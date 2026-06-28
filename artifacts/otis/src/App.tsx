@@ -8,6 +8,7 @@ import Dashboard from "@/pages/dashboard";
 import Bills from "@/pages/bills";
 import Accounts from "@/pages/accounts";
 import Forecast from "@/pages/forecast";
+import PaySchedules from "@/pages/pay-schedules";
 import LifeEvents from "@/pages/life-events";
 import Loans from "@/pages/loans";
 import AI from "@/pages/ai";
@@ -30,6 +31,7 @@ function Router() {
         <Route path="/bills" component={Bills} />
         <Route path="/accounts" component={Accounts} />
         <Route path="/forecast" component={Forecast} />
+        <Route path="/pay-schedules" component={PaySchedules} />
         <Route path="/life-events" component={LifeEvents} />
         <Route path="/loans" component={Loans} />
         <Route path="/ai" component={AI} />

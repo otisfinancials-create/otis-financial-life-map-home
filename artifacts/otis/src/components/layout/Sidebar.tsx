@@ -6,7 +6,8 @@ import {
   LineChart, 
   CalendarHeart, 
   CreditCard,
-  Bot
+  Bot,
+  Banknote
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,7 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Accounts", href: "/accounts", icon: Landmark },
   { name: "Bills", href: "/bills", icon: Receipt },
+  { name: "Pay Schedules", href: "/pay-schedules", icon: Banknote },
   { name: "Forecast", href: "/forecast", icon: LineChart },
   { name: "Loans", href: "/loans", icon: CreditCard },
   { name: "Life Events", href: "/life-events", icon: CalendarHeart },
