@@ -55,6 +55,11 @@ function advanceByFrequency(date: Date, frequency: string): Date {
     case "quarterly":
       d.setMonth(d.getMonth() + 3);
       break;
+    case "semi-annual":
+    case "semiannual":
+    case "biannual":
+      d.setMonth(d.getMonth() + 6);
+      break;
     case "annual":
     case "annually":
     case "yearly":
@@ -102,8 +107,8 @@ async function seed() {
         userId,
         billName: "Car Insurance",
         category: "Insurance",
-        amount: "900.00",
-        frequency: "annual",
+        amount: "450.00",
+        frequency: "semi-annual",
         dueDay: 1,
         isActive: true,
         isVariable: false,
@@ -153,6 +158,9 @@ async function seed() {
 
   console.log(`Inserted ${insertedSchedules.length} pay schedule(s). Next pay date: ${nextPayDate}`);
 
+  // Forecast regeneration is done inline rather than via POST /api/forecast/regenerate
+  // because that endpoint requires Clerk auth — a CLI script has no browser session token.
+  // This logic mirrors the route exactly; keep both in sync when changing the engine.
   console.log("Regenerating forecast...");
 
   await db.delete(forecastedTransactionsTable).where(

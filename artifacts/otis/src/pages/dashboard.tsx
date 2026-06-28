@@ -310,9 +310,21 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : upcomingBills?.length ? (
-                <div className="space-y-4">
+                <div className="space-y-1">
                   {upcomingBills.slice(0, 6).map((bill) => (
-                    <div key={bill.id} className="flex items-start justify-between gap-2">
+                    // Intentionally div+onClick (not <Link>) — the card header already
+                    // contains a <Link href="/bills"> ("All bills"), so using <Link>
+                    // here would create <a> nested inside <a>, triggering a React
+                    // hydration warning. Navigation via onClick keeps the rows clickable
+                    // without invalid HTML nesting.
+                    <div
+                      key={bill.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate("/bills")}
+                      onKeyDown={(e) => e.key === "Enter" && navigate("/bills")}
+                      className="flex items-start justify-between gap-2 rounded-sm cursor-pointer hover:bg-muted/40 transition-colors py-1.5 px-1 -mx-1"
+                    >
                       <div className="flex flex-col min-w-0">
                         <span className="text-sm font-medium truncate">{bill.billName}</span>
                         <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">

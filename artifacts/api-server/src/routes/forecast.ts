@@ -239,6 +239,7 @@ function advanceByFrequency(date: Date, frequency: string): Date {
       break;
     case "monthly": d.setMonth(d.getMonth() + 1); break;
     case "quarterly": d.setMonth(d.getMonth() + 3); break;
+    case "semi-annual": case "semiannual": case "biannual": d.setMonth(d.getMonth() + 6); break;
     case "annual": case "annually": case "yearly": d.setFullYear(d.getFullYear() + 1); break;
     default: d.setMonth(d.getMonth() + 1);
   }
