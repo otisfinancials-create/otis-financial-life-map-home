@@ -1,10 +1,10 @@
-import { pgTable, serial, integer, text, numeric, boolean, timestamp, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, boolean, timestamp, date, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const billsTable = pgTable("bills", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().default(1),
+  userId: text("user_id").notNull(),
   billName: text("bill_name").notNull(),
   category: text("category").notNull(),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),

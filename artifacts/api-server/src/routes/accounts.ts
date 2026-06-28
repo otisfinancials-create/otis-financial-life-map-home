@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, accountsTable } from "@workspace/db";
 import {
   CreateAccountBody,
@@ -18,7 +18,11 @@ const router: IRouter = Router();
 
 router.get("/accounts", async (req, res): Promise<void> => {
   req.log.info("Fetching accounts");
-  const accounts = await db.select().from(accountsTable).orderBy(accountsTable.accountType, accountsTable.accountName);
+  const accounts = await db
+    .select()
+    .from(accountsTable)
+    .where(eq(accountsTable.userId, req.userId))
+    .orderBy(accountsTable.accountType, accountsTable.accountName);
   res.json(ListAccountsResponse.parse(accounts.map(serialize)));
 });
 
@@ -30,14 +34,18 @@ router.post("/accounts", async (req, res): Promise<void> => {
   }
   const [account] = await db.insert(accountsTable).values({
     ...parsed.data,
+    userId: req.userId,
     currentBalance: String(parsed.data.currentBalance),
   }).returning();
   res.status(201).json(CreateAccountResponse.parse(serialize(account)));
 });
 
 router.get("/accounts/summary", async (req, res): Promise<void> => {
-  const accounts = await db.select().from(accountsTable);
-  
+  const accounts = await db
+    .select()
+    .from(accountsTable)
+    .where(eq(accountsTable.userId, req.userId));
+
   const totalAssets = accounts
     .filter((a) => a.isAsset)
     .reduce((sum, a) => sum + parseFloat(String(a.currentBalance)), 0);
@@ -70,7 +78,10 @@ router.get("/accounts/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [account] = await db.select().from(accountsTable).where(eq(accountsTable.id, params.data.id));
+  const [account] = await db
+    .select()
+    .from(accountsTable)
+    .where(and(eq(accountsTable.id, params.data.id), eq(accountsTable.userId, req.userId)));
   if (!account) {
     res.status(404).json({ error: "Account not found" });
     return;
@@ -96,7 +107,7 @@ router.patch("/accounts/:id", async (req, res): Promise<void> => {
       ...restAccountData,
       ...(rawBalance !== undefined && { currentBalance: String(rawBalance) }),
     })
-    .where(eq(accountsTable.id, params.data.id))
+    .where(and(eq(accountsTable.id, params.data.id), eq(accountsTable.userId, req.userId)))
     .returning();
   if (!account) {
     res.status(404).json({ error: "Account not found" });
@@ -111,7 +122,10 @@ router.delete("/accounts/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [account] = await db.delete(accountsTable).where(eq(accountsTable.id, params.data.id)).returning();
+  const [account] = await db
+    .delete(accountsTable)
+    .where(and(eq(accountsTable.id, params.data.id), eq(accountsTable.userId, req.userId)))
+    .returning();
   if (!account) {
     res.status(404).json({ error: "Account not found" });
     return;

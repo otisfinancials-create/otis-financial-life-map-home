@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, billsTable } from "@workspace/db";
 import {
   CreateBillBody,
@@ -18,7 +18,11 @@ const router: IRouter = Router();
 
 router.get("/bills", async (req, res): Promise<void> => {
   req.log.info("Fetching bills");
-  const bills = await db.select().from(billsTable).orderBy(billsTable.billName);
+  const bills = await db
+    .select()
+    .from(billsTable)
+    .where(eq(billsTable.userId, req.userId))
+    .orderBy(billsTable.billName);
   res.json(ListBillsResponse.parse(bills.map(serializeBill)));
 });
 
@@ -30,6 +34,7 @@ router.post("/bills", async (req, res): Promise<void> => {
   }
   const [bill] = await db.insert(billsTable).values({
     ...parsed.data,
+    userId: req.userId,
     amount: String(parsed.data.amount),
     isVariable: parsed.data.isVariable ?? false,
     isActive: parsed.data.isActive ?? true,
@@ -39,8 +44,11 @@ router.post("/bills", async (req, res): Promise<void> => {
 
 router.get("/bills/upcoming", async (req, res): Promise<void> => {
   const today = new Date();
-  const bills = await db.select().from(billsTable).where(eq(billsTable.isActive, true));
-  
+  const bills = await db
+    .select()
+    .from(billsTable)
+    .where(and(eq(billsTable.isActive, true), eq(billsTable.userId, req.userId)));
+
   const upcoming = bills
     .map((bill) => {
       const dueDay = bill.dueDay;
@@ -71,7 +79,10 @@ router.get("/bills/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [bill] = await db.select().from(billsTable).where(eq(billsTable.id, params.data.id));
+  const [bill] = await db
+    .select()
+    .from(billsTable)
+    .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)));
   if (!bill) {
     res.status(404).json({ error: "Bill not found" });
     return;
@@ -98,7 +109,7 @@ router.patch("/bills/:id", async (req, res): Promise<void> => {
       ...(rawBillAmount !== undefined && { amount: String(rawBillAmount) }),
       updatedAt: new Date(),
     })
-    .where(eq(billsTable.id, params.data.id))
+    .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)))
     .returning();
   if (!bill) {
     res.status(404).json({ error: "Bill not found" });
@@ -116,7 +127,7 @@ router.delete("/bills/:id", async (req, res): Promise<void> => {
   const [bill] = await db
     .update(billsTable)
     .set({ isActive: false, updatedAt: new Date() })
-    .where(eq(billsTable.id, params.data.id))
+    .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)))
     .returning();
   if (!bill) {
     res.status(404).json({ error: "Bill not found" });

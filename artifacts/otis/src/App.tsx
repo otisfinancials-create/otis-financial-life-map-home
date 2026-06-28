@@ -1,7 +1,12 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
+import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
+import { publishableKeyFromHost } from "@clerk/react/internal";
+import { shadcn } from "@clerk/themes";
+import { Switch, Route, useLocation, Redirect, Router as WouterRouter } from "wouter";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { queryClient } from "@/lib/queryClient";
 
 import { Shell } from "@/components/layout/Shell";
 import Dashboard from "@/pages/dashboard";
@@ -14,43 +19,238 @@ import Loans from "@/pages/loans";
 import AI from "@/pages/ai";
 import NotFound from "@/pages/not-found";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: false,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
 
-function Router() {
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function stripBase(path: string): string {
+  return basePath && path.startsWith(basePath)
+    ? path.slice(basePath.length) || "/"
+    : path;
+}
+
+if (!clerkPubKey) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
+}
+
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: "clerk",
+  options: {
+    logoPlacement: "inside" as const,
+    logoLinkUrl: basePath || "/",
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+  },
+  variables: {
+    colorPrimary: "hsl(210, 100%, 60%)",
+    colorForeground: "hsl(0, 0%, 98%)",
+    colorMutedForeground: "hsl(240, 5%, 65%)",
+    colorDanger: "hsl(0, 84%, 60%)",
+    colorBackground: "hsl(240, 10%, 6%)",
+    colorInput: "hsl(240, 5%, 15%)",
+    colorInputForeground: "hsl(0, 0%, 98%)",
+    colorNeutral: "hsl(240, 5%, 15%)",
+    fontFamily: "'Inter', sans-serif",
+    borderRadius: "0.5rem",
+  },
+  elements: {
+    rootBox: "w-full flex justify-center",
+    cardBox: "bg-[hsl(240,10%,6%)] border border-[hsl(240,5%,15%)] rounded-2xl w-[440px] max-w-full overflow-hidden",
+    card: "!shadow-none !border-0 !bg-transparent !rounded-none",
+    footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
+    headerTitle: "text-[hsl(0,0%,98%)]",
+    headerSubtitle: "text-[hsl(240,5%,65%)]",
+    socialButtonsBlockButtonText: "text-[hsl(0,0%,98%)]",
+    formFieldLabel: "text-[hsl(0,0%,98%)]",
+    footerActionLink: "text-[hsl(210,100%,60%)]",
+    footerActionText: "text-[hsl(240,5%,65%)]",
+    dividerText: "text-[hsl(240,5%,65%)]",
+    identityPreviewEditButton: "text-[hsl(210,100%,60%)]",
+    formFieldSuccessText: "text-[hsl(173,80%,40%)]",
+    alertText: "text-[hsl(0,0%,98%)]",
+    logoBox: "mb-2",
+    logoImage: "h-10 w-10",
+    socialButtonsBlockButton: "border-[hsl(240,5%,15%)] bg-[hsl(240,5%,15%)] hover:bg-[hsl(240,5%,20%)]",
+    formButtonPrimary: "bg-[hsl(210,100%,60%)] hover:bg-[hsl(210,100%,55%)] text-[hsl(240,10%,4%)]",
+    formFieldInput: "bg-[hsl(240,5%,15%)] border-[hsl(240,5%,20%)] text-[hsl(0,0%,98%)]",
+    footerAction: "bg-transparent",
+    dividerLine: "bg-[hsl(240,5%,15%)]",
+    alert: "bg-[hsl(240,5%,15%)]",
+    otpCodeFieldInput: "bg-[hsl(240,5%,15%)] border-[hsl(240,5%,20%)] text-[hsl(0,0%,98%)]",
+    formFieldRow: "gap-2",
+    main: "gap-4",
+  },
+};
+
+function SignInPage() {
   return (
-    <Shell>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/bills" component={Bills} />
-        <Route path="/accounts" component={Accounts} />
-        <Route path="/forecast" component={Forecast} />
-        <Route path="/pay-schedules" component={PaySchedules} />
-        <Route path="/life-events" component={LifeEvents} />
-        <Route path="/loans" component={Loans} />
-        <Route path="/ai" component={AI} />
-        <Route component={NotFound} />
-      </Switch>
-    </Shell>
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+    </div>
+  );
+}
+
+function SignUpPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+    </div>
+  );
+}
+
+function LandingPage() {
+  return (
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-4 text-foreground">
+      <div className="mb-8 flex items-center gap-3">
+        <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
+          <span className="text-primary-foreground text-lg font-bold font-mono">O</span>
+        </div>
+        <span className="text-3xl font-semibold tracking-tight">Otis</span>
+      </div>
+      <p className="mb-8 max-w-sm text-center text-muted-foreground">
+        Your financial life map. Sign in to access your dashboard.
+      </p>
+      <div className="flex gap-3">
+        <a
+          href={`${basePath}/sign-in`}
+          className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          Sign in
+        </a>
+        <a
+          href={`${basePath}/sign-up`}
+          className="rounded-md border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+        >
+          Create account
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function HomeRedirect() {
+  return (
+    <>
+      <Show when="signed-in">
+        <Shell>
+          <Dashboard />
+        </Shell>
+      </Show>
+      <Show when="signed-out">
+        <LandingPage />
+      </Show>
+    </>
+  );
+}
+
+function ProtectedShell({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <Show when="signed-in">
+        <Shell>{children}</Shell>
+      </Show>
+      <Show when="signed-out">
+        <Redirect to="/" />
+      </Show>
+    </>
+  );
+}
+
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const qc = useQueryClient();
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
+        qc.clear();
+      }
+      prevUserIdRef.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener, qc]);
+
+  return null;
+}
+
+function ClerkProviderWithRoutes() {
+  const [, setLocation] = useLocation();
+
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
+      localization={{
+        signIn: {
+          start: {
+            title: "Welcome back",
+            subtitle: "Sign in to access your financial dashboard",
+          },
+        },
+        signUp: {
+          start: {
+            title: "Create your account",
+            subtitle: "Get started with Otis today",
+          },
+        },
+      }}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <ClerkQueryClientCacheInvalidator />
+          <Switch>
+            <Route path="/" component={HomeRedirect} />
+            <Route path="/sign-in/*?" component={SignInPage} />
+            <Route path="/sign-up/*?" component={SignUpPage} />
+            <Route path="/bills">
+              <ProtectedShell><Bills /></ProtectedShell>
+            </Route>
+            <Route path="/accounts">
+              <ProtectedShell><Accounts /></ProtectedShell>
+            </Route>
+            <Route path="/forecast">
+              <ProtectedShell><Forecast /></ProtectedShell>
+            </Route>
+            <Route path="/pay-schedules">
+              <ProtectedShell><PaySchedules /></ProtectedShell>
+            </Route>
+            <Route path="/life-events">
+              <ProtectedShell><LifeEvents /></ProtectedShell>
+            </Route>
+            <Route path="/loans">
+              <ProtectedShell><Loans /></ProtectedShell>
+            </Route>
+            <Route path="/ai">
+              <ProtectedShell><AI /></ProtectedShell>
+            </Route>
+            <Route>
+              <ProtectedShell><NotFound /></ProtectedShell>
+            </Route>
+          </Switch>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ClerkProvider>
   );
 }
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <WouterRouter base={basePath}>
+      <ClerkProviderWithRoutes />
+    </WouterRouter>
   );
 }
 

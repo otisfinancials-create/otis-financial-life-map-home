@@ -7,9 +7,11 @@ import {
   CalendarHeart, 
   CreditCard,
   Bot,
-  Banknote
+  Banknote,
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useClerk, useUser } from "@clerk/react";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -21,8 +23,17 @@ const navigation = [
   { name: "Life Events", href: "/life-events", icon: CalendarHeart },
 ];
 
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export function Sidebar() {
   const [location] = useLocation();
+  const { signOut } = useClerk();
+  const { user } = useUser();
+
+  const displayName = user?.fullName || user?.primaryEmailAddress?.emailAddress || "Account";
+  const initials = user?.fullName
+    ? user.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+    : (user?.primaryEmailAddress?.emailAddress?.[0] ?? "?").toUpperCase();
 
   return (
     <div className="flex h-full w-64 flex-col border-r border-border bg-sidebar text-sidebar-foreground">
@@ -88,14 +99,24 @@ export function Sidebar() {
         </nav>
       </div>
       <div className="p-4 border-t border-border">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-xs font-medium border border-border">
-            JS
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-8 w-8 shrink-0 rounded-full bg-secondary flex items-center justify-center text-xs font-medium border border-border">
+              {initials}
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm font-medium leading-none truncate">{displayName}</span>
+              <span className="text-xs text-muted-foreground mt-1">Personal</span>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium leading-none">John Smith</span>
-            <span className="text-xs text-muted-foreground mt-1">Free Plan</span>
-          </div>
+          <button
+            type="button"
+            onClick={() => signOut({ redirectUrl: basePath || "/" })}
+            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50 transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>

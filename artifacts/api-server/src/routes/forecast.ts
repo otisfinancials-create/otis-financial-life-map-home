@@ -23,8 +23,7 @@ router.get("/forecast", async (req, res): Promise<void> => {
     return;
   }
 
-  let query = db.select().from(forecastedTransactionsTable).$dynamic();
-  const conditions = [];
+  const conditions = [eq(forecastedTransactionsTable.userId, req.userId)];
 
   if (queryParams.data.startDate) {
     conditions.push(gte(forecastedTransactionsTable.transactionDate, queryParams.data.startDate));
@@ -33,11 +32,12 @@ router.get("/forecast", async (req, res): Promise<void> => {
     conditions.push(lt(forecastedTransactionsTable.transactionDate, queryParams.data.endDate));
   }
 
-  if (conditions.length > 0) {
-    query = query.where(and(...conditions));
-  }
+  const rows = await db
+    .select()
+    .from(forecastedTransactionsTable)
+    .where(and(...conditions))
+    .orderBy(forecastedTransactionsTable.transactionDate);
 
-  const rows = await query.orderBy(forecastedTransactionsTable.transactionDate);
   res.json(ListForecastResponse.parse(rows.map(serialize)));
 });
 
@@ -49,6 +49,7 @@ router.post("/forecast", async (req, res): Promise<void> => {
   }
   const [tx] = await db.insert(forecastedTransactionsTable).values({
     ...parsed.data,
+    userId: req.userId,
     amount: String(parsed.data.amount),
     isActual: parsed.data.isActual ?? false,
     isCommitted: parsed.data.isCommitted ?? false,
@@ -58,7 +59,10 @@ router.post("/forecast", async (req, res): Promise<void> => {
 
 router.get("/forecast/monthly", async (req, res): Promise<void> => {
   const today = new Date();
-  const rows = await db.select().from(forecastedTransactionsTable);
+  const rows = await db
+    .select()
+    .from(forecastedTransactionsTable)
+    .where(eq(forecastedTransactionsTable.userId, req.userId));
 
   const monthlyMap: Record<string, { month: number; year: number; label: string; totalIncome: number; totalExpenses: number }> = {};
 
@@ -96,10 +100,14 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
 
 router.post("/forecast/regenerate", async (req, res): Promise<void> => {
   req.log.info("Regenerating forecast");
+  const userId = req.userId;
 
-  // Delete existing non-actual forecasted transactions
+  // Delete existing non-actual forecasted transactions for this user
   await db.delete(forecastedTransactionsTable).where(
-    eq(forecastedTransactionsTable.isActual, false)
+    and(
+      eq(forecastedTransactionsTable.isActual, false),
+      eq(forecastedTransactionsTable.userId, userId),
+    )
   );
 
   const today = new Date();
@@ -107,7 +115,11 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
   const toInsert: Array<typeof forecastedTransactionsTable.$inferInsert> = [];
 
   // Generate from bills
-  const bills = await db.select().from(billsTable).where(eq(billsTable.isActive, true));
+  const bills = await db
+    .select()
+    .from(billsTable)
+    .where(and(eq(billsTable.isActive, true), eq(billsTable.userId, userId)));
+
   for (const bill of bills) {
     const amount = parseFloat(String(bill.amount));
     const frequency = bill.frequency;
@@ -119,6 +131,7 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
 
     while (current <= endDate) {
       toInsert.push({
+        userId,
         transactionDate: current.toISOString().split("T")[0],
         description: bill.billName,
         amount: String(amount),
@@ -133,7 +146,11 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
   }
 
   // Generate from pay schedules
-  const paySchedules = await db.select().from(paySchedulesTable);
+  const paySchedules = await db
+    .select()
+    .from(paySchedulesTable)
+    .where(eq(paySchedulesTable.userId, userId));
+
   for (const ps of paySchedules) {
     const amount = parseFloat(String(ps.amount));
     let current = new Date(ps.nextPayDate);
@@ -141,6 +158,7 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
     while (current <= endDate) {
       if (current >= today) {
         toInsert.push({
+          userId,
           transactionDate: current.toISOString().split("T")[0],
           description: `Paycheck – ${ps.employerName}`,
           amount: String(amount),
@@ -180,7 +198,7 @@ router.patch("/forecast/:id", async (req, res): Promise<void> => {
       ...restTxData,
       ...(rawTxAmount !== undefined && { amount: String(rawTxAmount) }),
     })
-    .where(eq(forecastedTransactionsTable.id, params.data.id))
+    .where(and(eq(forecastedTransactionsTable.id, params.data.id), eq(forecastedTransactionsTable.userId, req.userId)))
     .returning();
   if (!tx) {
     res.status(404).json({ error: "Forecasted transaction not found" });
@@ -195,7 +213,10 @@ router.delete("/forecast/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [tx] = await db.delete(forecastedTransactionsTable).where(eq(forecastedTransactionsTable.id, params.data.id)).returning();
+  const [tx] = await db
+    .delete(forecastedTransactionsTable)
+    .where(and(eq(forecastedTransactionsTable.id, params.data.id), eq(forecastedTransactionsTable.userId, req.userId)))
+    .returning();
   if (!tx) {
     res.status(404).json({ error: "Forecasted transaction not found" });
     return;

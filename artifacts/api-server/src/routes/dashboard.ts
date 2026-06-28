@@ -19,10 +19,12 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   req.log.info("Fetching dashboard summary");
 
   const [accounts, bills, paySchedules] = await Promise.all([
-    db.select().from(accountsTable),
-    db.select().from(billsTable).where(eq(billsTable.isActive, true)),
-    db.select().from(paySchedulesTable),
+    db.select().from(accountsTable).where(eq(accountsTable.userId, req.userId)),
+    db.select().from(billsTable).where(eq(billsTable.userId, req.userId)),
+    db.select().from(paySchedulesTable).where(eq(paySchedulesTable.userId, req.userId)),
   ]);
+
+  const activeBills = bills.filter((b) => b.isActive);
 
   // Net worth
   const totalAssets = accounts
@@ -34,7 +36,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const netWorth = totalAssets - totalLiabilities;
 
   // Monthly expenses from active bills
-  const monthlyExpenses = bills.reduce((sum, b) => {
+  const monthlyExpenses = activeBills.reduce((sum, b) => {
     const amount = parseFloat(String(b.amount));
     const multiplier = FREQ_TO_MONTHLY[b.frequency.toLowerCase()] ?? 1;
     return sum + amount * multiplier;
@@ -51,7 +53,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 
   // Upcoming bills in next 30 days
   const today = new Date();
-  const upcomingBills = bills.filter((bill) => {
+  const upcomingBills = activeBills.filter((bill) => {
     let dueDate = new Date(today.getFullYear(), today.getMonth(), bill.dueDay);
     if (dueDate < today) {
       dueDate = new Date(today.getFullYear(), today.getMonth() + 1, bill.dueDay);
@@ -60,7 +62,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     return days <= 30;
   });
 
-  const billsDueThisWeek = bills.filter((bill) => {
+  const billsDueThisWeek = activeBills.filter((bill) => {
     let dueDate = new Date(today.getFullYear(), today.getMonth(), bill.dueDay);
     if (dueDate < today) {
       dueDate = new Date(today.getFullYear(), today.getMonth() + 1, bill.dueDay);

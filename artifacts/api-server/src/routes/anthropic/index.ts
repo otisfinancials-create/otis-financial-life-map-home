@@ -6,7 +6,6 @@ import { SendAnthropicMessageBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-const USER_ID = 1;
 
 function buildSystemPrompt(financialContext: string): string {
   return `You are Otis, a personal financial intelligence assistant for high-earning households. You are direct, precise, and data-driven — think Bloomberg terminal meets a trusted CFP.

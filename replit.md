@@ -36,7 +36,7 @@ A personal finance web app for high-earning households. Combines cash flow forec
 ## Architecture decisions
 
 - Contract-first: OpenAPI spec gates codegen which gates both frontend hooks and server Zod validators.
-- Single mock user (user_id = 1): no auth yet; Clerk will be added later.
+- Auth: Replit-managed Clerk. Web uses cookie-based sessions (no Bearer tokens in browser code). API routes protected via `requireAuth` middleware (`artifacts/api-server/src/middlewares/requireAuth.ts`). Health endpoint (`/healthz`) is public.
 - Dark mode default: CSS variables set up with dark theme as primary.
 - Forecast engine: `/api/forecast/regenerate` generates 12 months of transactions from bills + pay schedules on demand.
 - Plaid not integrated yet — accounts are manually managed.

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, paySchedulesTable } from "@workspace/db";
 import {
   CreatePayScheduleBody,
@@ -17,7 +17,11 @@ const router: IRouter = Router();
 
 router.get("/pay-schedules", async (req, res): Promise<void> => {
   req.log.info("Fetching pay schedules");
-  const schedules = await db.select().from(paySchedulesTable).orderBy(paySchedulesTable.employerName);
+  const schedules = await db
+    .select()
+    .from(paySchedulesTable)
+    .where(eq(paySchedulesTable.userId, req.userId))
+    .orderBy(paySchedulesTable.employerName);
   res.json(ListPaySchedulesResponse.parse(schedules.map(serialize)));
 });
 
@@ -29,6 +33,7 @@ router.post("/pay-schedules", async (req, res): Promise<void> => {
   }
   const [schedule] = await db.insert(paySchedulesTable).values({
     ...parsed.data,
+    userId: req.userId,
     amount: String(parsed.data.amount),
   }).returning();
   res.status(201).json(CreatePayScheduleResponse.parse(serialize(schedule)));
@@ -40,7 +45,10 @@ router.get("/pay-schedules/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [schedule] = await db.select().from(paySchedulesTable).where(eq(paySchedulesTable.id, params.data.id));
+  const [schedule] = await db
+    .select()
+    .from(paySchedulesTable)
+    .where(and(eq(paySchedulesTable.id, params.data.id), eq(paySchedulesTable.userId, req.userId)));
   if (!schedule) {
     res.status(404).json({ error: "Pay schedule not found" });
     return;
@@ -67,7 +75,7 @@ router.patch("/pay-schedules/:id", async (req, res): Promise<void> => {
       ...(rawPayAmount !== undefined && { amount: String(rawPayAmount) }),
       updatedAt: new Date(),
     })
-    .where(eq(paySchedulesTable.id, params.data.id))
+    .where(and(eq(paySchedulesTable.id, params.data.id), eq(paySchedulesTable.userId, req.userId)))
     .returning();
   if (!schedule) {
     res.status(404).json({ error: "Pay schedule not found" });
@@ -82,7 +90,10 @@ router.delete("/pay-schedules/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [schedule] = await db.delete(paySchedulesTable).where(eq(paySchedulesTable.id, params.data.id)).returning();
+  const [schedule] = await db
+    .delete(paySchedulesTable)
+    .where(and(eq(paySchedulesTable.id, params.data.id), eq(paySchedulesTable.userId, req.userId)))
+    .returning();
   if (!schedule) {
     res.status(404).json({ error: "Pay schedule not found" });
     return;
