@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lt } from "drizzle-orm";
 import { db, forecastedTransactionsTable, billsTable, paySchedulesTable } from "@workspace/db";
 import {
   CreateForecastedTransactionBody,
@@ -30,7 +30,7 @@ router.get("/forecast", async (req, res): Promise<void> => {
     conditions.push(gte(forecastedTransactionsTable.transactionDate, queryParams.data.startDate));
   }
   if (queryParams.data.endDate) {
-    conditions.push(lte(forecastedTransactionsTable.transactionDate, queryParams.data.endDate));
+    conditions.push(lt(forecastedTransactionsTable.transactionDate, queryParams.data.endDate));
   }
 
   if (conditions.length > 0) {
@@ -218,7 +218,7 @@ function advanceByFrequency(date: Date, frequency: string): Date {
       break;
     case "monthly": d.setMonth(d.getMonth() + 1); break;
     case "quarterly": d.setMonth(d.getMonth() + 3); break;
-    case "annually": case "yearly": d.setFullYear(d.getFullYear() + 1); break;
+    case "annual": case "annually": case "yearly": d.setFullYear(d.getFullYear() + 1); break;
     default: d.setMonth(d.getMonth() + 1);
   }
   return d;
