@@ -12,6 +12,8 @@ export interface PaySchedule {
   amount: number;
   frequency: string;
   nextPayDate: string;
+  /** @nullable */
+  notes?: string | null;
   createdAt: string;
   updatedAt: string;
 }

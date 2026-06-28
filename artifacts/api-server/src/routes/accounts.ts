@@ -28,7 +28,10 @@ router.post("/accounts", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [account] = await db.insert(accountsTable).values(parsed.data).returning();
+  const [account] = await db.insert(accountsTable).values({
+    ...parsed.data,
+    currentBalance: String(parsed.data.currentBalance),
+  }).returning();
   res.status(201).json(CreateAccountResponse.parse(serialize(account)));
 });
 
@@ -86,9 +89,13 @@ router.patch("/accounts/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { currentBalance: rawBalance, ...restAccountData } = parsed.data;
   const [account] = await db
     .update(accountsTable)
-    .set(parsed.data)
+    .set({
+      ...restAccountData,
+      ...(rawBalance !== undefined && { currentBalance: String(rawBalance) }),
+    })
     .where(eq(accountsTable.id, params.data.id))
     .returning();
   if (!account) {

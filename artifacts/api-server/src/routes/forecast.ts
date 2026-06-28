@@ -49,6 +49,7 @@ router.post("/forecast", async (req, res): Promise<void> => {
   }
   const [tx] = await db.insert(forecastedTransactionsTable).values({
     ...parsed.data,
+    amount: String(parsed.data.amount),
     isActual: parsed.data.isActual ?? false,
     isCommitted: parsed.data.isCommitted ?? false,
   }).returning();
@@ -172,9 +173,13 @@ router.patch("/forecast/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { amount: rawTxAmount, ...restTxData } = parsed.data;
   const [tx] = await db
     .update(forecastedTransactionsTable)
-    .set(parsed.data)
+    .set({
+      ...restTxData,
+      ...(rawTxAmount !== undefined && { amount: String(rawTxAmount) }),
+    })
     .where(eq(forecastedTransactionsTable.id, params.data.id))
     .returning();
   if (!tx) {
@@ -203,6 +208,14 @@ function advanceByFrequency(date: Date, frequency: string): Date {
   switch (frequency.toLowerCase()) {
     case "weekly": d.setDate(d.getDate() + 7); break;
     case "biweekly": case "bi-weekly": d.setDate(d.getDate() + 14); break;
+    case "semi-monthly": case "semimonthly":
+      if (d.getDate() < 15) {
+        d.setDate(15);
+      } else {
+        d.setMonth(d.getMonth() + 1);
+        d.setDate(1);
+      }
+      break;
     case "monthly": d.setMonth(d.getMonth() + 1); break;
     case "quarterly": d.setMonth(d.getMonth() + 3); break;
     case "annually": case "yearly": d.setFullYear(d.getFullYear() + 1); break;

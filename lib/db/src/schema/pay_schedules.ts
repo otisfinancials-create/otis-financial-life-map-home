@@ -9,6 +9,7 @@ export const paySchedulesTable = pgTable("pay_schedules", {
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   frequency: text("frequency").notNull(),
   nextPayDate: date("next_pay_date", { mode: "string" }).notNull(),
+  notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

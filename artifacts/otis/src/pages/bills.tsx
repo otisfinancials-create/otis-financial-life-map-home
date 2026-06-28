@@ -1,9 +1,15 @@
 import { useState } from "react";
-import { format } from "date-fns";
-import { Plus, MoreHorizontal, CheckCircle2, Circle, Search, Pencil, Trash2 } from "lucide-react";
+import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useListBills, useDeleteBill, getListBillsQueryKey, getGetUpcomingBillsQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import {
+  useListBills,
+  useDeleteBill,
+  useUpdateBill,
+  getListBillsQueryKey,
+  getGetUpcomingBillsQueryKey,
+  getGetDashboardSummaryQueryKey,
+} from "@workspace/api-client-react";
 import type { Bill } from "@workspace/api-client-react";
 import { useSyncForecast } from "@/hooks/use-sync-forecast";
 
@@ -11,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -43,19 +50,34 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+function formatPaymentMethod(raw: string | null | undefined): string {
+  if (!raw) return "";
+  if (raw.startsWith("credit-card:")) {
+    const card = raw.slice("credit-card:".length).trim();
+    return card ? `Credit Card – ${card}` : "Credit Card";
+  }
+  const map: Record<string, string> = {
+    "auto-pay": "Auto-pay",
+    "manual": "Manual",
+    "credit-card": "Credit Card",
+  };
+  return map[raw] ?? raw;
+}
+
 export default function Bills() {
   const [searchTerm, setSearchTerm] = useState("");
   const [billToEdit, setBillToEdit] = useState<Bill | undefined>(undefined);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [billToDelete, setBillToDelete] = useState<Bill | undefined>(undefined);
-  
+  const [billToDeactivate, setBillToDeactivate] = useState<Bill | undefined>(undefined);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: bills, isLoading } = useListBills();
   const deleteBill = useDeleteBill();
+  const updateBill = useUpdateBill();
   const { sync: syncForecast } = useSyncForecast();
 
-  const filteredBills = bills?.filter((bill) => 
+  const filteredBills = bills?.filter((bill) =>
     bill.billName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     bill.category.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
@@ -65,22 +87,38 @@ export default function Bills() {
     setIsEditDialogOpen(true);
   };
 
-  const handleDelete = () => {
-    if (!billToDelete) return;
-    
-    deleteBill.mutate({ id: billToDelete.id }, {
+  const handleToggleActive = (bill: Bill) => {
+    updateBill.mutate(
+      { id: bill.id, data: { isActive: !bill.isActive } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetUpcomingBillsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          syncForecast();
+        },
+        onError: () => {
+          toast({ title: "Failed to update bill status", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  const handleDeactivate = () => {
+    if (!billToDeactivate) return;
+    deleteBill.mutate({ id: billToDeactivate.id }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetUpcomingBillsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-        toast({ title: "Bill deleted", description: "Forecast is syncing in the background." });
-        setBillToDelete(undefined);
+        toast({ title: "Bill deactivated", description: "It will no longer appear in your forecast." });
+        setBillToDeactivate(undefined);
         syncForecast();
       },
       onError: () => {
-        toast({ title: "Failed to delete bill", variant: "destructive" });
-        setBillToDelete(undefined);
-      }
+        toast({ title: "Failed to deactivate bill", variant: "destructive" });
+        setBillToDeactivate(undefined);
+      },
     });
   };
 
@@ -102,13 +140,13 @@ export default function Bills() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <BillDialog 
+          <BillDialog
             trigger={
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
                 Add Bill
               </Button>
-            } 
+            }
           />
         </div>
       </div>
@@ -116,37 +154,45 @@ export default function Bills() {
       <Card className="border-border bg-card overflow-hidden">
         {isLoading ? (
           <div className="p-8 space-y-4">
-            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+            {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
           </div>
         ) : filteredBills.length > 0 ? (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="w-[30px]"></TableHead>
                   <TableHead>Bill Name</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Frequency</TableHead>
-                  <TableHead>Due Date</TableHead>
+                  <TableHead>Due Day</TableHead>
+                  <TableHead>Payment</TableHead>
+                  <TableHead>Active</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredBills.map((bill) => (
                   <TableRow key={bill.id} className="border-border group">
-                    <TableCell>
-                      {bill.isActive ? (
-                        <CheckCircle2 className="h-4 w-4 text-primary" />
-                      ) : (
-                        <Circle className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </TableCell>
                     <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {bill.billName}
+                      <div className="flex items-center gap-1.5">
+                        {bill.companyUrl ? (
+                          <a
+                            href={bill.companyUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-primary transition-colors flex items-center gap-1 group/link"
+                          >
+                            {bill.billName}
+                            <ExternalLink className="h-3 w-3 opacity-0 group-hover/link:opacity-60 transition-opacity" />
+                          </a>
+                        ) : (
+                          bill.billName
+                        )}
                         {bill.isVariable && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">Var</Badge>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
+                            Var
+                          </Badge>
                         )}
                       </div>
                     </TableCell>
@@ -155,19 +201,32 @@ export default function Bills() {
                         {bill.category}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="font-mono">
                       <FormatCurrency amount={bill.amount} />
                     </TableCell>
-                    <TableCell className="capitalize text-muted-foreground">
+                    <TableCell className="capitalize text-muted-foreground text-sm">
                       {bill.frequency}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="text-muted-foreground text-sm">
                       Day {bill.dueDay}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {formatPaymentMethod(bill.paymentMethod) || <span className="text-muted-foreground/40">—</span>}
+                    </TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={bill.isActive}
+                        onCheckedChange={() => handleToggleActive(bill)}
+                        aria-label={`Toggle ${bill.billName} active`}
+                      />
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
                             <span className="sr-only">Open menu</span>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
@@ -179,12 +238,12 @@ export default function Bills() {
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            onClick={() => setBillToDelete(bill)}
+                          <DropdownMenuItem
+                            onClick={() => setBillToDeactivate(bill)}
                             className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
+                            Deactivate
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -198,34 +257,46 @@ export default function Bills() {
           <EmptyState
             icon={<Receipt className="h-8 w-8" />}
             title={searchTerm ? "No bills found" : "No bills yet"}
-            description={searchTerm ? `No bills matching "${searchTerm}"` : "Add your first bill to start forecasting your cash flow."}
+            description={
+              searchTerm
+                ? `No bills matching "${searchTerm}"`
+                : "Add your first bill to start forecasting your cash flow."
+            }
             className="border-0 bg-transparent rounded-none"
-            action={!searchTerm && <BillDialog trigger={<Button>Add your first bill</Button>} />}
+            action={
+              !searchTerm && (
+                <BillDialog trigger={<Button>Add your first bill</Button>} />
+              )
+            }
           />
         )}
       </Card>
 
-      <BillDialog 
-        bill={billToEdit} 
-        open={isEditDialogOpen} 
-        onOpenChange={setIsEditDialogOpen} 
+      <BillDialog
+        bill={billToEdit}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
       />
 
-      <AlertDialog open={!!billToDelete} onOpenChange={(open) => !open && setBillToDelete(undefined)}>
+      <AlertDialog
+        open={!!billToDeactivate}
+        onOpenChange={(open) => !open && setBillToDeactivate(undefined)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>Deactivate this bill?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the bill "{billToDelete?.billName}" and remove it from all future forecasts.
+              "{billToDeactivate?.billName}" will be marked inactive and removed from future forecasts.
+              You can re-activate it at any time by toggling it back on.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDelete}
+            <AlertDialogAction
+              onClick={handleDeactivate}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteBill.isPending ? "Deleting..." : "Delete"}
+              {deleteBill.isPending ? "Deactivating..." : "Deactivate"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -233,6 +304,3 @@ export default function Bills() {
     </div>
   );
 }
-
-// Temporary import for the empty state icon
-import { Receipt } from "lucide-react";

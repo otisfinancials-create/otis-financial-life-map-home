@@ -1,0 +1,95 @@
+We are now building the Bills & Pay Schedule feature. This is the foundation of the entire app — every forecast, dashboard view, and AI simulation depends on this data being clean and well-structured.
+
+Context: The user sets up their recurring bills and their pay schedule once. The app then uses this to auto-generate the forecasted_transactions table, which powers the 6-to-12-month cash flow ledger.
+
+Please build the following:
+
+Part A: Bill Setup
+
+
+Bill entry form at /bills/new with these fields:
+
+Bill name (text)
+Category (dropdown: Housing, Insurance, Subscriptions, Utilities, Auto, Food, Medical, Debt Payments, Other)
+Amount (number — allow "variable" toggle that grays out the amount field and marks it as estimated)
+Frequency (dropdown: Weekly, Bi-weekly, Monthly, Quarterly, Annually)
+Due day of month (number 1–31, or "last day of month")
+Payment method (dropdown: Auto-pay, Manual, Credit Card — if Credit Card, show a sub-field for which card)
+Company URL (text — used for hyperlinking the bill name in the ledger)
+Start date (date picker)
+End date (optional date picker — for things like a car loan payoff date)
+Notes (optional text area)
+Active toggle (on/off)
+
+
+
+Bills list page at /bills showing all bills in a clean table with columns:
+
+Bill name (hyperlinked to company URL)
+Category
+Amount (show "Variable" badge if variable)
+Frequency
+Due date
+Payment method
+Status (Active/Inactive toggle)
+Actions (Edit, Delete)
+
+
+
+Edit bill — clicking edit opens the same form pre-populated
+API routes:
+
+GET /api/bills — list all bills for the logged-in user
+POST /api/bills — create a new bill
+PUT /api/bills/[id] — update a bill
+DELETE /api/bills/[id] — soft delete (set is_active = false)
+
+
+
+
+
+Part B: Pay Schedule Setup
+
+
+Pay schedule entry form at /pay/new with these fields:
+
+Employer / Income source name (text)
+Net pay amount (number — what actually hits the bank after taxes)
+Pay frequency (dropdown: Weekly, Bi-weekly, Semi-monthly [1st and 15th], Monthly)
+Next pay date (date picker — the app calculates all future dates from this)
+Notes (optional)
+
+
+
+Pay schedule list at /pay showing all income sources in a table
+API routes:
+
+GET /api/pay — list all pay schedules
+POST /api/pay — create new
+PUT /api/pay/[id] — update
+DELETE /api/pay/[id] — delete
+
+
+
+
+
+Part C: Forecast Generation Engine
+
+After bills and pay are saved, automatically generate the forecasted_transactions table:
+
+
+Create a utility function generateForecast(userId, monthsAhead = 12) that:
+
+Reads all active bills for the user
+Reads all pay schedules for the user
+Calculates every occurrence of each bill and paycheck for the next N months
+Inserts/upserts rows into forecasted_transactions
+Bills = negative amounts (outflows), Pay = positive amounts (inflows)
+
+
+
+Call this function automatically whenever a bill or pay record is created or updated
+Create a simple read-only preview at /forecast/preview — a plain table showing the next 30 days of forecasted transactions, sorted by date, with a running balance column (starting from $0 for now — we'll connect real account balances later)
+
+
+Use mock user_id = 1 for all database queries (we'll add real auth later). Use Tailwind for all styling. Make forms clean and intuitive — no jargon, no unnecessary fields visible by default.

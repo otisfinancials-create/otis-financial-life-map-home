@@ -193,6 +193,7 @@ export const ListPaySchedulesResponseItem = zod.object({
   "amount": zod.number(),
   "frequency": zod.string(),
   "nextPayDate": zod.string(),
+  "notes": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -206,7 +207,8 @@ export const CreatePayScheduleBody = zod.object({
   "employerName": zod.string(),
   "amount": zod.number(),
   "frequency": zod.string(),
-  "nextPayDate": zod.string()
+  "nextPayDate": zod.string(),
+  "notes": zod.string().optional()
 })
 
 export const CreatePayScheduleResponse = zod.object({
@@ -215,6 +217,7 @@ export const CreatePayScheduleResponse = zod.object({
   "amount": zod.number(),
   "frequency": zod.string(),
   "nextPayDate": zod.string(),
+  "notes": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -233,6 +236,7 @@ export const GetPayScheduleResponse = zod.object({
   "amount": zod.number(),
   "frequency": zod.string(),
   "nextPayDate": zod.string(),
+  "notes": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -249,7 +253,8 @@ export const UpdatePayScheduleBody = zod.object({
   "employerName": zod.string().optional(),
   "amount": zod.number().optional(),
   "frequency": zod.string().optional(),
-  "nextPayDate": zod.string().optional()
+  "nextPayDate": zod.string().optional(),
+  "notes": zod.string().optional()
 })
 
 export const UpdatePayScheduleResponse = zod.object({
@@ -258,6 +263,7 @@ export const UpdatePayScheduleResponse = zod.object({
   "amount": zod.number(),
   "frequency": zod.string(),
   "nextPayDate": zod.string(),
+  "notes": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })

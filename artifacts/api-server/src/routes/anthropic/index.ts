@@ -67,15 +67,15 @@ async function getFinancialContext(): Promise<string> {
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
   const accountLines = accounts
-    .map((a) => `  - ${a.name} (${a.accountType}): ${fmt(parseFloat(String(a.currentBalance)))} [${a.isAsset ? "asset" : "liability"}]`)
+    .map((a) => `  - ${a.accountName} (${a.accountType}): ${fmt(parseFloat(String(a.currentBalance)))} [${a.isAsset ? "asset" : "liability"}]`)
     .join("\n");
 
   const billLines = bills
-    .map((b) => `  - ${b.name} (${b.category}): ${fmt(parseFloat(String(b.amount)))} ${b.frequency}, due day ${b.dueDay}`)
+    .map((b) => `  - ${b.billName} (${b.category}): ${fmt(parseFloat(String(b.amount)))} ${b.frequency}, due day ${b.dueDay}`)
     .join("\n");
 
   const incomeLines = paySchedules
-    .map((p) => `  - ${p.name}: ${fmt(parseFloat(String(p.amount)))} ${p.frequency} (~${fmt(parseFloat(String(p.amount)) * (FREQ_TO_MONTHLY[p.frequency] ?? 1))}/mo)`)
+    .map((p) => `  - ${p.employerName}: ${fmt(parseFloat(String(p.amount)))} ${p.frequency} (~${fmt(parseFloat(String(p.amount)) * (FREQ_TO_MONTHLY[p.frequency] ?? 1))}/mo)`)
     .join("\n");
 
   return `NET WORTH: ${fmt(netWorth)} (Assets: ${fmt(totalAssets)}, Liabilities: ${fmt(totalLiabilities)})

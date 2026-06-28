@@ -69,7 +69,7 @@ export default function AI() {
   const { data: conversations, isLoading: loadingConvs } = useListAnthropicConversations();
   const { data: activeConv, isLoading: loadingConv } = useGetAnthropicConversation(
     activeConvId ?? 0,
-    { query: { enabled: activeConvId !== null } }
+    { query: { enabled: activeConvId !== null, queryKey: getGetAnthropicConversationQueryKey(activeConvId ?? 0) } }
   );
   const createConv = useCreateAnthropicConversation();
   const deleteConv = useDeleteAnthropicConversation();

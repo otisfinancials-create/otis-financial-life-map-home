@@ -30,6 +30,7 @@ router.post("/bills", async (req, res): Promise<void> => {
   }
   const [bill] = await db.insert(billsTable).values({
     ...parsed.data,
+    amount: String(parsed.data.amount),
     isVariable: parsed.data.isVariable ?? false,
     isActive: parsed.data.isActive ?? true,
   }).returning();
@@ -89,9 +90,14 @@ router.patch("/bills/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { amount: rawBillAmount, ...restBillData } = parsed.data;
   const [bill] = await db
     .update(billsTable)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set({
+      ...restBillData,
+      ...(rawBillAmount !== undefined && { amount: String(rawBillAmount) }),
+      updatedAt: new Date(),
+    })
     .where(eq(billsTable.id, params.data.id))
     .returning();
   if (!bill) {
@@ -107,7 +113,11 @@ router.delete("/bills/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [bill] = await db.delete(billsTable).where(eq(billsTable.id, params.data.id)).returning();
+  const [bill] = await db
+    .update(billsTable)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(billsTable.id, params.data.id))
+    .returning();
   if (!bill) {
     res.status(404).json({ error: "Bill not found" });
     return;

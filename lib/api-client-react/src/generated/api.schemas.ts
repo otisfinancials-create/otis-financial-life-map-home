@@ -91,6 +91,8 @@ export interface PaySchedule {
   amount: number;
   frequency: string;
   nextPayDate: string;
+  /** @nullable */
+  notes?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -100,6 +102,7 @@ export interface PayScheduleInput {
   amount: number;
   frequency: string;
   nextPayDate: string;
+  notes?: string;
 }
 
 export interface PayScheduleUpdate {
@@ -107,6 +110,7 @@ export interface PayScheduleUpdate {
   amount?: number;
   frequency?: string;
   nextPayDate?: string;
+  notes?: string;
 }
 
 export interface Account {

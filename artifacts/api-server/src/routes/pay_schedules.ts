@@ -27,7 +27,10 @@ router.post("/pay-schedules", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [schedule] = await db.insert(paySchedulesTable).values(parsed.data).returning();
+  const [schedule] = await db.insert(paySchedulesTable).values({
+    ...parsed.data,
+    amount: String(parsed.data.amount),
+  }).returning();
   res.status(201).json(CreatePayScheduleResponse.parse(serialize(schedule)));
 });
 
@@ -56,9 +59,14 @@ router.patch("/pay-schedules/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { amount: rawPayAmount, ...restPayData } = parsed.data;
   const [schedule] = await db
     .update(paySchedulesTable)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set({
+      ...restPayData,
+      ...(rawPayAmount !== undefined && { amount: String(rawPayAmount) }),
+      updatedAt: new Date(),
+    })
     .where(eq(paySchedulesTable.id, params.data.id))
     .returning();
   if (!schedule) {

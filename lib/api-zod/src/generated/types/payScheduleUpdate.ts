@@ -11,4 +11,5 @@ export interface PayScheduleUpdate {
   amount?: number;
   frequency?: string;
   nextPayDate?: string;
+  notes?: string;
 }

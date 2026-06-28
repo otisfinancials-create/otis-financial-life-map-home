@@ -23,6 +23,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -40,11 +41,19 @@ import {
 import type { PaySchedule } from "@workspace/api-client-react";
 import { useSyncForecast } from "@/hooks/use-sync-forecast";
 
+const FREQUENCIES = [
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Bi-weekly" },
+  { value: "semi-monthly", label: "Semi-monthly (1st & 15th)" },
+  { value: "monthly", label: "Monthly" },
+];
+
 const schema = z.object({
   employerName: z.string().min(2, { message: "Employer name must be at least 2 characters." }),
   amount: z.coerce.number().positive({ message: "Amount must be greater than 0." }),
   frequency: z.string().min(1, { message: "Please select a frequency." }),
   nextPayDate: z.string().min(1, { message: "Please enter the next pay date." }),
+  notes: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -76,12 +85,18 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
       amount: schedule?.amount ?? 0,
       frequency: schedule?.frequency ?? "biweekly",
       nextPayDate: schedule?.nextPayDate ?? "",
+      notes: schedule?.notes ?? "",
     },
   });
 
   function onSubmit(data: FormValues) {
+    const payload = {
+      ...data,
+      notes: data.notes || undefined,
+    };
+
     if (isEditing) {
-      updateSchedule.mutate({ id: schedule.id, data }, {
+      updateSchedule.mutate({ id: schedule.id, data: payload }, {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListPaySchedulesQueryKey() });
           toast({ title: "Pay schedule updated", description: "Forecast is syncing in the background." });
@@ -94,7 +109,7 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
         },
       });
     } else {
-      createSchedule.mutate({ data }, {
+      createSchedule.mutate({ data: payload }, {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListPaySchedulesQueryKey() });
           toast({ title: "Pay schedule added", description: "Forecast is syncing in the background." });
@@ -119,7 +134,7 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Pay Schedule" : "Add Pay Schedule"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Pay Schedule" : "Add Income Source"}</DialogTitle>
           <DialogDescription>
             {isEditing
               ? "Update this income source. The forecast will resync automatically."
@@ -133,7 +148,7 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
               name="employerName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Employer / Source</FormLabel>
+                  <FormLabel>Employer / Income Source</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. Acme Corp, Freelance Clients" {...field} />
                   </FormControl>
@@ -148,7 +163,7 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
                 name="amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Amount (net)</FormLabel>
+                    <FormLabel>Net Pay Amount</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" placeholder="0.00" {...field} />
                     </FormControl>
@@ -161,19 +176,17 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
                 name="frequency"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Frequency</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormLabel>Pay Frequency</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                        <SelectItem value="biweekly">Bi-weekly</SelectItem>
-                        <SelectItem value="monthly">Monthly</SelectItem>
-                        <SelectItem value="quarterly">Quarterly</SelectItem>
-                        <SelectItem value="annually">Annually</SelectItem>
+                        {FREQUENCIES.map((f) => (
+                          <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -196,7 +209,26 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
               )}
             />
 
-            <DialogFooter className="pt-4">
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="e.g. base salary only, bonuses separate..."
+                      className="resize-none"
+                      rows={2}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
                 Cancel
               </Button>

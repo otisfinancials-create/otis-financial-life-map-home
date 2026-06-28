@@ -744,6 +744,8 @@ components:
           type: string
         nextPayDate:
           type: string
+        notes:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -761,6 +763,8 @@ components:
           type: string
         nextPayDate:
           type: string
+        notes:
+          type: string
 
     PayScheduleUpdate:
       type: object
@@ -772,6 +776,8 @@ components:
         frequency:
           type: string
         nextPayDate:
+          type: string
+        notes:
           type: string
 
     # ── Accounts ─────────────────────────────────────────────────────────────
