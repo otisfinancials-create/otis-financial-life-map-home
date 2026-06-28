@@ -3,20 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Otis Financial Life Map API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: bills
+    description: Bill management
+  - name: paySchedules
+    description: Pay schedule management
+  - name: accounts
+    description: Account management
+  - name: forecasts
+    description: Cash flow forecasting
+  - name: dashboard
+    description: Dashboard summaries
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +34,797 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Dashboard ──────────────────────────────────────────────────────────────
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary (net worth, cash flow, upcoming bills)
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  # ── Bills ───────────────────────────────────────────────────────────────────
+  /bills:
+    get:
+      operationId: listBills
+      tags: [bills]
+      summary: List all bills
+      responses:
+        "200":
+          description: List of bills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bill"
+    post:
+      operationId: createBill
+      tags: [bills]
+      summary: Create a bill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+
+  /bills/upcoming:
+    get:
+      operationId: getUpcomingBills
+      tags: [bills]
+      summary: Get bills due in the next 30 days
+      responses:
+        "200":
+          description: Upcoming bills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UpcomingBill"
+
+  /bills/{id}:
+    get:
+      operationId: getBill
+      tags: [bills]
+      summary: Get a bill by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateBill
+      tags: [bills]
+      summary: Update a bill
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteBill
+      tags: [bills]
+      summary: Delete a bill
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ── Pay Schedules ─────────────────────────────────────────────────────────
+  /pay-schedules:
+    get:
+      operationId: listPaySchedules
+      tags: [paySchedules]
+      summary: List all pay schedules
+      responses:
+        "200":
+          description: List of pay schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaySchedule"
+    post:
+      operationId: createPaySchedule
+      tags: [paySchedules]
+      summary: Create a pay schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayScheduleInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaySchedule"
+
+  /pay-schedules/{id}:
+    get:
+      operationId: getPaySchedule
+      tags: [paySchedules]
+      summary: Get a pay schedule by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Pay schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaySchedule"
+        "404":
+          description: Not found
+    patch:
+      operationId: updatePaySchedule
+      tags: [paySchedules]
+      summary: Update a pay schedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayScheduleUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaySchedule"
+        "404":
+          description: Not found
+    delete:
+      operationId: deletePaySchedule
+      tags: [paySchedules]
+      summary: Delete a pay schedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Accounts ──────────────────────────────────────────────────────────────
+  /accounts:
+    get:
+      operationId: listAccounts
+      tags: [accounts]
+      summary: List all accounts
+      responses:
+        "200":
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+    post:
+      operationId: createAccount
+      tags: [accounts]
+      summary: Create an account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+
+  /accounts/summary:
+    get:
+      operationId: getAccountsSummary
+      tags: [accounts]
+      summary: Get net worth and breakdown by account type
+      responses:
+        "200":
+          description: Accounts summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountsSummary"
+
+  /accounts/{id}:
+    get:
+      operationId: getAccount
+      tags: [accounts]
+      summary: Get an account by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateAccount
+      tags: [accounts]
+      summary: Update an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteAccount
+      tags: [accounts]
+      summary: Delete an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Forecasted Transactions ──────────────────────────────────────────────
+  /forecast:
+    get:
+      operationId: listForecast
+      tags: [forecasts]
+      summary: List forecasted transactions (optionally filtered by date range)
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of forecasted transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ForecastedTransaction"
+    post:
+      operationId: createForecastedTransaction
+      tags: [forecasts]
+      summary: Create a manual forecasted transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForecastedTransactionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForecastedTransaction"
+
+  /forecast/monthly:
+    get:
+      operationId: getMonthlyForecast
+      tags: [forecasts]
+      summary: Get monthly cash flow forecast grouped by month (next 12 months)
+      responses:
+        "200":
+          description: Monthly forecast
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MonthlyForecast"
+
+  /forecast/regenerate:
+    post:
+      operationId: regenerateForecast
+      tags: [forecasts]
+      summary: Regenerate forecasted transactions from bills and pay schedules
+      responses:
+        "200":
+          description: Regenerated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegenerateForecastResult"
+
+  /forecast/{id}:
+    patch:
+      operationId: updateForecastedTransaction
+      tags: [forecasts]
+      summary: Update a forecasted transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForecastedTransactionUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForecastedTransaction"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteForecastedTransaction
+      tags: [forecasts]
+      summary: Delete a forecasted transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    # ── Dashboard ────────────────────────────────────────────────────────────
+    DashboardSummary:
+      type: object
+      required: [netWorth, totalAssets, totalLiabilities, monthlyIncome, monthlyExpenses, monthlyCashFlow, upcomingBillsCount, upcomingBillsTotal, billsDueThisWeek]
+      properties:
+        netWorth:
+          type: number
+        totalAssets:
+          type: number
+        totalLiabilities:
+          type: number
+        monthlyIncome:
+          type: number
+        monthlyExpenses:
+          type: number
+        monthlyCashFlow:
+          type: number
+        upcomingBillsCount:
+          type: integer
+        upcomingBillsTotal:
+          type: number
+        billsDueThisWeek:
+          type: integer
+
+    # ── Bills ────────────────────────────────────────────────────────────────
+    Bill:
+      type: object
+      required: [id, billName, category, amount, frequency, dueDay, isVariable, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        billName:
+          type: string
+        category:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+        dueDay:
+          type: integer
+        paymentMethod:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        companyUrl:
+          type: ["string", "null"]
+        isVariable:
+          type: boolean
+        isActive:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    BillInput:
+      type: object
+      required: [billName, category, amount, frequency, dueDay]
+      properties:
+        billName:
+          type: string
+        category:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+        dueDay:
+          type: integer
+        paymentMethod:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        companyUrl:
+          type: string
+        isVariable:
+          type: boolean
+        isActive:
+          type: boolean
+        notes:
+          type: string
+
+    BillUpdate:
+      type: object
+      properties:
+        billName:
+          type: string
+        category:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+        dueDay:
+          type: integer
+        paymentMethod:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        companyUrl:
+          type: string
+        isVariable:
+          type: boolean
+        isActive:
+          type: boolean
+        notes:
+          type: string
+
+    UpcomingBill:
+      type: object
+      required: [id, billName, category, amount, dueDate, daysUntilDue]
+      properties:
+        id:
+          type: integer
+        billName:
+          type: string
+        category:
+          type: string
+        amount:
+          type: number
+        dueDate:
+          type: string
+        daysUntilDue:
+          type: integer
+        paymentMethod:
+          type: ["string", "null"]
+
+    # ── Pay Schedules ────────────────────────────────────────────────────────
+    PaySchedule:
+      type: object
+      required: [id, employerName, amount, frequency, nextPayDate, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        employerName:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+        nextPayDate:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    PayScheduleInput:
+      type: object
+      required: [employerName, amount, frequency, nextPayDate]
+      properties:
+        employerName:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+        nextPayDate:
+          type: string
+
+    PayScheduleUpdate:
+      type: object
+      properties:
+        employerName:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+        nextPayDate:
+          type: string
+
+    # ── Accounts ─────────────────────────────────────────────────────────────
+    Account:
+      type: object
+      required: [id, accountName, accountType, institutionName, currentBalance, isAsset, createdAt]
+      properties:
+        id:
+          type: integer
+        accountName:
+          type: string
+        accountType:
+          type: string
+        institutionName:
+          type: string
+        currentBalance:
+          type: number
+        isAsset:
+          type: boolean
+        plaidAccountId:
+          type: ["string", "null"]
+        lastSyncedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    AccountInput:
+      type: object
+      required: [accountName, accountType, institutionName, currentBalance, isAsset]
+      properties:
+        accountName:
+          type: string
+        accountType:
+          type: string
+        institutionName:
+          type: string
+        currentBalance:
+          type: number
+        isAsset:
+          type: boolean
+
+    AccountUpdate:
+      type: object
+      properties:
+        accountName:
+          type: string
+        accountType:
+          type: string
+        institutionName:
+          type: string
+        currentBalance:
+          type: number
+        isAsset:
+          type: boolean
+
+    AccountsSummary:
+      type: object
+      required: [netWorth, totalAssets, totalLiabilities, byType]
+      properties:
+        netWorth:
+          type: number
+        totalAssets:
+          type: number
+        totalLiabilities:
+          type: number
+        byType:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountTypeGroup"
+
+    AccountTypeGroup:
+      type: object
+      required: [accountType, total, count]
+      properties:
+        accountType:
+          type: string
+        total:
+          type: number
+        count:
+          type: integer
+
+    # ── Forecasted Transactions ───────────────────────────────────────────────
+    ForecastedTransaction:
+      type: object
+      required: [id, transactionDate, description, amount, transactionType, category, isActual, isCommitted, createdAt]
+      properties:
+        id:
+          type: integer
+        transactionDate:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+        transactionType:
+          type: string
+        category:
+          type: string
+        sourceBillId:
+          type: ["integer", "null"]
+        sourcePayId:
+          type: ["integer", "null"]
+        isActual:
+          type: boolean
+        isCommitted:
+          type: boolean
+        createdAt:
+          type: string
+
+    ForecastedTransactionInput:
+      type: object
+      required: [transactionDate, description, amount, transactionType, category]
+      properties:
+        transactionDate:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+        transactionType:
+          type: string
+        category:
+          type: string
+        sourceBillId:
+          type: integer
+        sourcePayId:
+          type: integer
+        isActual:
+          type: boolean
+        isCommitted:
+          type: boolean
+
+    ForecastedTransactionUpdate:
+      type: object
+      properties:
+        transactionDate:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+        transactionType:
+          type: string
+        category:
+          type: string
+        isActual:
+          type: boolean
+        isCommitted:
+          type: boolean
+
+    MonthlyForecast:
+      type: object
+      required: [month, year, label, totalIncome, totalExpenses, netCashFlow]
+      properties:
+        month:
+          type: integer
+        year:
+          type: integer
+        label:
+          type: string
+        totalIncome:
+          type: number
+        totalExpenses:
+          type: number
+        netCashFlow:
+          type: number
+
+    RegenerateForecastResult:
+      type: object
+      required: [created, message]
+      properties:
+        created:
+          type: integer
+        message:
+          type: string

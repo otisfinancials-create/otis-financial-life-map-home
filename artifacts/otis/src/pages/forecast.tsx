@@ -1,0 +1,242 @@
+import { useState } from "react";
+import { format, addMonths, startOfMonth, subMonths } from "date-fns";
+import { ChevronLeft, ChevronRight, RefreshCw, BarChart3, List } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+
+import { useListForecast, useGetMonthlyForecast, useRegenerateForecast, getListForecastQueryKey, getGetMonthlyForecastQueryKey } from "@workspace/api-client-react";
+import type { ForecastedTransaction } from "@workspace/api-client-react";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FormatCurrency } from "@/components/ui/format-currency";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
+
+export default function Forecast() {
+  const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()));
+  const [view, setView] = useState<"list" | "chart">("list");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  const startDate = format(currentMonth, "yyyy-MM-dd");
+  const endDate = format(addMonths(currentMonth, 1), "yyyy-MM-dd");
+
+  const { data: transactions, isLoading: isLoadingTransactions } = useListForecast({ 
+    query: { 
+      queryKey: getListForecastQueryKey({ startDate, endDate }) 
+    } 
+  });
+  
+  const { data: monthlyData, isLoading: isLoadingMonthly } = useGetMonthlyForecast();
+  const regenerateForecast = useRegenerateForecast();
+
+  const handleRegenerate = () => {
+    regenerateForecast.mutate(undefined, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListForecastQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetMonthlyForecastQueryKey() });
+        toast({ title: "Forecast regenerated successfully" });
+      },
+      onError: () => {
+        toast({ title: "Failed to regenerate forecast", variant: "destructive" });
+      }
+    });
+  };
+
+  const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
+  const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+  const today = () => setCurrentMonth(startOfMonth(new Date()));
+
+  // Calculate totals for current view
+  const currentMonthTotals = transactions?.reduce((acc, t) => {
+    if (t.transactionType === "income") acc.income += t.amount;
+    else acc.expenses += t.amount;
+    return acc;
+  }, { income: 0, expenses: 0 }) || { income: 0, expenses: 0 };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Cash Flow Forecast</h1>
+          <p className="text-muted-foreground mt-1">Projected income and expenses based on your bills and pay schedule.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRegenerate}
+            disabled={regenerateForecast.isPending}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${regenerateForecast.isPending ? 'animate-spin' : ''}`} />
+            Regenerate
+          </Button>
+          <div className="flex border border-border rounded-md bg-card">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className={`rounded-r-none border-r border-border h-9 px-3 ${view === 'list' ? 'bg-muted' : ''}`}
+              onClick={() => setView('list')}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className={`rounded-l-none h-9 px-3 ${view === 'chart' ? 'bg-muted' : ''}`}
+              onClick={() => setView('chart')}
+            >
+              <BarChart3 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {view === "list" ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-card p-2 rounded-lg border border-border">
+            <Button variant="ghost" size="icon" onClick={prevMonth}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-4">
+              <span className="font-medium w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
+              <Button variant="ghost" size="sm" onClick={today} className="text-xs h-7">Today</Button>
+            </div>
+            <Button variant="ghost" size="icon" onClick={nextMonth}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card className="bg-card border-border py-4 px-6 flex flex-col justify-center">
+              <span className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Projected Income</span>
+              <span className="text-xl font-mono text-chart-2 font-medium">
+                <FormatCurrency amount={currentMonthTotals.income} />
+              </span>
+            </Card>
+            <Card className="bg-card border-border py-4 px-6 flex flex-col justify-center">
+              <span className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Projected Expenses</span>
+              <span className="text-xl font-mono text-chart-3 font-medium">
+                <FormatCurrency amount={currentMonthTotals.expenses} />
+              </span>
+            </Card>
+            <Card className="bg-card border-border py-4 px-6 flex flex-col justify-center">
+              <span className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Net Flow</span>
+              <span className={`text-xl font-mono font-medium ${currentMonthTotals.income - currentMonthTotals.expenses >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                <FormatCurrency amount={currentMonthTotals.income - currentMonthTotals.expenses} showSign />
+              </span>
+            </Card>
+          </div>
+
+          <Card className="border-border bg-card overflow-hidden">
+            {isLoadingTransactions ? (
+              <div className="p-8 space-y-4">
+                {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+              </div>
+            ) : transactions && transactions.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="w-[120px]">Date</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transactions.map((t) => (
+                    <TableRow key={t.id} className="border-border">
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {format(new Date(t.transactionDate), "MMM dd")}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {t.description}
+                        {t.isActual && (
+                          <Badge variant="secondary" className="ml-2 text-[10px] px-1 h-4 bg-primary/20 text-primary">Cleared</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="font-normal border-border bg-background">
+                          {t.category}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        <span className={t.transactionType === "income" ? "text-chart-2" : "text-foreground"}>
+                          {t.transactionType === "income" ? "+" : "-"}<FormatCurrency amount={t.amount} />
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="p-12 text-center text-muted-foreground">
+                <p>No transactions projected for this month.</p>
+                <p className="text-sm mt-1">Make sure you have active bills and a pay schedule configured.</p>
+              </div>
+            )}
+          </Card>
+        </div>
+      ) : (
+        <Card className="bg-card border-border pt-6">
+          <CardHeader className="pb-8">
+            <CardTitle>12-Month Projection</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingMonthly ? (
+              <Skeleton className="h-[400px] w-full" />
+            ) : monthlyData && monthlyData.length > 0 ? (
+              <div className="h-[400px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyData} margin={{ top: 20, right: 20, left: -20, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis 
+                      dataKey="label" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                      dy={10}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                      tickFormatter={(value) => `$${value/1000}k`}
+                    />
+                    <Tooltip 
+                      cursor={{ fill: 'hsl(var(--muted)/0.3)' }}
+                      contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
+                      itemStyle={{ color: 'hsl(var(--foreground))' }}
+                      formatter={(value: number, name: string) => [
+                        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value), 
+                        name === 'totalIncome' ? 'Income' : name === 'totalExpenses' ? 'Expenses' : 'Net Flow'
+                      ]}
+                    />
+                    <Bar dataKey="totalIncome" name="totalIncome" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                    <Bar dataKey="totalExpenses" name="totalExpenses" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                    <ReferenceLine y={0} stroke="hsl(var(--border))" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[400px] flex items-center justify-center text-muted-foreground">
+                Not enough data to generate forecast chart.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,71 @@
+I am building a personal finance web app called "Otis" (working title). It is a "Financial Life Map" — a single-pane-of-glass dashboard that combines cash flow forecasting, net worth tracking, bill management, investment monitoring, loan amortization, and life event planning into one beautifully simple product.
+
+Target user: Households earning $160K+, currently managing their finances in a spreadsheet. They are sophisticated but want simplicity, speed, and automation. They do NOT want a bloated app — they want precision and clarity.
+
+Tech stack:
+
+
+Framework: Next.js (App Router) + Tailwind CSS
+Database: PostgreSQL (managed by Replit)
+AI logic: Claude API (claude-sonnet-4-6)
+Financial data: Plaid API (to be integrated later)
+Auth: Clerk (to be integrated later)
+
+
+Design direction:
+
+
+Clean, modern, and data-dense but never cluttered
+Think "Bloomberg meets Notion" — professional but approachable
+Dark mode preferred as the default
+Mobile-first responsive layouts
+The AI assistant persona is named "Otis" — friendly, smart, head-tilts while thinking
+
+
+Please do the following to scaffold the project:
+
+
+Set up the Next.js project with Tailwind CSS and the App Router
+Create a PostgreSQL connection utility using environment variables
+Create the following initial database tables with proper indexes and foreign keys:
+
+
+users (id, email, name, subscription_tier, created_at)
+
+bills (
+  id, user_id, bill_name, category, amount, frequency,
+  due_day, payment_method, start_date, end_date,
+  company_url, is_variable, is_active, notes, created_at, updated_at
+)
+
+pay_schedule (
+  id, user_id, employer_name, amount, frequency,
+  next_pay_date, created_at, updated_at
+)
+
+accounts (
+  id, user_id, account_name, account_type, institution_name,
+  current_balance, is_asset, plaid_account_id, last_synced_at, created_at
+)
+
+forecasted_transactions (
+  id, user_id, transaction_date, description, amount,
+  transaction_type, category, source_bill_id, source_pay_id,
+  is_actual, is_committed, created_at
+)
+
+
+Create a basic Next.js layout with:
+
+A left sidebar with navigation icons (Dashboard, Bills, Accounts, Forecast, Life Events, Loans, Otis AI)
+A top bar with user avatar and notification bell
+A main content area
+Placeholder pages for each nav item
+
+
+
+Create a /bills page with a placeholder table layout (we will build this next)
+Add a .env.example file with all required environment variable keys
+
+
+Do not integrate Plaid or Clerk yet. Use mock/seed data where needed. Make sure the project runs without errors before stopping.
