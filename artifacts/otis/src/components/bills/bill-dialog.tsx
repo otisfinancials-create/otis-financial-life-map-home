@@ -38,6 +38,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import { useCreateBill, useUpdateBill, getListBillsQueryKey, getGetUpcomingBillsQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import type { Bill } from "@workspace/api-client-react";
+import { useSyncForecast } from "@/hooks/use-sync-forecast";
 
 const billSchema = z.object({
   billName: z.string().min(2, { message: "Name must be at least 2 characters." }),
@@ -70,6 +71,7 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
   const queryClient = useQueryClient();
   const createBill = useCreateBill();
   const updateBill = useUpdateBill();
+  const { sync: syncForecast } = useSyncForecast();
   const isEditing = !!bill;
 
   const form = useForm<BillFormValues>({
@@ -94,9 +96,10 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
           queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetUpcomingBillsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          toast({ title: "Bill updated successfully" });
+          toast({ title: "Bill updated", description: "Forecast is syncing in the background." });
           setIsOpen(false);
           if (!isControlled) form.reset();
+          syncForecast();
         },
         onError: () => {
           toast({ title: "Failed to update bill", variant: "destructive" });
@@ -108,9 +111,10 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
           queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetUpcomingBillsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          toast({ title: "Bill created successfully" });
+          toast({ title: "Bill added", description: "Forecast is syncing in the background." });
           setIsOpen(false);
           if (!isControlled) form.reset();
+          syncForecast();
         },
         onError: () => {
           toast({ title: "Failed to create bill", variant: "destructive" });

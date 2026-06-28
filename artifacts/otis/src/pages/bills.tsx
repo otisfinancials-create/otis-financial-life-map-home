@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { useListBills, useDeleteBill, getListBillsQueryKey, getGetUpcomingBillsQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import type { Bill } from "@workspace/api-client-react";
+import { useSyncForecast } from "@/hooks/use-sync-forecast";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -52,6 +53,7 @@ export default function Bills() {
   const queryClient = useQueryClient();
   const { data: bills, isLoading } = useListBills();
   const deleteBill = useDeleteBill();
+  const { sync: syncForecast } = useSyncForecast();
 
   const filteredBills = bills?.filter((bill) => 
     bill.billName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -71,8 +73,9 @@ export default function Bills() {
         queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetUpcomingBillsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-        toast({ title: "Bill deleted successfully" });
+        toast({ title: "Bill deleted", description: "Forecast is syncing in the background." });
         setBillToDelete(undefined);
+        syncForecast();
       },
       onError: () => {
         toast({ title: "Failed to delete bill", variant: "destructive" });
