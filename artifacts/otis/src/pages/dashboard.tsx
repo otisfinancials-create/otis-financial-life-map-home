@@ -3,7 +3,6 @@ import {
   useGetUpcomingBills,
   useListAccounts,
   useGetMonthlyForecast,
-  getGetDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,9 +12,9 @@ import {
   Wallet,
   TrendingUp,
   AlertCircle,
-  Building2,
   Banknote,
   ArrowRight,
+  ExternalLink,
 } from "lucide-react";
 import {
   BarChart,
@@ -27,8 +26,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { format } from "date-fns";
-import { Link } from "wouter";
-import { Badge } from "@/components/ui/badge";
+import { Link, useLocation } from "wouter";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-US", {
@@ -38,6 +36,7 @@ const fmt = (v: number) =>
   }).format(v);
 
 export default function Dashboard() {
+  const [, navigate] = useLocation();
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
   const { data: upcomingBills, isLoading: isLoadingBills } = useGetUpcomingBills();
   const { data: accounts, isLoading: isLoadingAccounts } = useListAccounts();
@@ -68,6 +67,9 @@ export default function Dashboard() {
     loan: "Loans",
   };
 
+  const metricCardClass =
+    "bg-card border-border cursor-pointer transition-all duration-150 hover:border-primary/50 hover:bg-card/80 group";
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
@@ -77,13 +79,14 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Primary Metrics */}
+      {/* Primary Metrics — all clickable */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Net Worth */}
-        <Card className="bg-card border-border">
+
+        {/* Net Worth → Accounts */}
+        <Card className={metricCardClass} onClick={() => navigate("/accounts")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <TrendingUp className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
           </CardHeader>
           <CardContent>
             {isLoadingSummary ? (
@@ -93,27 +96,30 @@ export default function Dashboard() {
                 <div className="text-2xl font-bold font-mono tracking-tight">
                   <FormatCurrency amount={summary?.netWorth ?? 0} compact />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  <span className="text-chart-2 inline-flex items-center gap-0.5">
-                    <ArrowUpRight className="h-3 w-3" />
-                    <FormatCurrency amount={summary?.totalAssets ?? 0} compact />
+                <p className="text-xs text-muted-foreground mt-1 flex items-center justify-between">
+                  <span>
+                    <span className="text-chart-2 inline-flex items-center gap-0.5">
+                      <ArrowUpRight className="h-3 w-3" />
+                      <FormatCurrency amount={summary?.totalAssets ?? 0} compact />
+                    </span>
+                    {" assets · "}
+                    <span className="text-chart-3">
+                      <FormatCurrency amount={summary?.totalLiabilities ?? 0} compact />
+                    </span>
+                    {" debt"}
                   </span>
-                  {" assets · "}
-                  <span className="text-chart-3">
-                    <FormatCurrency amount={summary?.totalLiabilities ?? 0} compact />
-                  </span>
-                  {" debt"}
+                  <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
                 </p>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Monthly Cash Flow */}
-        <Card className="bg-card border-border">
+        {/* Monthly Cash Flow → Forecast */}
+        <Card className={metricCardClass} onClick={() => navigate("/forecast")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Monthly Cash Flow</CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
+            <Wallet className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
           </CardHeader>
           <CardContent>
             {isLoadingSummary ? (
@@ -127,25 +133,28 @@ export default function Dashboard() {
                 >
                   <FormatCurrency amount={summary?.monthlyCashFlow ?? 0} compact showSign />
                 </div>
-                <div className="flex items-center gap-2 mt-1 text-xs">
-                  <span className="text-chart-2">
-                    <FormatCurrency amount={summary?.monthlyIncome ?? 0} compact /> in
-                  </span>
-                  <span className="text-muted-foreground">/</span>
-                  <span className="text-chart-3">
-                    <FormatCurrency amount={summary?.monthlyExpenses ?? 0} compact /> out
-                  </span>
+                <div className="flex items-center justify-between mt-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-chart-2">
+                      <FormatCurrency amount={summary?.monthlyIncome ?? 0} compact /> in
+                    </span>
+                    <span className="text-muted-foreground">/</span>
+                    <span className="text-chart-3">
+                      <FormatCurrency amount={summary?.monthlyExpenses ?? 0} compact /> out
+                    </span>
+                  </div>
+                  <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
                 </div>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Monthly Income */}
-        <Card className="bg-card border-border">
+        {/* Monthly Income → Pay Schedules */}
+        <Card className={metricCardClass} onClick={() => navigate("/pay-schedules")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Monthly Income</CardTitle>
-            <Banknote className="h-4 w-4 text-muted-foreground" />
+            <Banknote className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
           </CardHeader>
           <CardContent>
             {isLoadingSummary ? (
@@ -155,19 +164,20 @@ export default function Dashboard() {
                 <div className="text-2xl font-bold font-mono tracking-tight text-chart-2">
                   <FormatCurrency amount={summary?.monthlyIncome ?? 0} compact />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  from pay schedules
+                <p className="text-xs text-muted-foreground mt-1 flex items-center justify-between">
+                  <span>from pay schedules</span>
+                  <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
                 </p>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Total Assets */}
-        <Card className="bg-card border-border">
+        {/* Total Liabilities → Accounts */}
+        <Card className={metricCardClass} onClick={() => navigate("/accounts")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Liabilities</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            <AlertCircle className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
           </CardHeader>
           <CardContent>
             {isLoadingSummary ? (
@@ -177,11 +187,14 @@ export default function Dashboard() {
                 <div className="text-2xl font-bold font-mono tracking-tight">
                   <FormatCurrency amount={summary?.totalLiabilities ?? 0} compact />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  <span className="text-chart-2">
-                    <FormatCurrency amount={summary?.totalAssets ?? 0} compact />
+                <p className="text-xs text-muted-foreground mt-1 flex items-center justify-between">
+                  <span>
+                    <span className="text-chart-2">
+                      <FormatCurrency amount={summary?.totalAssets ?? 0} compact />
+                    </span>
+                    {" total assets"}
                   </span>
-                  {" total assets"}
+                  <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
                 </p>
               </>
             )}
