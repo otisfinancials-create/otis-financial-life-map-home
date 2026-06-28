@@ -513,6 +513,33 @@ export const DeleteForecastedTransactionResponse = zod.void()
 
 
 /**
+ * @summary Get user settings (starting balance)
+ */
+export const GetUserSettingsResponse = zod.object({
+  "id": zod.number(),
+  "startingBalance": zod.number(),
+  "balanceAsOfDate": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Upsert user settings (starting balance)
+ */
+export const SaveUserSettingsBody = zod.object({
+  "startingBalance": zod.number(),
+  "balanceAsOfDate": zod.string()
+})
+
+export const SaveUserSettingsResponse = zod.object({
+  "id": zod.number(),
+  "startingBalance": zod.number(),
+  "balanceAsOfDate": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
  * @summary List all conversations
  */
 export const ListAnthropicConversationsResponseItem = zod.object({

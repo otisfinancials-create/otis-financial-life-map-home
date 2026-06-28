@@ -4,3 +4,4 @@ export * from "./accounts";
 export * from "./forecasted_transactions";
 export * from "./conversations";
 export * from "./messages";
+export * from "./user_settings";

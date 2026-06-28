@@ -44,7 +44,9 @@ import type {
   PayScheduleInput,
   PayScheduleUpdate,
   RegenerateForecastResult,
-  UpcomingBill
+  UpcomingBill,
+  UserSettings,
+  UserSettingsInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1917,6 +1919,153 @@ export const useDeleteForecastedTransaction = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteForecastedTransactionMutationOptions(options));
+    }
+
+export const getGetUserSettingsUrl = () => {
+
+
+
+
+  return `/api/user-settings`
+}
+
+/**
+ * @summary Get user settings (starting balance)
+ */
+export const getUserSettings = async ( options?: RequestInit): Promise<UserSettings> => {
+
+  return customFetch<UserSettings>(getGetUserSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserSettingsQueryKey = () => {
+    return [
+    `/api/user-settings`
+    ] as const;
+    }
+
+
+export const getGetUserSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getUserSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserSettings>>> = ({ signal }) => getUserSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getUserSettings>>>
+export type GetUserSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get user settings (starting balance)
+ */
+
+export function useGetUserSettings<TData = Awaited<ReturnType<typeof getUserSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveUserSettingsUrl = () => {
+
+
+
+
+  return `/api/user-settings`
+}
+
+/**
+ * @summary Upsert user settings (starting balance)
+ */
+export const saveUserSettings = async (userSettingsInput: UserSettingsInput, options?: RequestInit): Promise<UserSettings> => {
+
+  return customFetch<UserSettings>(getSaveUserSettingsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(userSettingsInput)
+  }
+);}
+
+
+
+
+export const getSaveUserSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveUserSettings>>, TError,{data: BodyType<UserSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveUserSettings>>, TError,{data: BodyType<UserSettingsInput>}, TContext> => {
+
+const mutationKey = ['saveUserSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveUserSettings>>, {data: BodyType<UserSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveUserSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveUserSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof saveUserSettings>>>
+    export type SaveUserSettingsMutationBody = BodyType<UserSettingsInput>
+    export type SaveUserSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Upsert user settings (starting balance)
+ */
+export const useSaveUserSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveUserSettings>>, TError,{data: BodyType<UserSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveUserSettings>>,
+        TError,
+        {data: BodyType<UserSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getSaveUserSettingsMutationOptions(options));
     }
 
 export const getListAnthropicConversationsUrl = () => {

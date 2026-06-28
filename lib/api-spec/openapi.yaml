@@ -22,6 +22,8 @@ tags:
     description: Dashboard summaries
   - name: anthropic
     description: Anthropic AI chat operations
+  - name: userSettings
+    description: User preferences and settings
 
 paths:
   /healthz:
@@ -466,6 +468,37 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  # ── User Settings ────────────────────────────────────────────────────────────
+  /user-settings:
+    get:
+      operationId: getUserSettings
+      tags: [userSettings]
+      summary: Get user settings (starting balance)
+      responses:
+        "200":
+          description: User settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+    post:
+      operationId: saveUserSettings
+      tags: [userSettings]
+      summary: Upsert user settings (starting balance)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserSettingsInput"
+      responses:
+        "200":
+          description: Saved settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
 
   # ── Anthropic AI ────────────────────────────────────────────────────────────
   /anthropic/conversations:
@@ -952,6 +985,28 @@ components:
         created:
           type: integer
         message:
+          type: string
+
+    UserSettings:
+      type: object
+      required: [id, startingBalance, balanceAsOfDate]
+      properties:
+        id:
+          type: integer
+        startingBalance:
+          type: number
+        balanceAsOfDate:
+          type: string
+        updatedAt:
+          type: string
+
+    UserSettingsInput:
+      type: object
+      required: [startingBalance, balanceAsOfDate]
+      properties:
+        startingBalance:
+          type: number
+        balanceAsOfDate:
           type: string
 
     AnthropicConversation:

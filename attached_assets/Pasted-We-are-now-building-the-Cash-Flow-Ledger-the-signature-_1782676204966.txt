@@ -1,0 +1,121 @@
+We are now building the Cash Flow Ledger — the signature spreadsheet-style view that shows every forecasted transaction row by row, 6 to 12 months out, with a running balance. This is the feature that makes power users feel at home because it mirrors the control of a spreadsheet while being far more automated and intelligent.
+
+Context: The forecasted_transactions table is already populated by the forecast generation engine built in the previous session. This page reads from that table and presents it in a rich, interactive ledger view.
+
+Please build the following at /forecast:
+
+
+Part A: The Ledger Table
+
+Build a full-page data table with these columns:
+
+DateDescriptionCategoryTypeAmountRunning Balance
+
+Behavior:
+
+
+Date — formatted as Mon DD, YYYY (e.g., Jul 15, 2026). Group rows by month with a sticky month header row (e.g., "── July 2026 ──") that shows the month's net cash flow summary inline (e.g., "Net: +$1,240")
+Description — bill name or income source. If the bill has a company_url, make it a subtle external link icon next to the name (do not underline the whole cell)
+Category — small colored badge (use consistent colors per category, e.g., Housing = blue, Subscriptions = purple, Auto = orange, Income = green)
+Type — "Bill" or "Income" — shown as a small tag
+Amount — bills shown in red with a minus sign, income shown in green with a plus sign. Variable bills shown with a ~ prefix (e.g., ~$120) and a tooltip on hover: "Estimated — amount may vary"
+Running Balance — cumulative balance from today forward. Color the cell red if the balance goes negative (this is critical — it's the early warning system)
+
+
+Rows:
+
+
+Alternate row shading (very subtle, dark mode friendly)
+Hover state highlights the full row
+Clicking a bill row opens a side panel (drawer) with the bill details and an edit link
+Today's date should be visually marked — a thin accent line or "TODAY" badge so the user can orient themselves
+
+
+
+Part B: Controls Bar (above the table)
+
+Add a sticky controls bar at the top of the ledger with:
+
+
+Time range selector — buttons: 1 Month | 3 Months | 6 Months | 12 Months (default: 6 months)
+View toggle — two modes:
+
+Ledger (default): the row-by-row view described above
+Monthly Summary: collapses to one row per month showing total income, total bills, and net cash flow for that month — like a P&L
+
+
+
+Filter dropdown — filter by category (All, Housing, Subscriptions, Utilities, etc.)
+Search bar — live search by description name
+"Add Manual Entry" button — opens a simple form to add a one-time transaction (e.g., a planned vacation expense or a one-time bonus) that inserts directly into forecasted_transactions with is_committed = true
+
+
+
+Part C: Monthly Summary View
+
+When the user toggles to "Monthly Summary" mode, collapse the table to one row per month:
+
+MonthTotal IncomeTotal BillsNet Cash FlowEnd-of-Month Balance
+
+
+Color the Net Cash Flow cell green if positive, red if negative
+Make each month row expandable — clicking it expands to show all individual transactions for that month (accordion behavior)
+Show a simple bar chart above the table (using a lightweight library — recharts or Chart.js) visualizing income vs. expenses by month across the selected time range
+
+
+
+Part D: Inline Editing
+
+The ledger should be fully editable per your requirements. Implement:
+
+
+Inline amount edit — double-clicking an amount cell makes it editable in place. On blur or Enter, save to the database and recalculate the running balance column
+Mark as Paid — each bill row has a subtle checkbox or "✓ Mark Paid" action. When clicked:
+
+The row gets a "Paid" badge
+Set is_actual = true in the database
+The amount is locked (no longer editable)
+
+
+
+Delete a one-time entry — one-time manual entries (not recurring bills) can be deleted directly from the ledger row with a trash icon
+
+
+
+Part E: Starting Balance
+
+Right now the running balance starts from $0. Add a small banner at the top of the ledger:
+
+
+"Your running balance starts from $0. Connect your accounts or enter a starting balance to see accurate projections."
+
+
+
+With a button: "Set Starting Balance" — opens a simple modal where the user types in their current checking account balance. Store this in a user_settings table (user_id, starting_balance, balance_as_of_date). Use this value as the seed for the running balance column.
+
+Create the user_settings table in PostgreSQL if it doesn't exist.
+
+
+Part F: API Routes
+
+
+GET /api/forecast?userId=1&months=6 — return all forecasted transactions for the period, sorted by date, with running balance calculated server-side
+PUT /api/forecast/[id] — update a single forecasted transaction (amount, is_actual, is_committed)
+POST /api/forecast/manual — insert a one-time manual transaction
+DELETE /api/forecast/[id] — delete a manual (non-recurring) transaction only
+GET /api/forecast/summary — return monthly summary rollups (income, expenses, net, end balance per month)
+POST /api/user-settings — save starting balance
+GET /api/user-settings — retrieve starting balance
+
+
+
+Design notes:
+
+
+This page will be used daily, so performance matters — paginate or virtualize if the row count exceeds 200 rows
+The running balance column is the most important column — make it visually prominent (slightly larger font, bold)
+Red negative balances should be impossible to miss — use a background highlight on the entire row, not just the cell
+Keep the monthly group headers sticky as the user scrolls through a long ledger
+
+
+Use mock user_id = 1. Seed enough data (at least 6 months of bills + 2 pay periods per month) to make the ledger feel real and scrollable during testing.

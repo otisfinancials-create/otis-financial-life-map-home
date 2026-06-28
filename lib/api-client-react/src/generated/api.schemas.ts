@@ -208,6 +208,18 @@ export interface RegenerateForecastResult {
   message: string;
 }
 
+export interface UserSettings {
+  id: number;
+  startingBalance: number;
+  balanceAsOfDate: string;
+  updatedAt?: string;
+}
+
+export interface UserSettingsInput {
+  startingBalance: number;
+  balanceAsOfDate: string;
+}
+
 export interface AnthropicConversation {
   id: number;
   title: string;

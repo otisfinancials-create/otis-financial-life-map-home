@@ -32,3 +32,5 @@ export * from './payScheduleInput';
 export * from './payScheduleUpdate';
 export * from './regenerateForecastResult';
 export * from './upcomingBill';
+export * from './userSettings';
+export * from './userSettingsInput';
