@@ -12,5 +12,8 @@
   "devDependencies": {
     "prettier": "^3.8.4",
     "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "@replit/connectors-sdk": "^0.4.1"
   }
 }
