@@ -1,18 +1,30 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, accountsTable, billsTable } from "@workspace/db";
+import { db, accountsTable, billsTable, paySchedulesTable } from "@workspace/db";
 import { GetDashboardSummaryResponse } from "@workspace/api-zod";
+
+const FREQ_TO_MONTHLY: Record<string, number> = {
+  weekly: 52 / 12,
+  biweekly: 26 / 12,
+  "bi-weekly": 26 / 12,
+  monthly: 1,
+  quarterly: 1 / 3,
+  annually: 1 / 12,
+  yearly: 1 / 12,
+};
 
 const router: IRouter = Router();
 
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   req.log.info("Fetching dashboard summary");
 
-  const [accounts, bills] = await Promise.all([
+  const [accounts, bills, paySchedules] = await Promise.all([
     db.select().from(accountsTable),
     db.select().from(billsTable).where(eq(billsTable.isActive, true)),
+    db.select().from(paySchedulesTable),
   ]);
 
+  // Net worth
   const totalAssets = accounts
     .filter((a) => a.isAsset)
     .reduce((sum, a) => sum + parseFloat(String(a.currentBalance)), 0);
@@ -21,16 +33,21 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     .reduce((sum, a) => sum + parseFloat(String(a.currentBalance)), 0);
   const netWorth = totalAssets - totalLiabilities;
 
-  // Monthly calculations based on bills
+  // Monthly expenses from active bills
   const monthlyExpenses = bills.reduce((sum, b) => {
     const amount = parseFloat(String(b.amount));
-    const freq = b.frequency.toLowerCase();
-    if (freq === "weekly") return sum + amount * 4.33;
-    if (freq === "biweekly" || freq === "bi-weekly") return sum + amount * 2.17;
-    if (freq === "quarterly") return sum + amount / 3;
-    if (freq === "annually" || freq === "yearly") return sum + amount / 12;
-    return sum + amount; // monthly
+    const multiplier = FREQ_TO_MONTHLY[b.frequency.toLowerCase()] ?? 1;
+    return sum + amount * multiplier;
   }, 0);
+
+  // Monthly income from real pay schedules
+  const monthlyIncome = paySchedules.reduce((sum, ps) => {
+    const amount = parseFloat(String(ps.amount));
+    const multiplier = FREQ_TO_MONTHLY[ps.frequency.toLowerCase()] ?? 1;
+    return sum + amount * multiplier;
+  }, 0);
+
+  const monthlyCashFlow = monthlyIncome - monthlyExpenses;
 
   // Upcoming bills in next 30 days
   const today = new Date();
@@ -52,11 +69,10 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     return days <= 7;
   }).length;
 
-  const upcomingBillsTotal = upcomingBills.reduce((sum, b) => sum + parseFloat(String(b.amount)), 0);
-
-  // Placeholder: income will come from pay schedules later
-  const monthlyIncome = monthlyExpenses * 1.4; // will be replaced with real pay schedule data
-  const monthlyCashFlow = monthlyIncome - monthlyExpenses;
+  const upcomingBillsTotal = upcomingBills.reduce(
+    (sum, b) => sum + parseFloat(String(b.amount)),
+    0
+  );
 
   res.json(
     GetDashboardSummaryResponse.parse({

@@ -1,25 +1,72 @@
-import { useGetDashboardSummary, useGetUpcomingBills, useListAccounts } from "@workspace/api-client-react";
+import {
+  useGetDashboardSummary,
+  useGetUpcomingBills,
+  useListAccounts,
+  useGetMonthlyForecast,
+  getGetDashboardSummaryQueryKey,
+} from "@workspace/api-client-react";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, AlertCircle, Building2 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from "recharts";
-import { format, addDays } from "date-fns";
+import {
+  ArrowUpRight,
+  Wallet,
+  TrendingUp,
+  AlertCircle,
+  Building2,
+  Banknote,
+  ArrowRight,
+} from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
+import { format } from "date-fns";
+import { Link } from "wouter";
+import { Badge } from "@/components/ui/badge";
+
+const fmt = (v: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(v);
 
 export default function Dashboard() {
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
   const { data: upcomingBills, isLoading: isLoadingBills } = useGetUpcomingBills();
   const { data: accounts, isLoading: isLoadingAccounts } = useListAccounts();
+  const { data: monthlyForecast, isLoading: isLoadingForecast } = useGetMonthlyForecast();
 
-  // Mock chart data for demonstration, normally this would come from forecast API
-  const cashFlowData = [
-    { month: "Jan", income: 14500, expenses: 8200 },
-    { month: "Feb", income: 14500, expenses: 7800 },
-    { month: "Mar", income: 14500, expenses: 9100 },
-    { month: "Apr", income: 14500, expenses: 8400 },
-    { month: "May", income: 18500, expenses: 8500 }, // Bonus month
-    { month: "Jun", income: 14500, expenses: 9800 }, // Vacation
-  ];
+  // Use first 6 months of real forecast data for the chart
+  const cashFlowData = (monthlyForecast ?? []).slice(0, 6).map((m) => ({
+    month: m.label,
+    income: m.totalIncome,
+    expenses: m.totalExpenses,
+    net: m.netCashFlow,
+  }));
+
+  // Group accounts by type for the sidebar breakdown
+  const accountsByType = (accounts ?? []).reduce<Record<string, number>>((acc, a) => {
+    const key = a.accountType;
+    const bal = a.isAsset ? a.currentBalance : -a.currentBalance;
+    acc[key] = (acc[key] ?? 0) + bal;
+    return acc;
+  }, {});
+
+  const TYPE_LABELS: Record<string, string> = {
+    checking: "Checking",
+    savings: "Savings",
+    investment: "Investment",
+    retirement: "Retirement",
+    real_estate: "Real Estate",
+    loan: "Loans",
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -32,6 +79,7 @@ export default function Dashboard() {
 
       {/* Primary Metrics */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Net Worth */}
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
@@ -42,17 +90,26 @@ export default function Dashboard() {
               <Skeleton className="h-8 w-[120px]" />
             ) : (
               <>
-                <div className="text-2xl font-bold tracking-tight">
-                  <FormatCurrency amount={summary?.netWorth || 0} compact />
+                <div className="text-2xl font-bold font-mono tracking-tight">
+                  <FormatCurrency amount={summary?.netWorth ?? 0} compact />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                  <span className="text-chart-2 flex items-center"><ArrowUpRight className="h-3 w-3" /> 2.4%</span> from last month
+                <p className="text-xs text-muted-foreground mt-1">
+                  <span className="text-chart-2 inline-flex items-center gap-0.5">
+                    <ArrowUpRight className="h-3 w-3" />
+                    <FormatCurrency amount={summary?.totalAssets ?? 0} compact />
+                  </span>
+                  {" assets · "}
+                  <span className="text-chart-3">
+                    <FormatCurrency amount={summary?.totalLiabilities ?? 0} compact />
+                  </span>
+                  {" debt"}
                 </p>
               </>
             )}
           </CardContent>
         </Card>
-        
+
+        {/* Monthly Cash Flow */}
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Monthly Cash Flow</CardTitle>
@@ -63,35 +120,50 @@ export default function Dashboard() {
               <Skeleton className="h-8 w-[120px]" />
             ) : (
               <>
-                <div className="text-2xl font-bold tracking-tight">
-                  <FormatCurrency amount={summary?.monthlyCashFlow || 0} compact showSign />
+                <div
+                  className={`text-2xl font-bold font-mono tracking-tight ${
+                    (summary?.monthlyCashFlow ?? 0) >= 0 ? "text-chart-2" : "text-destructive"
+                  }`}
+                >
+                  <FormatCurrency amount={summary?.monthlyCashFlow ?? 0} compact showSign />
                 </div>
                 <div className="flex items-center gap-2 mt-1 text-xs">
-                  <span className="text-chart-2"><FormatCurrency amount={summary?.monthlyIncome || 0} compact /> in</span>
+                  <span className="text-chart-2">
+                    <FormatCurrency amount={summary?.monthlyIncome ?? 0} compact /> in
+                  </span>
                   <span className="text-muted-foreground">/</span>
-                  <span className="text-chart-3"><FormatCurrency amount={summary?.monthlyExpenses || 0} compact /> out</span>
+                  <span className="text-chart-3">
+                    <FormatCurrency amount={summary?.monthlyExpenses ?? 0} compact /> out
+                  </span>
                 </div>
               </>
             )}
           </CardContent>
         </Card>
 
+        {/* Monthly Income */}
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Assets</CardTitle>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Monthly Income</CardTitle>
+            <Banknote className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {isLoadingSummary ? (
               <Skeleton className="h-8 w-[120px]" />
             ) : (
-              <div className="text-2xl font-bold tracking-tight">
-                <FormatCurrency amount={summary?.totalAssets || 0} compact />
-              </div>
+              <>
+                <div className="text-2xl font-bold font-mono tracking-tight text-chart-2">
+                  <FormatCurrency amount={summary?.monthlyIncome ?? 0} compact />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  from pay schedules
+                </p>
+              </>
             )}
           </CardContent>
         </Card>
 
+        {/* Total Assets */}
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Liabilities</CardTitle>
@@ -101,103 +173,209 @@ export default function Dashboard() {
             {isLoadingSummary ? (
               <Skeleton className="h-8 w-[120px]" />
             ) : (
-              <div className="text-2xl font-bold tracking-tight">
-                <FormatCurrency amount={summary?.totalLiabilities || 0} compact />
-              </div>
+              <>
+                <div className="text-2xl font-bold font-mono tracking-tight">
+                  <FormatCurrency amount={summary?.totalLiabilities ?? 0} compact />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <span className="text-chart-2">
+                    <FormatCurrency amount={summary?.totalAssets ?? 0} compact />
+                  </span>
+                  {" total assets"}
+                </p>
+              </>
             )}
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Chart */}
+        {/* Cash Flow Chart — real forecast data */}
         <Card className="col-span-1 lg:col-span-2 bg-card border-border">
           <CardHeader>
             <CardTitle>Cash Flow Trend</CardTitle>
-            <CardDescription>Income vs Expenses over the next 6 months</CardDescription>
+            <CardDescription>
+              {cashFlowData.length > 0
+                ? `${cashFlowData[0]?.month} – ${cashFlowData[cashFlowData.length - 1]?.month} · income vs expenses`
+                : "Income vs expenses · next 6 months"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={cashFlowData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis 
-                    dataKey="month" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    dy={10}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    tickFormatter={(value) => `$${value/1000}k`}
-                  />
-                  <Tooltip 
-                    cursor={{ fill: 'hsl(var(--muted)/0.3)' }}
-                    contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                    itemStyle={{ color: 'hsl(var(--foreground))' }}
-                    formatter={(value: number) => [new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value), '']}
-                  />
-                  <Bar dataKey="income" name="Income" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="expenses" name="Expenses" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Upcoming Bills */}
-        <Card className="bg-card border-border flex flex-col">
-          <CardHeader>
-            <CardTitle>Upcoming Bills</CardTitle>
-            <CardDescription>Next 30 days</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-auto pr-2">
-            {isLoadingBills ? (
-              <div className="space-y-4">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="flex justify-between items-center">
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-3 w-16" />
-                    </div>
-                    <Skeleton className="h-4 w-16" />
-                  </div>
-                ))}
-              </div>
-            ) : upcomingBills?.length ? (
-              <div className="space-y-5">
-                {upcomingBills.slice(0, 6).map((bill) => (
-                  <div key={bill.id} className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{bill.billName}</span>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        {bill.daysUntilDue === 0 ? (
-                          <span className="text-chart-4 font-medium">Due today</span>
-                        ) : bill.daysUntilDue === 1 ? (
-                          <span className="text-chart-4">Due tomorrow</span>
-                        ) : (
-                          <span>Due in {bill.daysUntilDue} days</span>
-                        )}
-                        <span className="opacity-50">•</span>
-                        {format(new Date(bill.dueDate), 'MMM d')}
-                      </span>
-                    </div>
-                    <div className="text-sm font-medium">
-                      <FormatCurrency amount={bill.amount} />
-                    </div>
-                  </div>
-                ))}
+            {isLoadingForecast ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : cashFlowData.length > 0 ? (
+              <div className="h-[280px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={cashFlowData}
+                    margin={{ top: 10, right: 0, left: -20, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="hsl(var(--border))"
+                    />
+                    <XAxis
+                      dataKey="month"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                      dy={10}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                      tickFormatter={(v) => `$${v / 1000}k`}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "hsl(var(--muted)/0.3)" }}
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--popover))",
+                        borderColor: "hsl(var(--border))",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                      itemStyle={{ color: "hsl(var(--foreground))" }}
+                      formatter={(value: number, name: string) => [
+                        fmt(value),
+                        name === "income" ? "Income" : name === "expenses" ? "Expenses" : "Net",
+                      ]}
+                    />
+                    <Bar
+                      dataKey="income"
+                      name="income"
+                      fill="hsl(var(--chart-2))"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={36}
+                    />
+                    <Bar
+                      dataKey="expenses"
+                      name="expenses"
+                      fill="hsl(var(--chart-3))"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={36}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-                No bills due soon.
+              <div className="h-[280px] flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                <p className="text-sm">No forecast data yet.</p>
+                <Link href="/forecast" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+                  Go to Forecast to generate it <ArrowRight className="h-3 w-3" />
+                </Link>
               </div>
             )}
           </CardContent>
         </Card>
+
+        {/* Right column: Upcoming Bills + Account Breakdown */}
+        <div className="flex flex-col gap-6">
+          {/* Upcoming Bills */}
+          <Card className="bg-card border-border flex-1">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Upcoming Bills</CardTitle>
+                <Link href="/bills" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  All bills <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+              <CardDescription>Next 30 days</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingBills ? (
+                <div className="space-y-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex justify-between items-center">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-3.5 w-24" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                      <Skeleton className="h-3.5 w-14" />
+                    </div>
+                  ))}
+                </div>
+              ) : upcomingBills?.length ? (
+                <div className="space-y-4">
+                  {upcomingBills.slice(0, 6).map((bill) => (
+                    <div key={bill.id} className="flex items-start justify-between gap-2">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-medium truncate">{bill.billName}</span>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          {bill.daysUntilDue === 0 ? (
+                            <span className="text-destructive font-medium">Due today</span>
+                          ) : bill.daysUntilDue === 1 ? (
+                            <span className="text-chart-4">Due tomorrow</span>
+                          ) : bill.daysUntilDue <= 5 ? (
+                            <span className="text-chart-4">
+                              Due in {bill.daysUntilDue}d
+                            </span>
+                          ) : (
+                            <span>Due in {bill.daysUntilDue}d</span>
+                          )}
+                          <span className="opacity-40">·</span>
+                          <span>{format(new Date(bill.dueDate + "T00:00:00"), "MMM d")}</span>
+                        </span>
+                      </div>
+                      <span className="text-sm font-mono font-medium shrink-0">
+                        <FormatCurrency amount={bill.amount} />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-6 flex items-center justify-center text-muted-foreground text-sm">
+                  No bills due soon.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Net Worth breakdown by account type */}
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">By Account Type</CardTitle>
+                <Link href="/accounts" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  All accounts <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingAccounts ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex justify-between items-center">
+                      <Skeleton className="h-3.5 w-20" />
+                      <Skeleton className="h-3.5 w-16" />
+                    </div>
+                  ))}
+                </div>
+              ) : Object.keys(accountsByType).length > 0 ? (
+                <div className="space-y-2.5">
+                  {Object.entries(accountsByType).map(([type, total]) => (
+                    <div key={type} className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        {TYPE_LABELS[type] ?? type}
+                      </span>
+                      <span
+                        className={`text-sm font-mono font-medium ${
+                          total >= 0 ? "text-foreground" : "text-chart-3"
+                        }`}
+                      >
+                        {total < 0 ? "−" : ""}
+                        {fmt(Math.abs(total))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">No accounts yet.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
