@@ -5,6 +5,7 @@ import {
   Landmark, 
   LineChart, 
   CalendarHeart, 
+  FlaskConical,
   CreditCard,
   Bot,
   Banknote,
@@ -21,6 +22,7 @@ const navigation = [
   { name: "Forecast", href: "/forecast", icon: LineChart },
   { name: "Loans", href: "/loans", icon: CreditCard },
   { name: "Life Events", href: "/life-events", icon: CalendarHeart },
+  { name: "Simulator", href: "/simulator", icon: FlaskConical },
 ];
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
