@@ -1,3 +1,4 @@
 - [Light mode theme](light-mode-theme.md) — app switched from dark to light; :root is light, .dark retains dark values for future toggle
 - [Otis light/dark theming](otis-theming.md) — class-based dark via @custom-variant; a stray `dark` class on Shell.tsx made the authenticated app dark while the sign-in page stayed light.
 - [Git ops from the agent](git-write-block.md) — local object writes (commit, tag) are blocked, but `git push` works; GitHub rejects pushes of repos with CI files unless token has `workflow` scope; create tags via the REST API.
+- [Clerk dev iframe 401s](clerk-dev-iframe-cookies.md) — preview-pane iframe blocks Clerk session cookie; signed-in app 401s with sessionStatus null. Fix: open app in own tab. Not data loss.
