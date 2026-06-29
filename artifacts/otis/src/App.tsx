@@ -12,6 +12,7 @@ import { Shell } from "@/components/layout/Shell";
 import Dashboard from "@/pages/dashboard";
 import Bills from "@/pages/bills";
 import Accounts from "@/pages/accounts";
+import AssetsLiabilities from "@/pages/assets-liabilities";
 import Forecast from "@/pages/forecast";
 import PaySchedules from "@/pages/pay-schedules";
 import LifeEvents from "@/pages/life-events";
@@ -221,6 +222,9 @@ function ClerkProviderWithRoutes() {
             </Route>
             <Route path="/accounts">
               <ProtectedShell><Accounts /></ProtectedShell>
+            </Route>
+            <Route path="/assets-liabilities">
+              <ProtectedShell><AssetsLiabilities /></ProtectedShell>
             </Route>
             <Route path="/forecast">
               <ProtectedShell><Forecast /></ProtectedShell>

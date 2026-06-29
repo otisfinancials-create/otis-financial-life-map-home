@@ -28,17 +28,16 @@ import { useColors } from "@/hooks/useColors";
 const ACCOUNT_TYPES = [
   { label: "Checking", value: "checking" },
   { label: "Savings", value: "savings" },
-  { label: "Investment", value: "investment" },
-  { label: "Retirement", value: "retirement" },
-  { label: "Loan", value: "loan" },
+  { label: "Investment / Brokerage", value: "investment" },
   { label: "Credit Card", value: "credit_card" },
-  { label: "Other Asset", value: "other_asset" },
+  { label: "Loan", value: "loan" },
+  { label: "Mortgage", value: "mortgage" },
 ] as const;
 
 type AccountTypeValue = (typeof ACCOUNT_TYPES)[number]["value"];
 
 function isLiabilityType(type: string): boolean {
-  return type === "loan" || type === "credit_card";
+  return type === "loan" || type === "credit_card" || type === "mortgage";
 }
 
 export type AccountFormData = {

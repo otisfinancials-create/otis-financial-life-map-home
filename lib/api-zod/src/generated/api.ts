@@ -394,6 +394,112 @@ export const DeleteAccountResponse = zod.void()
 
 
 /**
+ * @summary List all assets and liabilities
+ */
+export const ListAssetsResponseItem = zod.object({
+  "id": zod.number(),
+  "assetName": zod.string(),
+  "assetType": zod.string(),
+  "institutionName": zod.string(),
+  "currentBalance": zod.number(),
+  "isAsset": zod.boolean(),
+  "createdAt": zod.string()
+})
+export const ListAssetsResponse = zod.array(ListAssetsResponseItem)
+
+
+/**
+ * @summary Create an asset or liability
+ */
+export const CreateAssetBody = zod.object({
+  "assetName": zod.string(),
+  "assetType": zod.string(),
+  "institutionName": zod.string(),
+  "currentBalance": zod.number(),
+  "isAsset": zod.boolean()
+})
+
+export const CreateAssetResponse = zod.object({
+  "id": zod.number(),
+  "assetName": zod.string(),
+  "assetType": zod.string(),
+  "institutionName": zod.string(),
+  "currentBalance": zod.number(),
+  "isAsset": zod.boolean(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Get net worth and breakdown by asset type
+ */
+export const GetAssetsSummaryResponse = zod.object({
+  "netWorth": zod.number(),
+  "totalAssets": zod.number(),
+  "totalLiabilities": zod.number(),
+  "byType": zod.array(zod.object({
+  "assetType": zod.string(),
+  "total": zod.number(),
+  "count": zod.number()
+}))
+})
+
+
+/**
+ * @summary Get an asset or liability by ID
+ */
+export const GetAssetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetAssetResponse = zod.object({
+  "id": zod.number(),
+  "assetName": zod.string(),
+  "assetType": zod.string(),
+  "institutionName": zod.string(),
+  "currentBalance": zod.number(),
+  "isAsset": zod.boolean(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update an asset or liability
+ */
+export const UpdateAssetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAssetBody = zod.object({
+  "assetName": zod.string().optional(),
+  "assetType": zod.string().optional(),
+  "institutionName": zod.string().optional(),
+  "currentBalance": zod.number().optional(),
+  "isAsset": zod.boolean().optional()
+})
+
+export const UpdateAssetResponse = zod.object({
+  "id": zod.number(),
+  "assetName": zod.string(),
+  "assetType": zod.string(),
+  "institutionName": zod.string(),
+  "currentBalance": zod.number(),
+  "isAsset": zod.boolean(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete an asset or liability
+ */
+export const DeleteAssetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAssetResponse = zod.void()
+
+
+/**
  * @summary List forecasted transactions (optionally filtered by date range)
  */
 export const ListForecastQueryParams = zod.object({

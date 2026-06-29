@@ -34,87 +34,74 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
-import { useCreateAccount, useUpdateAccount, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
-import type { Account } from "@workspace/api-client-react";
+import { useCreateAsset, useUpdateAsset, getListAssetsQueryKey, getGetAssetsSummaryQueryKey } from "@workspace/api-client-react";
+import type { Asset } from "@workspace/api-client-react";
 
-const accountSchema = z.object({
-  accountName: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  accountType: z.string().min(1, { message: "Please select an account type." }),
+const assetSchema = z.object({
+  assetName: z.string().min(2, { message: "Name must be at least 2 characters." }),
+  assetType: z.string().min(1, { message: "Please select a type." }),
   institutionName: z.string().min(1, { message: "Please provide an institution name." }),
   currentBalance: z.coerce.number(),
   isAsset: z.boolean().default(true),
 });
 
-type AccountFormValues = z.infer<typeof accountSchema>;
+type AssetFormValues = z.infer<typeof assetSchema>;
 
-interface AccountDialogProps {
-  account?: Account;
+interface AssetDialogProps {
+  asset?: Asset;
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
-export function AccountDialog({ account, trigger, open, onOpenChange }: AccountDialogProps) {
+export function AssetDialog({ asset, trigger, open, onOpenChange }: AssetDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined && onOpenChange !== undefined;
   const isOpen = isControlled ? open : internalOpen;
   const setIsOpen = isControlled ? onOpenChange : setInternalOpen;
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const createAccount = useCreateAccount();
-  const updateAccount = useUpdateAccount();
-  const isEditing = !!account;
+  const createAsset = useCreateAsset();
+  const updateAsset = useUpdateAsset();
+  const isEditing = !!asset;
 
-  const form = useForm<AccountFormValues>({
-    resolver: zodResolver(accountSchema),
+  const form = useForm<AssetFormValues>({
+    resolver: zodResolver(assetSchema),
     defaultValues: {
-      accountName: account?.accountName || "",
-      accountType: account?.accountType || "",
-      institutionName: account?.institutionName || "",
-      currentBalance: account?.currentBalance || 0,
-      isAsset: account?.isAsset ?? true,
+      assetName: asset?.assetName || "",
+      assetType: asset?.assetType || "",
+      institutionName: asset?.institutionName || "",
+      currentBalance: asset?.currentBalance || 0,
+      isAsset: asset?.isAsset ?? true,
     },
   });
 
-  // Automatically set isAsset based on accountType selection
-  const watchAccountType = form.watch("accountType");
-  const handleAccountTypeChange = (value: string) => {
-    form.setValue("accountType", value);
-    if (value === "loan" || value === "credit_card" || value === "mortgage") {
-      form.setValue("isAsset", false);
-    } else {
-      form.setValue("isAsset", true);
-    }
-  };
-
-  function onSubmit(data: AccountFormValues) {
+  function onSubmit(data: AssetFormValues) {
     if (isEditing) {
-      updateAccount.mutate({ id: account.id, data }, {
+      updateAsset.mutate({ id: asset.id, data }, {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetAccountsSummaryQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          toast({ title: "Account updated successfully" });
+          queryClient.invalidateQueries({ queryKey: getListAssetsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetAssetsSummaryQueryKey() });
+          toast({ title: "Entry updated successfully" });
           setIsOpen(false);
           if (!isControlled) form.reset();
         },
         onError: () => {
-          toast({ title: "Failed to update account", variant: "destructive" });
+          toast({ title: "Failed to update entry", variant: "destructive" });
         }
       });
     } else {
-      createAccount.mutate({ data }, {
+      createAsset.mutate({ data }, {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetAccountsSummaryQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          toast({ title: "Account created successfully" });
+          queryClient.invalidateQueries({ queryKey: getListAssetsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetAssetsSummaryQueryKey() });
+          toast({ title: "Entry created successfully" });
           setIsOpen(false);
           if (!isControlled) form.reset();
         },
         onError: () => {
-          toast({ title: "Failed to create account", variant: "destructive" });
+          toast({ title: "Failed to create entry", variant: "destructive" });
         }
       });
     }
@@ -132,9 +119,9 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Account" : "Add Account"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Entry" : "Add Asset or Liability"}</DialogTitle>
           <DialogDescription>
-            {isEditing ? "Make changes to your account details." : "Add a new financial account manually."}
+            {isEditing ? "Make changes to this entry." : "Add a new asset or liability manually."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -146,7 +133,7 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                 <FormItem>
                   <FormLabel>Institution</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Chase, Vanguard, Fidelity" {...field} />
+                    <Input placeholder="e.g. Zillow, Kelley Blue Book, Self" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -154,12 +141,12 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
             />
             <FormField
               control={form.control}
-              name="accountName"
+              name="assetName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Account Name</FormLabel>
+                  <FormLabel>Asset or Liability Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Primary Checking, 401k" {...field} />
+                    <Input placeholder="e.g. Primary Residence, 2022 Tesla" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -168,23 +155,21 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="accountType"
+                name="assetType"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Type</FormLabel>
-                    <Select onValueChange={handleAccountTypeChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="checking">Checking</SelectItem>
-                        <SelectItem value="savings">Savings</SelectItem>
-                        <SelectItem value="investment">Investment / Brokerage</SelectItem>
-                        <SelectItem value="credit_card">Credit Card</SelectItem>
-                        <SelectItem value="loan">Loan</SelectItem>
-                        <SelectItem value="mortgage">Mortgage</SelectItem>
+                        <SelectItem value="real_estate">Real Estate</SelectItem>
+                        <SelectItem value="vehicle">Vehicle</SelectItem>
+                        <SelectItem value="personal_property">Personal Property</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -196,7 +181,7 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                 name="currentBalance"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Current Balance</FormLabel>
+                    <FormLabel>Current Value</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" {...field} />
                     </FormControl>
@@ -205,23 +190,22 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                 )}
               />
             </div>
-            
+
             <FormField
               control={form.control}
               name="isAsset"
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border p-3">
                   <div className="space-y-0.5">
-                    <FormLabel>Asset Account</FormLabel>
+                    <FormLabel>Asset</FormLabel>
                     <FormDescription className="text-xs">
-                      Adds to net worth if active, subtracts if inactive
+                      On adds to net worth; off counts as a liability
                     </FormDescription>
                   </div>
                   <FormControl>
                     <Switch
                       checked={field.value}
                       onCheckedChange={field.onChange}
-                      disabled={watchAccountType === "loan" || watchAccountType === "credit_card" || watchAccountType === "mortgage"}
                     />
                   </FormControl>
                 </FormItem>
@@ -232,8 +216,8 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
               <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createAccount.isPending || updateAccount.isPending}>
-                {createAccount.isPending || updateAccount.isPending ? "Saving..." : isEditing ? "Save Changes" : "Add Account"}
+              <Button type="submit" disabled={createAsset.isPending || updateAsset.isPending}>
+                {createAsset.isPending || updateAsset.isPending ? "Saving..." : isEditing ? "Save Changes" : "Add Entry"}
               </Button>
             </DialogFooter>
           </form>

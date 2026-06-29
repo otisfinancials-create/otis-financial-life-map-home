@@ -1,6 +1,7 @@
 export * from "./bills";
 export * from "./pay_schedules";
 export * from "./accounts";
+export * from "./assets";
 export * from "./forecasted_transactions";
 export * from "./conversations";
 export * from "./messages";

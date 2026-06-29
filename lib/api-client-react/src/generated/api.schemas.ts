@@ -156,6 +156,45 @@ export interface AccountsSummary {
   byType: AccountTypeGroup[];
 }
 
+export interface Asset {
+  id: number;
+  assetName: string;
+  assetType: string;
+  institutionName: string;
+  currentBalance: number;
+  isAsset: boolean;
+  createdAt: string;
+}
+
+export interface AssetInput {
+  assetName: string;
+  assetType: string;
+  institutionName: string;
+  currentBalance: number;
+  isAsset: boolean;
+}
+
+export interface AssetUpdate {
+  assetName?: string;
+  assetType?: string;
+  institutionName?: string;
+  currentBalance?: number;
+  isAsset?: boolean;
+}
+
+export interface AssetTypeGroup {
+  assetType: string;
+  total: number;
+  count: number;
+}
+
+export interface AssetsSummary {
+  netWorth: number;
+  totalAssets: number;
+  totalLiabilities: number;
+  byType: AssetTypeGroup[];
+}
+
 export interface ForecastedTransaction {
   id: number;
   transactionDate: string;

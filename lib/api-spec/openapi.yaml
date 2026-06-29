@@ -16,6 +16,8 @@ tags:
     description: Pay schedule management
   - name: accounts
     description: Account management
+  - name: assets
+    description: Assets and liabilities management
   - name: forecasts
     description: Cash flow forecasting
   - name: dashboard
@@ -349,6 +351,111 @@ paths:
       operationId: deleteAccount
       tags: [accounts]
       summary: Delete an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Assets & Liabilities ──────────────────────────────────────────────────
+  /assets:
+    get:
+      operationId: listAssets
+      tags: [assets]
+      summary: List all assets and liabilities
+      responses:
+        "200":
+          description: List of assets and liabilities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Asset"
+    post:
+      operationId: createAsset
+      tags: [assets]
+      summary: Create an asset or liability
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssetInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+
+  /assets/summary:
+    get:
+      operationId: getAssetsSummary
+      tags: [assets]
+      summary: Get net worth and breakdown by asset type
+      responses:
+        "200":
+          description: Assets summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetsSummary"
+
+  /assets/{id}:
+    get:
+      operationId: getAsset
+      tags: [assets]
+      summary: Get an asset or liability by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateAsset
+      tags: [assets]
+      summary: Update an asset or liability
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssetUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteAsset
+      tags: [assets]
+      summary: Delete an asset or liability
       parameters:
         - name: id
           in: path
@@ -886,6 +993,81 @@ components:
       required: [accountType, total, count]
       properties:
         accountType:
+          type: string
+        total:
+          type: number
+        count:
+          type: integer
+
+    # ── Assets & Liabilities ─────────────────────────────────────────────────
+    Asset:
+      type: object
+      required: [id, assetName, assetType, institutionName, currentBalance, isAsset, createdAt]
+      properties:
+        id:
+          type: integer
+        assetName:
+          type: string
+        assetType:
+          type: string
+        institutionName:
+          type: string
+        currentBalance:
+          type: number
+        isAsset:
+          type: boolean
+        createdAt:
+          type: string
+
+    AssetInput:
+      type: object
+      required: [assetName, assetType, institutionName, currentBalance, isAsset]
+      properties:
+        assetName:
+          type: string
+        assetType:
+          type: string
+        institutionName:
+          type: string
+        currentBalance:
+          type: number
+        isAsset:
+          type: boolean
+
+    AssetUpdate:
+      type: object
+      properties:
+        assetName:
+          type: string
+        assetType:
+          type: string
+        institutionName:
+          type: string
+        currentBalance:
+          type: number
+        isAsset:
+          type: boolean
+
+    AssetsSummary:
+      type: object
+      required: [netWorth, totalAssets, totalLiabilities, byType]
+      properties:
+        netWorth:
+          type: number
+        totalAssets:
+          type: number
+        totalLiabilities:
+          type: number
+        byType:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetTypeGroup"
+
+    AssetTypeGroup:
+      type: object
+      required: [assetType, total, count]
+      properties:
+        assetType:
           type: string
         total:
           type: number
