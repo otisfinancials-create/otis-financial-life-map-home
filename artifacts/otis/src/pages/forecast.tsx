@@ -219,15 +219,14 @@ export default function Forecast() {
     }),
   [txsWithBalance, catFilter, search]);
 
-  // ── Current-balance marker (last displayed row on/before today) ───────────
+  // ── Current-balance marker (last paid/actual row) ─────────────────────────
   const currentBalanceTxId = useMemo(() => {
     let id: number | null = null;
     for (const t of filtered) {
-      if (t.transactionDate <= todayStr) id = t.id;
-      else break;
+      if (t.isActual) id = t.id;
     }
-    return id ?? filtered[0]?.id ?? null;
-  }, [filtered, todayStr]);
+    return id;
+  }, [filtered]);
 
   // ── Group by month ────────────────────────────────────────────────────────
   const groups = useMemo((): MonthGroup[] => {
@@ -581,7 +580,7 @@ export default function Forecast() {
 
                               {/* Description */}
                               <div className="px-4 py-2.5 flex items-center gap-1.5 min-w-0">
-                                <span className="font-medium text-sm truncate">{tx.description}</span>
+                                <span className="font-medium text-sm truncate min-w-0">{tx.description}</span>
                                 {tx.companyUrl && (
                                   <a
                                     href={tx.companyUrl}
