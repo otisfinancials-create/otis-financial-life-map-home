@@ -19,7 +19,7 @@ import { useClerk, useUser } from "@clerk/react";
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Accounts", href: "/accounts", icon: Landmark },
-  { name: "Assets & Liabilities", href: "/assets-liabilities", icon: Scale },
+  { name: "My Assets", href: "/assets-liabilities", icon: Scale },
   { name: "Bills", href: "/bills", icon: Receipt },
   { name: "Pay Schedules", href: "/pay-schedules", icon: Banknote },
   { name: "Forecast", href: "/forecast", icon: LineChart },

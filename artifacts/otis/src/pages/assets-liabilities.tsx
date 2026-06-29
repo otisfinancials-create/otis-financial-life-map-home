@@ -103,7 +103,7 @@ export default function AssetsLiabilities() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Assets &amp; Liabilities</h1>
+          <h1 className="text-2xl font-bold tracking-tight">My Assets</h1>
           <p className="text-muted-foreground mt-1">Track property, vehicles, and other holdings outside your accounts.</p>
         </div>
         <AssetDialog
@@ -117,7 +117,7 @@ export default function AssetsLiabilities() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4">
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Assets</CardTitle>
@@ -128,20 +128,6 @@ export default function AssetsLiabilities() {
             ) : (
               <div className="text-2xl font-bold tracking-tight text-chart-2">
                 <FormatCurrency amount={summary?.totalAssets || 0} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Liabilities</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoadingSummary ? (
-              <Skeleton className="h-8 w-[120px]" />
-            ) : (
-              <div className="text-2xl font-bold tracking-tight text-chart-3">
-                <FormatCurrency amount={summary?.totalLiabilities || 0} />
               </div>
             )}
           </CardContent>
