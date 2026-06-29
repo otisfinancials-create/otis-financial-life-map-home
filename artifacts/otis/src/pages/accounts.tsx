@@ -113,21 +113,7 @@ export default function Accounts() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoadingSummary ? (
-              <Skeleton className="h-8 w-[120px]" />
-            ) : (
-              <div className="text-2xl font-bold tracking-tight">
-                <FormatCurrency amount={summary?.netWorth || 0} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Assets</CardTitle>
