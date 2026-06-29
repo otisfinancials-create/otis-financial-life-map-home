@@ -556,7 +556,7 @@ export default function Forecast() {
                               onDragEnd={() => setDraggingId(null)}
                               onClick={() => { if (!isEditing && !suppressClickRef.current) setSelectedTx(tx); }}
                               className={[
-                                "grid grid-cols-[110px_1fr_130px_72px_136px_230px] border-b border-border/60 last:border-0 group cursor-pointer transition-colors",
+                                "grid grid-cols-[110px_1fr_130px_72px_136px_230px] border-b border-border/60 last:border-0 group cursor-pointer transition-colors select-none",
                                 idx % 2 === 1 ? "bg-muted/20" : "",
                                 draggingId === tx.id ? "opacity-40" : "",
                                 draggingId !== null && draggingId !== tx.id ? "hover:border-primary hover:border-2" : "",
