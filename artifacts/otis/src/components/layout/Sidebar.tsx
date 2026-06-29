@@ -6,6 +6,7 @@ import {
   LineChart, 
   CalendarHeart, 
   FlaskConical,
+  PiggyBank,
   CreditCard,
   Bot,
   Banknote,
@@ -22,6 +23,7 @@ const navigation = [
   { name: "Forecast", href: "/forecast", icon: LineChart },
   { name: "Loans", href: "/loans", icon: CreditCard },
   { name: "Life Events", href: "/life-events", icon: CalendarHeart },
+  { name: "Retirement", href: "/retirement", icon: PiggyBank },
   { name: "Simulator", href: "/simulator", icon: FlaskConical },
 ];
 

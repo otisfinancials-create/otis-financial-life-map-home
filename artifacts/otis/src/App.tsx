@@ -15,6 +15,7 @@ import Accounts from "@/pages/accounts";
 import Forecast from "@/pages/forecast";
 import PaySchedules from "@/pages/pay-schedules";
 import LifeEvents from "@/pages/life-events";
+import Retirement from "@/pages/retirement";
 import Simulator from "@/pages/simulator";
 import Loans from "@/pages/loans";
 import AI from "@/pages/ai";
@@ -229,6 +230,9 @@ function ClerkProviderWithRoutes() {
             </Route>
             <Route path="/life-events">
               <ProtectedShell><LifeEvents /></ProtectedShell>
+            </Route>
+            <Route path="/retirement">
+              <ProtectedShell><Retirement /></ProtectedShell>
             </Route>
             <Route path="/simulator">
               <ProtectedShell><Simulator /></ProtectedShell>
