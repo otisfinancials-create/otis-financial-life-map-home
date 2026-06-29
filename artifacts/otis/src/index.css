@@ -7,16 +7,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Aggressive light-mode base override — wins over any dark media query via !important.
-   Placed after @import (CSS spec requires imports first) but !important makes
-   source position irrelevant to the cascade. */
-html,
-body,
-#root {
-  background-color: #f8f9fa !important;
-  color: #1a1a2e !important;
-}
-
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -177,52 +167,6 @@ body,
   .shadow {
     --tw-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
     --tw-shadow-colored: 0 1px 3px 0 var(--tw-shadow-color), 0 1px 2px -1px var(--tw-shadow-color);
-  }
-}
-
-/* ─── Force light mode regardless of OS dark-mode preference ────────────────
-   Tailwind v4's compiled output includes a @media (prefers-color-scheme: dark)
-   block that overrides :root variables for users on dark-OS systems. Repeating
-   the light values here — at the end of the file — wins by source order.
-   The .dark { } block above still works for a future manual dark-mode toggle
-   because class selectors (.dark) beat element selectors (:root) on specificity.
-────────────────────────────────────────────────────────────────────────────── */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: 210 17% 98%;
-    --foreground: 240 28% 14%;
-    --border: 214 32% 91%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 28% 14%;
-    --card-border: 214 32% 91%;
-    --sidebar: 210 17% 95%;
-    --sidebar-foreground: 240 28% 14%;
-    --sidebar-border: 214 32% 91%;
-    --sidebar-primary: 210 100% 50%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 214 32% 89%;
-    --sidebar-accent-foreground: 240 28% 14%;
-    --sidebar-ring: 210 100% 50%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 28% 14%;
-    --popover-border: 214 32% 91%;
-    --primary: 210 100% 50%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 17% 95%;
-    --secondary-foreground: 240 28% 14%;
-    --muted: 210 17% 96%;
-    --muted-foreground: 0 0% 40%;
-    --accent: 210 17% 94%;
-    --accent-foreground: 240 28% 14%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-    --input: 214 32% 91%;
-    --ring: 210 100% 50%;
-    --chart-1: 210 100% 50%;
-    --chart-2: 165 72% 33%;
-    --chart-3: 10 75% 50%;
-    --chart-4: 38 92% 46%;
-    --chart-5: 270 72% 52%;
   }
 }
 
