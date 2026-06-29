@@ -1,2 +1,1 @@
-- [Scripts package deps](scripts-deps.md) — drizzle-orm must be explicitly added to scripts/package.json; it does not flow through from @workspace/db
-- [TS env var narrowing in closures](ts-env-narrowing.md) — process.env.X narrowing doesn't propagate into later async function closures; fix by reassigning after null check
+- [Light mode theme](light-mode-theme.md) — app switched from dark to light; :root is light, .dark retains dark values for future toggle

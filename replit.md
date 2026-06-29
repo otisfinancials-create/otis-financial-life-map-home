@@ -39,7 +39,7 @@ A personal finance web app for high-earning households. Combines cash flow forec
 
 - Contract-first: OpenAPI spec gates codegen which gates both frontend hooks and server Zod validators.
 - Auth: Replit-managed Clerk. Web uses cookie-based sessions (no Bearer tokens in browser code). API routes protected via `requireAuth` middleware (`artifacts/api-server/src/middlewares/requireAuth.ts`). Health endpoint (`/healthz`) is public.
-- Dark mode default: CSS variables set up with dark theme as primary.
+- Light mode default: CSS variables in `index.css` `:root` use a clean white/light-gray palette. `.dark` class retains the original dark values for potential future toggle.
 - Forecast engine: `/api/forecast/regenerate` generates 12 months of transactions from bills + pay schedules on demand.
 - Plaid not integrated yet — accounts are manually managed.
 
@@ -55,7 +55,7 @@ A personal finance web app for high-earning households. Combines cash flow forec
 
 ## User preferences
 
-- Dark mode as default
+- Light mode as default
 - "Bloomberg meets Notion" aesthetic — data-dense but never cluttered
 - Do not use emojis in the UI
 - AI assistant persona named "Otis"

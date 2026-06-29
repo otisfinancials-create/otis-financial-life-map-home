@@ -61,18 +61,18 @@ import {
 // ─── Category styles ─────────────────────────────────────────────────────────
 
 const CAT_STYLES: Record<string, string> = {
-  Housing:       "bg-blue-500/15 text-blue-300",
-  Subscriptions: "bg-purple-500/15 text-purple-300",
-  Utilities:     "bg-cyan-500/15 text-cyan-300",
-  Insurance:     "bg-orange-500/15 text-orange-300",
-  Health:        "bg-green-500/15 text-green-300",
-  Food:          "bg-amber-500/15 text-amber-300",
-  Taxes:         "bg-red-500/15 text-red-300",
-  Transportation:"bg-yellow-500/15 text-yellow-300",
-  salary:        "bg-emerald-500/15 text-emerald-300",
-  Other:         "bg-zinc-500/15 text-zinc-400",
+  Housing:       "bg-blue-100 text-blue-700",
+  Subscriptions: "bg-purple-100 text-purple-700",
+  Utilities:     "bg-cyan-100 text-cyan-700",
+  Insurance:     "bg-orange-100 text-orange-700",
+  Health:        "bg-green-100 text-green-700",
+  Food:          "bg-amber-100 text-amber-800",
+  Taxes:         "bg-red-100 text-red-700",
+  Transportation:"bg-yellow-100 text-yellow-700",
+  salary:        "bg-emerald-100 text-emerald-700",
+  Other:         "bg-gray-100 text-gray-600",
 };
-const catStyle = (c: string) => CAT_STYLES[c] ?? "bg-zinc-500/15 text-zinc-400";
+const catStyle = (c: string) => CAT_STYLES[c] ?? "bg-gray-100 text-gray-600";
 
 const MANUAL_CATEGORIES = [
   "Housing","Subscriptions","Utilities","Insurance",
