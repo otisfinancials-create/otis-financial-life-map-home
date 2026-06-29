@@ -13,6 +13,7 @@ import {
   useUpdateForecastedTransaction,
   useDeleteForecastedTransaction,
   useCreateForecastedTransaction,
+  useReorderForecast,
   useGetUserSettings,
   useSaveUserSettings,
   useListBills,
@@ -135,8 +136,9 @@ export default function Forecast() {
   });
   const [selectedTx, setSelectedTx] = useState<TxRow | null>(null);
 
-  // drag-to-move (change date)
+  // drag-to-move (change date) + drag-to-reorder (within a date)
   const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<{ id: number; pos: "before" | "after" } | null>(null);
   const suppressClickRef = useRef(false);
   const [datePromptTx, setDatePromptTx] = useState<TxRow | null>(null);
   const [datePromptValue, setDatePromptValue] = useState("");
@@ -166,6 +168,7 @@ export default function Forecast() {
   const updateTx   = useUpdateForecastedTransaction();
   const deleteTx   = useDeleteForecastedTransaction();
   const createTx   = useCreateForecastedTransaction();
+  const reorderTx  = useReorderForecast();
   const saveSettings = useSaveUserSettings();
 
   // ── Bills lookup (for companyUrl + isVariable) ────────────────────────────
@@ -194,7 +197,10 @@ export default function Forecast() {
   // ── Running balance computation ───────────────────────────────────────────
   const txsWithBalance = useMemo((): TxRow[] => {
     const sorted = [...rawTxs].sort(
-      (a, b) => a.transactionDate.localeCompare(b.transactionDate) || a.id - b.id,
+      (a, b) =>
+        a.transactionDate.localeCompare(b.transactionDate) ||
+        a.sortOrder - b.sortOrder ||
+        a.id - b.id,
     );
     let running = startingBalance;
     return sorted.map((t) => {
@@ -218,6 +224,12 @@ export default function Forecast() {
       return true;
     }),
   [txsWithBalance, catFilter, search]);
+
+  // Row currently being dragged (for date-aware drop affordances)
+  const draggedRow = useMemo(
+    () => (draggingId === null ? null : txsWithBalance.find((t) => t.id === draggingId) ?? null),
+    [draggingId, txsWithBalance],
+  );
 
   // ── Current-balance marker (last paid/actual row) ─────────────────────────
   const currentBalanceTxId = useMemo(() => {
@@ -316,15 +328,48 @@ export default function Forecast() {
     try { e.dataTransfer.setData("text/plain", String(tx.id)); } catch { /* noop */ }
   };
 
+  const handleRowDragOver = (target: TxRow, e: React.DragEvent) => {
+    if (draggingId === null) return;
+    e.preventDefault();
+    // Only show an in-between insertion line when reordering within the same date.
+    if (!draggedRow || draggedRow.id === target.id || draggedRow.transactionDate !== target.transactionDate) {
+      if (dragOver !== null) setDragOver(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pos: "before" | "after" = e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    if (dragOver?.id !== target.id || dragOver?.pos !== pos) setDragOver({ id: target.id, pos });
+  };
+
   const handleRowDrop = (target: TxRow, e: React.DragEvent) => {
     e.preventDefault();
     suppressClickRef.current = true;
     setTimeout(() => { suppressClickRef.current = false; }, 0);
     const draggedId = draggingId;
+    const currentDragOver = dragOver;
     setDraggingId(null);
+    setDragOver(null);
     if (draggedId === null || draggedId === target.id) return;
     const dragged = txsWithBalance.find((t) => t.id === draggedId);
     if (!dragged) return;
+
+    // Same date → reorder the dragged row to its new position within that day.
+    if (dragged.transactionDate === target.transactionDate) {
+      const remaining = txsWithBalance
+        .filter((t) => t.transactionDate === target.transactionDate && t.id !== draggedId);
+      const targetIdx = remaining.findIndex((t) => t.id === target.id);
+      if (targetIdx === -1) return;
+      const pos = currentDragOver?.id === target.id ? currentDragOver.pos : "before";
+      remaining.splice(pos === "after" ? targetIdx + 1 : targetIdx, 0, dragged);
+      const ids = remaining.map((t) => t.id);
+      reorderTx.mutate({ data: { ids } }, {
+        onSuccess: () => invalidate(),
+        onError: () => toast({ title: "Failed to reorder", variant: "destructive" }),
+      });
+      return;
+    }
+
+    // Different date → keep the existing "move to date" flow.
     setDatePromptTx(dragged);
     setDatePromptValue(target.transactionDate);
   };
@@ -550,20 +595,25 @@ export default function Forecast() {
                               key={tx.id}
                               draggable={!isEditing}
                               onDragStart={(e) => handleRowDragStart(tx, e)}
-                              onDragOver={(e) => { if (draggingId !== null) e.preventDefault(); }}
+                              onDragOver={(e) => handleRowDragOver(tx, e)}
                               onDrop={(e) => handleRowDrop(tx, e)}
-                              onDragEnd={() => setDraggingId(null)}
+                              onDragEnd={() => { setDraggingId(null); setDragOver(null); }}
                               onClick={() => { if (!isEditing && !suppressClickRef.current) setSelectedTx(tx); }}
                               className={[
-                                "grid grid-cols-[110px_1fr_130px_72px_136px_230px] border-b border-border/60 last:border-0 group cursor-pointer transition-colors select-none",
+                                "relative grid grid-cols-[110px_1fr_130px_72px_136px_230px] border-b border-border/60 last:border-0 group cursor-pointer transition-colors select-none",
                                 idx % 2 === 1 ? "bg-muted/20" : "",
                                 draggingId === tx.id ? "opacity-40" : "",
-                                draggingId !== null && draggingId !== tx.id ? "hover:border-primary hover:border-2" : "",
+                                draggingId !== null && draggingId !== tx.id && draggedRow?.transactionDate !== tx.transactionDate ? "hover:border-primary hover:border-2" : "",
                                 isNeg
                                   ? "bg-red-500/[0.06] hover:bg-red-500/[0.12]"
                                   : "hover:bg-muted/40",
                               ].join(" ")}
                             >
+                              {dragOver?.id === tx.id && (
+                                <div
+                                  className={`absolute left-0 right-0 h-0.5 bg-primary z-20 pointer-events-none ${dragOver.pos === "before" ? "-top-px" : "-bottom-px"}`}
+                                />
+                              )}
                               {/* Date */}
                               <div className="px-4 py-2.5 flex items-center gap-1.5">
                                 <GripVertical

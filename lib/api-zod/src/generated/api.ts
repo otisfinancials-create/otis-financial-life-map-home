@@ -518,6 +518,7 @@ export const ListForecastResponseItem = zod.object({
   "sourcePayId": zod.number().nullish(),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
+  "sortOrder": zod.number(),
   "createdAt": zod.string()
 })
 export const ListForecastResponse = zod.array(ListForecastResponseItem)
@@ -549,6 +550,7 @@ export const CreateForecastedTransactionResponse = zod.object({
   "sourcePayId": zod.number().nullish(),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
+  "sortOrder": zod.number(),
   "createdAt": zod.string()
 })
 
@@ -573,6 +575,18 @@ export const GetMonthlyForecastResponse = zod.array(GetMonthlyForecastResponseIt
 export const RegenerateForecastResponse = zod.object({
   "created": zod.number(),
   "message": zod.string()
+})
+
+
+/**
+ * @summary Persist a new manual ordering for a set of same-date transactions
+ */
+export const ReorderForecastBody = zod.object({
+  "ids": zod.array(zod.number()).describe('Transaction ids in their new top-to-bottom order')
+})
+
+export const ReorderForecastResponse = zod.object({
+  "updated": zod.number()
 })
 
 
@@ -604,6 +618,7 @@ export const UpdateForecastedTransactionResponse = zod.object({
   "sourcePayId": zod.number().nullish(),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
+  "sortOrder": zod.number(),
   "createdAt": zod.string()
 })
 

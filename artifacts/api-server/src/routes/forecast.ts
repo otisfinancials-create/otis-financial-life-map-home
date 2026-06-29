@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lt } from "drizzle-orm";
+import { eq, and, gte, lt, inArray } from "drizzle-orm";
 import { db, forecastedTransactionsTable, billsTable, paySchedulesTable } from "@workspace/db";
 import {
   CreateForecastedTransactionBody,
@@ -12,6 +12,8 @@ import {
   GetMonthlyForecastResponse,
   RegenerateForecastResponse,
   UpdateForecastedTransactionResponse,
+  ReorderForecastBody,
+  ReorderForecastResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -36,7 +38,11 @@ router.get("/forecast", async (req, res): Promise<void> => {
     .select()
     .from(forecastedTransactionsTable)
     .where(and(...conditions))
-    .orderBy(forecastedTransactionsTable.transactionDate);
+    .orderBy(
+      forecastedTransactionsTable.transactionDate,
+      forecastedTransactionsTable.sortOrder,
+      forecastedTransactionsTable.id,
+    );
 
   res.json(ListForecastResponse.parse(rows.map(serialize)));
 });
@@ -178,6 +184,54 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
   }
 
   res.json(RegenerateForecastResponse.parse({ created: toInsert.length, message: `Created ${toInsert.length} forecasted transactions` }));
+});
+
+router.post("/forecast/reorder", async (req, res): Promise<void> => {
+  const parsed = ReorderForecastBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { ids } = parsed.data;
+  if (ids.length === 0) {
+    res.json(ReorderForecastResponse.parse({ updated: 0 }));
+    return;
+  }
+  if (new Set(ids).size !== ids.length) {
+    res.status(400).json({ error: "Duplicate transaction ids" });
+    return;
+  }
+
+  const owned = await db
+    .select({ id: forecastedTransactionsTable.id, transactionDate: forecastedTransactionsTable.transactionDate })
+    .from(forecastedTransactionsTable)
+    .where(and(
+      eq(forecastedTransactionsTable.userId, req.userId),
+      inArray(forecastedTransactionsTable.id, ids),
+    ));
+  const ownedIds = new Set(owned.map((r) => r.id));
+  if (ownedIds.size !== ids.length || ids.some((id) => !ownedIds.has(id))) {
+    res.status(404).json({ error: "One or more transactions not found" });
+    return;
+  }
+  if (new Set(owned.map((r) => r.transactionDate)).size > 1) {
+    res.status(400).json({ error: "All transactions must share the same date" });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    for (let i = 0; i < ids.length; i++) {
+      await tx
+        .update(forecastedTransactionsTable)
+        .set({ sortOrder: i })
+        .where(and(
+          eq(forecastedTransactionsTable.id, ids[i]),
+          eq(forecastedTransactionsTable.userId, req.userId),
+        ));
+    }
+  });
+
+  res.json(ReorderForecastResponse.parse({ updated: ids.length }));
 });
 
 router.patch("/forecast/:id", async (req, res): Promise<void> => {

@@ -14,6 +14,7 @@ export const forecastedTransactionsTable = pgTable("forecasted_transactions", {
   sourcePayId: integer("source_pay_id"),
   isActual: boolean("is_actual").notNull().default(false),
   isCommitted: boolean("is_committed").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

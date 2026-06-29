@@ -536,6 +536,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/RegenerateForecastResult"
 
+  /forecast/reorder:
+    post:
+      operationId: reorderForecast
+      tags: [forecasts]
+      summary: Persist a new manual ordering for a set of same-date transactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderForecastInput"
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReorderForecastResult"
+
   /forecast/{id}:
     patch:
       operationId: updateForecastedTransaction
@@ -1077,7 +1096,7 @@ components:
     # ── Forecasted Transactions ───────────────────────────────────────────────
     ForecastedTransaction:
       type: object
-      required: [id, transactionDate, description, amount, transactionType, category, isActual, isCommitted, createdAt]
+      required: [id, transactionDate, description, amount, transactionType, category, isActual, isCommitted, sortOrder, createdAt]
       properties:
         id:
           type: integer
@@ -1099,6 +1118,8 @@ components:
           type: boolean
         isCommitted:
           type: boolean
+        sortOrder:
+          type: integer
         createdAt:
           type: string
 
@@ -1142,6 +1163,23 @@ components:
           type: boolean
         isCommitted:
           type: boolean
+
+    ReorderForecastInput:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+          description: Transaction ids in their new top-to-bottom order
+
+    ReorderForecastResult:
+      type: object
+      required: [updated]
+      properties:
+        updated:
+          type: integer
 
     MonthlyForecast:
       type: object

@@ -48,6 +48,8 @@ import type {
   PayScheduleInput,
   PayScheduleUpdate,
   RegenerateForecastResult,
+  ReorderForecastInput,
+  ReorderForecastResult,
   UpcomingBill,
   UserSettings,
   UserSettingsInput
@@ -2224,6 +2226,76 @@ export const useRegenerateForecast = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRegenerateForecastMutationOptions(options));
+    }
+
+export const getReorderForecastUrl = () => {
+
+
+
+
+  return `/api/forecast/reorder`
+}
+
+/**
+ * @summary Persist a new manual ordering for a set of same-date transactions
+ */
+export const reorderForecast = async (reorderForecastInput: ReorderForecastInput, options?: RequestInit): Promise<ReorderForecastResult> => {
+
+  return customFetch<ReorderForecastResult>(getReorderForecastUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reorderForecastInput)
+  }
+);}
+
+
+
+
+export const getReorderForecastMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderForecast>>, TError,{data: BodyType<ReorderForecastInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reorderForecast>>, TError,{data: BodyType<ReorderForecastInput>}, TContext> => {
+
+const mutationKey = ['reorderForecast'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderForecast>>, {data: BodyType<ReorderForecastInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reorderForecast(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReorderForecastMutationResult = NonNullable<Awaited<ReturnType<typeof reorderForecast>>>
+    export type ReorderForecastMutationBody = BodyType<ReorderForecastInput>
+    export type ReorderForecastMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Persist a new manual ordering for a set of same-date transactions
+ */
+export const useReorderForecast = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderForecast>>, TError,{data: BodyType<ReorderForecastInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reorderForecast>>,
+        TError,
+        {data: BodyType<ReorderForecastInput>},
+        TContext
+      > => {
+      return useMutation(getReorderForecastMutationOptions(options));
     }
 
 export const getUpdateForecastedTransactionUrl = (id: number,) => {

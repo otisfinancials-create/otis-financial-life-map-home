@@ -19,5 +19,6 @@ export interface ForecastedTransaction {
   sourcePayId?: number | null;
   isActual: boolean;
   isCommitted: boolean;
+  sortOrder: number;
   createdAt: string;
 }

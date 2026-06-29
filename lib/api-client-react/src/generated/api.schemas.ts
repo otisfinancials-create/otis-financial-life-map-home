@@ -208,6 +208,7 @@ export interface ForecastedTransaction {
   sourcePayId?: number | null;
   isActual: boolean;
   isCommitted: boolean;
+  sortOrder: number;
   createdAt: string;
 }
 
@@ -231,6 +232,15 @@ export interface ForecastedTransactionUpdate {
   category?: string;
   isActual?: boolean;
   isCommitted?: boolean;
+}
+
+export interface ReorderForecastInput {
+  /** Transaction ids in their new top-to-bottom order */
+  ids: number[];
+}
+
+export interface ReorderForecastResult {
+  updated: number;
 }
 
 export interface MonthlyForecast {
