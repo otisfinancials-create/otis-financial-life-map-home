@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, accountsTable } from "@workspace/db";
+import { db, accountsTable, assetsTable } from "@workspace/db";
 import {
   CreateAccountBody,
   UpdateAccountBody,
@@ -41,19 +41,22 @@ router.post("/accounts", async (req, res): Promise<void> => {
 });
 
 router.get("/accounts/summary", async (req, res): Promise<void> => {
-  const accounts = await db
-    .select()
-    .from(accountsTable)
-    .where(eq(accountsTable.userId, req.userId));
+  const [accounts, assets] = await Promise.all([
+    db.select().from(accountsTable).where(eq(accountsTable.userId, req.userId)),
+    db.select().from(assetsTable).where(eq(assetsTable.userId, req.userId)),
+  ]);
 
-  const totalAssets = accounts
+  // Net worth totals include manually tracked assets & liabilities
+  const holdings = [...accounts, ...assets];
+  const totalAssets = holdings
     .filter((a) => a.isAsset)
     .reduce((sum, a) => sum + parseFloat(String(a.currentBalance)), 0);
-  const totalLiabilities = accounts
+  const totalLiabilities = holdings
     .filter((a) => !a.isAsset)
     .reduce((sum, a) => sum + parseFloat(String(a.currentBalance)), 0);
   const netWorth = totalAssets - totalLiabilities;
 
+  // byType remains scoped to account types only (accounts page grouping)
   const byTypeMap: Record<string, { total: number; count: number }> = {};
   for (const account of accounts) {
     const type = account.accountType;
