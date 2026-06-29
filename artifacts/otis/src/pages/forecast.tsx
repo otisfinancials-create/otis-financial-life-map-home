@@ -549,7 +549,9 @@ export default function Forecast() {
                                 idx % 2 === 1 ? "bg-muted/20" : "",
                                 draggingId === tx.id ? "opacity-40" : "",
                                 draggingId !== null && draggingId !== tx.id ? "hover:border-primary hover:border-2" : "",
-                                isNeg
+                                tx.isActual
+                                  ? "bg-blue-500/[0.08] hover:bg-blue-500/[0.14]"
+                                  : isNeg
                                   ? "bg-red-500/[0.06] hover:bg-red-500/[0.12]"
                                   : "hover:bg-muted/40",
                               ].join(" ")}
