@@ -32,6 +32,7 @@ const ACCOUNT_TYPES = [
   { label: "Retirement", value: "retirement" },
   { label: "Loan", value: "loan" },
   { label: "Credit Card", value: "credit_card" },
+  { label: "Other Asset", value: "other_asset" },
 ] as const;
 
 type AccountTypeValue = (typeof ACCOUNT_TYPES)[number]["value"];
