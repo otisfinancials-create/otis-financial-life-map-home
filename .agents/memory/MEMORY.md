@@ -1,2 +1,3 @@
 - [Light mode theme](light-mode-theme.md) — app switched from dark to light; :root is light, .dark retains dark values for future toggle
 - [Otis light/dark theming](otis-theming.md) — class-based dark via @custom-variant; a stray `dark` class on Shell.tsx made the authenticated app dark while the sign-in page stayed light.
+- [Git write block](git-write-block.md) — git tag/commit/push are blocked for BOTH main and task agents in this Repl; milestone tags/releases must be done by the user via the GitHub UI.
