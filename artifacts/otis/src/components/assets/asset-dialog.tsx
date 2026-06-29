@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -76,6 +76,19 @@ export function AssetDialog({ asset, trigger, open, onOpenChange }: AssetDialogP
       isAsset: asset?.isAsset ?? true,
     },
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      form.reset({
+        assetName: asset?.assetName || "",
+        assetType: asset?.assetType || "",
+        institutionName: asset?.institutionName || "",
+        currentBalance: asset?.currentBalance || 0,
+        isAsset: asset?.isAsset ?? true,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, asset?.id]);
 
   function onSubmit(data: AssetFormValues) {
     if (isEditing) {
@@ -159,7 +172,7 @@ export function AssetDialog({ asset, trigger, open, onOpenChange }: AssetDialogP
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select type" />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -76,6 +76,19 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
       isAsset: account?.isAsset ?? true,
     },
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      form.reset({
+        accountName: account?.accountName || "",
+        accountType: account?.accountType || "",
+        institutionName: account?.institutionName || "",
+        currentBalance: account?.currentBalance || 0,
+        isAsset: account?.isAsset ?? true,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, account?.id]);
 
   // Automatically set isAsset based on accountType selection
   const watchAccountType = form.watch("accountType");
@@ -172,7 +185,7 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Type</FormLabel>
-                    <Select onValueChange={handleAccountTypeChange} defaultValue={field.value}>
+                    <Select onValueChange={handleAccountTypeChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select type" />

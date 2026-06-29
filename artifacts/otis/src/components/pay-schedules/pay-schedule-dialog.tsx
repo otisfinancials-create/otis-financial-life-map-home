@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -88,6 +88,19 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
       notes: schedule?.notes ?? "",
     },
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      form.reset({
+        employerName: schedule?.employerName ?? "",
+        amount: schedule?.amount ?? 0,
+        frequency: schedule?.frequency ?? "biweekly",
+        nextPayDate: schedule?.nextPayDate ?? "",
+        notes: schedule?.notes ?? "",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, schedule?.id]);
 
   function onSubmit(data: FormValues) {
     const payload = {

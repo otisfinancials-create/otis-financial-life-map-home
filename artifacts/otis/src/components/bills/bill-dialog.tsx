@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -137,6 +137,28 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
       notes: bill?.notes || "",
     },
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      const parsed = parsePaymentMethod(bill?.paymentMethod);
+      form.reset({
+        billName: bill?.billName || "",
+        category: bill?.category || "",
+        amount: bill?.amount || 0,
+        frequency: bill?.frequency || "monthly",
+        dueDay: bill?.dueDay || 1,
+        paymentMethod: parsed.paymentMethod,
+        creditCardName: parsed.creditCardName,
+        companyUrl: bill?.companyUrl || "",
+        startDate: bill?.startDate || "",
+        endDate: bill?.endDate || "",
+        isVariable: bill?.isVariable || false,
+        isActive: bill?.isActive ?? true,
+        notes: bill?.notes || "",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, bill?.id]);
 
   const watchedPaymentMethod = form.watch("paymentMethod");
   const watchedIsVariable = form.watch("isVariable");
