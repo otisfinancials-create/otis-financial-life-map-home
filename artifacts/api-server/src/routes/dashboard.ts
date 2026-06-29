@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, accountsTable, billsTable, paySchedulesTable } from "@workspace/db";
+import { db, accountsTable, assetsTable, billsTable, paySchedulesTable } from "@workspace/db";
 import { GetDashboardSummaryResponse } from "@workspace/api-zod";
 
 const FREQ_TO_MONTHLY: Record<string, number> = {
@@ -18,19 +18,21 @@ const router: IRouter = Router();
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   req.log.info("Fetching dashboard summary");
 
-  const [accounts, bills, paySchedules] = await Promise.all([
+  const [accounts, assets, bills, paySchedules] = await Promise.all([
     db.select().from(accountsTable).where(eq(accountsTable.userId, req.userId)),
+    db.select().from(assetsTable).where(eq(assetsTable.userId, req.userId)),
     db.select().from(billsTable).where(eq(billsTable.userId, req.userId)),
     db.select().from(paySchedulesTable).where(eq(paySchedulesTable.userId, req.userId)),
   ]);
 
   const activeBills = bills.filter((b) => b.isActive);
 
-  // Net worth
-  const totalAssets = accounts
+  // Net worth — accounts plus manually tracked assets & liabilities
+  const holdings = [...accounts, ...assets];
+  const totalAssets = holdings
     .filter((a) => a.isAsset)
     .reduce((sum, a) => sum + parseFloat(String(a.currentBalance)), 0);
-  const totalLiabilities = accounts
+  const totalLiabilities = holdings
     .filter((a) => !a.isAsset)
     .reduce((sum, a) => sum + parseFloat(String(a.currentBalance)), 0);
   const netWorth = totalAssets - totalLiabilities;
