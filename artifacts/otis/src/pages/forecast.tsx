@@ -573,9 +573,6 @@ export default function Forecast() {
                                 <span className="font-mono text-[11px] text-muted-foreground whitespace-nowrap">
                                   {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d, yyyy")}
                                 </span>
-                                {isToday && (
-                                  <span className="text-[9px] font-bold bg-primary/20 text-primary px-1.5 py-0.5 rounded leading-none">TODAY</span>
-                                )}
                               </div>
 
                               {/* Description */}
@@ -592,6 +589,9 @@ export default function Forecast() {
                                   >
                                     <ExternalLink className="h-3 w-3" />
                                   </a>
+                                )}
+                                {isToday && (
+                                  <Badge className="shrink-0 text-[9px] font-bold px-1.5 h-4 bg-primary/20 text-primary border-0 rounded-full leading-none">TODAY</Badge>
                                 )}
                                 {tx.isActual && (
                                   <Badge className="shrink-0 text-[9px] px-1.5 h-4 bg-primary/20 text-primary border-0 rounded-full leading-none">Paid</Badge>
