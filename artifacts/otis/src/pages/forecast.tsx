@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { format, addMonths } from "date-fns";
 import {
   ExternalLink, Plus, Trash2, Check, RefreshCw, Search,
-  ChevronDown, ChevronRight, Zap,
+  ChevronDown, ChevronRight, Zap, GripVertical,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -134,6 +134,12 @@ export default function Forecast() {
     transactionDate: todayStr, category: "Other", transactionType: "expense",
   });
   const [selectedTx, setSelectedTx] = useState<TxRow | null>(null);
+
+  // drag-to-move (change date)
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const suppressClickRef = useRef(false);
+  const [datePromptTx, setDatePromptTx] = useState<TxRow | null>(null);
+  const [datePromptValue, setDatePromptValue] = useState("");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -293,6 +299,33 @@ export default function Forecast() {
       });
     }
     setEditingId(null);
+  };
+
+  const handleRowDragStart = (tx: TxRow, e: React.DragEvent) => {
+    setDraggingId(tx.id);
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", String(tx.id)); } catch { /* noop */ }
+  };
+
+  const handleRowDrop = (target: TxRow, e: React.DragEvent) => {
+    e.preventDefault();
+    suppressClickRef.current = true;
+    setTimeout(() => { suppressClickRef.current = false; }, 0);
+    const draggedId = draggingId;
+    setDraggingId(null);
+    if (draggedId === null || draggedId === target.id) return;
+    const dragged = txsWithBalance.find((t) => t.id === draggedId);
+    if (!dragged) return;
+    setDatePromptTx(dragged);
+    setDatePromptValue(target.transactionDate);
+  };
+
+  const handleSaveDate = () => {
+    if (!datePromptTx || !datePromptValue) return;
+    updateTx.mutate({ id: datePromptTx.id, data: { transactionDate: datePromptValue } }, {
+      onSuccess: () => { invalidate(); setDatePromptTx(null); toast({ title: "Date updated" }); },
+      onError: () => toast({ title: "Failed to update date", variant: "destructive" }),
+    });
   };
 
   const handleSaveBalance = () => {
@@ -505,10 +538,17 @@ export default function Forecast() {
                           return (
                             <div
                               key={tx.id}
-                              onClick={() => !isEditing && setSelectedTx(tx)}
+                              draggable={!isEditing}
+                              onDragStart={(e) => handleRowDragStart(tx, e)}
+                              onDragOver={(e) => { if (draggingId !== null) e.preventDefault(); }}
+                              onDrop={(e) => handleRowDrop(tx, e)}
+                              onDragEnd={() => setDraggingId(null)}
+                              onClick={() => { if (!isEditing && !suppressClickRef.current) setSelectedTx(tx); }}
                               className={[
                                 "grid grid-cols-[110px_1fr_130px_72px_136px_148px] border-b border-border/60 last:border-0 group cursor-pointer transition-colors",
                                 idx % 2 === 1 ? "bg-muted/20" : "",
+                                draggingId === tx.id ? "opacity-40" : "",
+                                draggingId !== null && draggingId !== tx.id ? "hover:border-primary hover:border-2" : "",
                                 isNeg
                                   ? "bg-red-500/[0.06] hover:bg-red-500/[0.12]"
                                   : "hover:bg-muted/40",
@@ -516,6 +556,10 @@ export default function Forecast() {
                             >
                               {/* Date */}
                               <div className="px-4 py-2.5 flex items-center gap-1.5">
+                                <GripVertical
+                                  aria-label="Drag to move this transaction to another date"
+                                  className="h-3.5 w-3.5 shrink-0 -ml-2 text-muted-foreground/25 group-hover:text-muted-foreground/70 cursor-grab"
+                                />
                                 <span className="font-mono text-[11px] text-muted-foreground whitespace-nowrap">
                                   {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d, yyyy")}
                                 </span>
@@ -564,6 +608,7 @@ export default function Forecast() {
                               {/* Amount (double-click to edit) */}
                               <div
                                 className="px-4 py-2.5 flex items-center justify-end"
+                                onClick={(e) => e.stopPropagation()}
                                 onDoubleClick={(e) => startEdit(tx, e)}
                               >
                                 {isEditing ? (
@@ -854,6 +899,7 @@ export default function Forecast() {
                 <Select value={manualForm.category} onValueChange={(v) => setManualForm((f) => ({ ...f, category: v }))}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="salary">Salary</SelectItem>
                     {MANUAL_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -874,6 +920,40 @@ export default function Forecast() {
             <Button variant="outline" onClick={() => setShowManualModal(false)}>Cancel</Button>
             <Button onClick={handleAddManual} disabled={createTx.isPending}>
               {createTx.isPending ? "Adding…" : "Add Entry"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          MOVE TRANSACTION (CHANGE DATE) MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
+      <Dialog open={!!datePromptTx} onOpenChange={(open) => { if (!open) setDatePromptTx(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Move Transaction</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              Set a new date for{" "}
+              <span className="text-foreground font-medium">{datePromptTx?.description}</span>.
+            </p>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">New date</label>
+              <Input
+                type="date"
+                value={datePromptValue}
+                onChange={(e) => setDatePromptValue(e.target.value)}
+                className="mt-1"
+                onKeyDown={(e) => { if (e.key === "Enter") handleSaveDate(); }}
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDatePromptTx(null)}>Cancel</Button>
+            <Button onClick={handleSaveDate} disabled={updateTx.isPending}>
+              {updateTx.isPending ? "Saving…" : "Save Date"}
             </Button>
           </DialogFooter>
         </DialogContent>
