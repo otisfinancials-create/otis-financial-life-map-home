@@ -1,6 +1,16 @@
 import { type Request, type Response, type NextFunction } from "express";
 import { getAuth } from "@clerk/express";
 
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value, (_k, v) =>
+      typeof v === "function" ? "[fn]" : v,
+    );
+  } catch (err) {
+    return `[unserializable: ${String(err)}]`;
+  }
+}
+
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const auth = getAuth(req);
   const userId = auth?.userId;
@@ -16,10 +26,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
           xForwardedHost: req.headers["x-forwarded-host"] ?? null,
           clerkUserId: auth?.userId ?? null,
           clerkSessionId: auth?.sessionId ?? null,
-          // @ts-expect-error reason is present on Clerk auth object for failures
-          clerkReason: auth?.reason ?? null,
-          // @ts-expect-error tokenType is present on newer Clerk auth objects
-          clerkTokenType: auth?.tokenType ?? null,
+          fullAuth: safeStringify(auth),
         },
       },
       "requireAuth: unauthorized request (temporary diagnostic)",
