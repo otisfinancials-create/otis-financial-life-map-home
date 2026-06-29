@@ -219,6 +219,16 @@ export default function Forecast() {
     }),
   [txsWithBalance, catFilter, search]);
 
+  // ── Current-balance marker (last displayed row on/before today) ───────────
+  const currentBalanceTxId = useMemo(() => {
+    let id: number | null = null;
+    for (const t of filtered) {
+      if (t.transactionDate <= todayStr) id = t.id;
+      else break;
+    }
+    return id ?? filtered[0]?.id ?? null;
+  }, [filtered, todayStr]);
+
   // ── Group by month ────────────────────────────────────────────────────────
   const groups = useMemo((): MonthGroup[] => {
     const map: Record<string, MonthGroup> = {};
@@ -491,7 +501,7 @@ export default function Forecast() {
                 <div className="overflow-y-auto max-h-[calc(100vh-280px)]">
 
                   {/* Column headers */}
-                  <div className="sticky top-0 z-10 grid grid-cols-[110px_1fr_130px_72px_136px_148px] bg-muted/60 border-b border-border text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  <div className="sticky top-0 z-10 grid grid-cols-[110px_1fr_130px_72px_136px_230px] bg-muted/60 border-b border-border text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                     <div className="px-4 py-2.5">Date</div>
                     <div className="px-4 py-2.5">Description</div>
                     <div className="px-4 py-2.5">Category</div>
@@ -506,7 +516,7 @@ export default function Forecast() {
                     return (
                       <div key={group.key}>
                         {/* Month group header (sticky within scroll container) */}
-                        <div className="sticky top-[37px] z-[9] grid grid-cols-[110px_1fr_130px_72px_136px_148px] bg-card/90 backdrop-blur-sm border-b border-t border-border">
+                        <div className="sticky top-[37px] z-[9] grid grid-cols-[110px_1fr_130px_72px_136px_230px] bg-card/90 backdrop-blur-sm border-b border-t border-border">
                           <div className="col-span-4 px-4 py-2 flex items-center gap-3">
                             <span className="text-[11px] font-bold text-foreground tracking-wide">── {group.label} ──</span>
                             <span className={`text-[11px] font-mono font-medium ${net >= 0 ? "text-emerald-400" : "text-destructive"}`}>
@@ -534,6 +544,7 @@ export default function Forecast() {
                           const isManual  = !tx.sourceBillId && !tx.sourcePayId;
                           const isEditing = editingId === tx.id;
                           const isToday   = tx.transactionDate === todayStr;
+                          const isCurrentBalance = tx.id === currentBalanceTxId;
 
                           return (
                             <div
@@ -545,7 +556,7 @@ export default function Forecast() {
                               onDragEnd={() => setDraggingId(null)}
                               onClick={() => { if (!isEditing && !suppressClickRef.current) setSelectedTx(tx); }}
                               className={[
-                                "grid grid-cols-[110px_1fr_130px_72px_136px_148px] border-b border-border/60 last:border-0 group cursor-pointer transition-colors",
+                                "grid grid-cols-[110px_1fr_130px_72px_136px_230px] border-b border-border/60 last:border-0 group cursor-pointer transition-colors",
                                 idx % 2 === 1 ? "bg-muted/20" : "",
                                 draggingId === tx.id ? "opacity-40" : "",
                                 draggingId !== null && draggingId !== tx.id ? "hover:border-primary hover:border-2" : "",
@@ -643,6 +654,11 @@ export default function Forecast() {
                                   {isNeg && "−"}
                                   <FormatCurrency amount={Math.abs(tx.runningBalance)} />
                                 </span>
+                                {isCurrentBalance && (
+                                  <Badge className="shrink-0 text-[9px] px-1.5 h-4 bg-primary/20 text-primary border-0 rounded-full leading-none whitespace-nowrap">
+                                    Current Balance
+                                  </Badge>
+                                )}
                                 {/* Action buttons (reveal on hover) */}
                                 <div
                                   className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
