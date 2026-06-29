@@ -195,6 +195,7 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                         <SelectItem value="checking">Checking</SelectItem>
                         <SelectItem value="savings">Savings</SelectItem>
                         <SelectItem value="investment">Investment / Brokerage</SelectItem>
+                        <SelectItem value="retirement">Retirement</SelectItem>
                         <SelectItem value="credit_card">Credit Card</SelectItem>
                         <SelectItem value="loan">Loan</SelectItem>
                         <SelectItem value="mortgage">Mortgage</SelectItem>

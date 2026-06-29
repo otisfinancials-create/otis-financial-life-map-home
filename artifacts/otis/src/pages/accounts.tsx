@@ -37,6 +37,7 @@ const getAccountIcon = (type: string) => {
     case 'savings': return <PiggyBank className="h-4 w-4" />;
     case 'credit_card': return <CreditCard className="h-4 w-4" />;
     case 'investment': return <Briefcase className="h-4 w-4" />;
+    case 'retirement': return <PiggyBank className="h-4 w-4" />;
     default: return <Landmark className="h-4 w-4" />;
   }
 };
@@ -47,6 +48,7 @@ const getAccountColor = (type: string) => {
     case 'savings': return 'text-chart-2';
     case 'credit_card': return 'text-chart-3';
     case 'investment': return 'text-chart-4';
+    case 'retirement': return 'text-chart-2';
     case 'loan': return 'text-destructive';
     case 'mortgage': return 'text-chart-5';
     default: return 'text-primary';
