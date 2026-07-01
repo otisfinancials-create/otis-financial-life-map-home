@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef, useEffect } from "react";
-import { format, addMonths } from "date-fns";
+import { useState, useMemo, useRef, useEffect, Fragment } from "react";
+import { format, addMonths, subDays } from "date-fns";
 import {
   ExternalLink, Plus, Trash2, Check, RefreshCw, Search,
   ChevronDown, ChevronRight, Zap, GripVertical,
@@ -147,7 +147,9 @@ export default function Forecast() {
   const queryClient = useQueryClient();
 
   // ── Date window ──────────────────────────────────────────────────────────
-  const startDate = todayStr;
+  // Rolling lookback: include the 7 days before today so recently-due
+  // transactions (paid / overdue) show alongside the future forecast.
+  const startDate = format(subDays(today, 7), "yyyy-MM-dd");
   const endDate   = format(addMonths(today, months), "yyyy-MM-dd");
 
   // ── Queries ──────────────────────────────────────────────────────────────
@@ -202,7 +204,13 @@ export default function Forecast() {
         a.sortOrder - b.sortOrder ||
         a.id - b.id,
     );
-    let running = startingBalance;
+    // Anchor the balance so that the balance at the start of today equals the
+    // user's starting balance. Past (lookback) rows are back-filled by removing
+    // their net effect from the anchor, so today/future balances stay unchanged.
+    const pastNet = sorted
+      .filter((t) => t.transactionDate < todayStr)
+      .reduce((sum, t) => sum + (t.transactionType === "income" ? t.amount : -t.amount), 0);
+    let running = startingBalance - pastNet;
     return sorted.map((t) => {
       const signed = t.transactionType === "income" ? t.amount : -t.amount;
       running += signed;
@@ -214,7 +222,7 @@ export default function Forecast() {
         companyUrl: bill?.companyUrl ?? null,
       };
     });
-  }, [rawTxs, startingBalance, billsMap]);
+  }, [rawTxs, startingBalance, billsMap, todayStr]);
 
   // ── Filter ────────────────────────────────────────────────────────────────
   const filtered = useMemo(() =>
@@ -239,6 +247,16 @@ export default function Forecast() {
     }
     return id;
   }, [filtered]);
+
+  // ── Past / future boundary (for the TODAY divider) ────────────────────────
+  const hasPastRows = useMemo(
+    () => filtered.some((t) => t.transactionDate < todayStr),
+    [filtered, todayStr],
+  );
+  const firstFutureTxId = useMemo(
+    () => filtered.find((t) => t.transactionDate >= todayStr)?.id ?? null,
+    [filtered, todayStr],
+  );
 
   // ── Group by month ────────────────────────────────────────────────────────
   const groups = useMemo((): MonthGroup[] => {
@@ -588,11 +606,20 @@ export default function Forecast() {
                           const isManual  = !tx.sourceBillId && !tx.sourcePayId;
                           const isEditing = editingId === tx.id;
                           const isToday   = tx.transactionDate === todayStr;
+                          const isPast    = tx.transactionDate < todayStr;
+                          const isOverdue = isPast && !tx.isActual;
                           const isCurrentBalance = tx.id === currentBalanceTxId;
 
                           return (
+                            <Fragment key={tx.id}>
+                            {hasPastRows && tx.id === firstFutureTxId && (
+                              <div className="flex items-center gap-3 px-4 py-1.5 bg-primary/[0.06] border-y border-primary/25 select-none">
+                                <div className="h-px flex-1 bg-primary/25" />
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Today</span>
+                                <div className="h-px flex-1 bg-primary/25" />
+                              </div>
+                            )}
                             <div
-                              key={tx.id}
                               draggable={!isEditing}
                               onDragStart={(e) => handleRowDragStart(tx, e)}
                               onDragOver={(e) => handleRowDragOver(tx, e)}
@@ -602,6 +629,7 @@ export default function Forecast() {
                               className={[
                                 "relative grid grid-cols-[110px_1fr_130px_72px_136px_230px] border-b border-border/60 last:border-0 group cursor-pointer transition-colors select-none",
                                 idx % 2 === 1 ? "bg-muted/20" : "",
+                                isPast ? "opacity-60" : "",
                                 draggingId === tx.id ? "opacity-40" : "",
                                 draggingId !== null && draggingId !== tx.id && draggedRow?.transactionDate !== tx.transactionDate ? "hover:border-primary hover:border-2" : "",
                                 isNeg
@@ -645,6 +673,12 @@ export default function Forecast() {
                                 )}
                                 {tx.isActual && (
                                   <Badge className="shrink-0 text-[9px] px-1.5 h-4 bg-primary/20 text-primary border-0 rounded-full leading-none">Paid</Badge>
+                                )}
+                                {isOverdue && (
+                                  <Badge className="shrink-0 flex items-center gap-1 text-[9px] px-1.5 h-4 bg-orange-100 text-orange-700 border-0 rounded-full leading-none">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                                    Overdue
+                                  </Badge>
                                 )}
                                 {isManual && (
                                   <Badge className="shrink-0 text-[9px] px-1.5 h-4 bg-muted text-muted-foreground border-0 rounded-full leading-none">Manual</Badge>
@@ -734,6 +768,7 @@ export default function Forecast() {
                                 </div>
                               </div>
                             </div>
+                            </Fragment>
                           );
                         })}
                       </div>
