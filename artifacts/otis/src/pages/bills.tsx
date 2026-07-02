@@ -39,6 +39,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BillDialog } from "@/components/bills/bill-dialog";
+import { BillsAnalytics } from "@/components/bills/bills-analytics";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -150,6 +151,8 @@ export default function Bills() {
           />
         </div>
       </div>
+
+      {!isLoading && <BillsAnalytics bills={bills ?? []} />}
 
       <Card className="border-border bg-card overflow-hidden">
         {isLoading ? (
