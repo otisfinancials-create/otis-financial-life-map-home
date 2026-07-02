@@ -4,33 +4,8 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import type { Bill } from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { FormatCurrency } from "@/components/ui/format-currency";
-
-// Fixed, light-mode-friendly colors per category.
-const CATEGORY_COLORS: Record<string, string> = {
-  "Housing":       "#3b82f6",
-  "Insurance":     "#f97316",
-  "Subscriptions": "#8b5cf6",
-  "Utilities":     "#06b6d4",
-  "Auto":          "#eab308",
-  "Food":          "#ec4899",
-  "Medical":       "#10b981",
-  "Debt Payments": "#ef4444",
-  "Other":         "#94a3b8",
-};
-const FALLBACK_COLORS = ["#14b8a6", "#a855f7", "#f43f5e", "#84cc16", "#64748b"];
-
-function monthlyFactor(frequency: string): number {
-  switch (frequency.toLowerCase()) {
-    case "weekly": return 52 / 12;
-    case "biweekly": case "bi-weekly": return 26 / 12;
-    case "semi-monthly": case "semimonthly": return 2;
-    case "monthly": return 1;
-    case "quarterly": return 1 / 3;
-    case "semi-annual": case "semiannual": case "biannual": return 1 / 6;
-    case "annual": case "annually": case "yearly": return 1 / 12;
-    default: return 1;
-  }
-}
+import { CATEGORY_COLORS, FALLBACK_COLORS } from "@/lib/category-colors";
+import { monthlyFactor } from "@/lib/bill-math";
 
 type Slice = {
   name: string;
