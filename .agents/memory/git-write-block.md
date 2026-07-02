@@ -49,3 +49,10 @@ contains commits that add it. Fix = a token WITH `workflow` scope.
 **Why:** lets the agent complete "push + milestone tag" tasks itself instead of
 bouncing the user through the Git pane, which silently fails on any repo that has
 CI workflow files.
+
+## Two GitHub repos share this lineage
+Both `otisfinancials-create/otis-financial-life-map` (original, referenced by the
+replit.md CI badge) and `otis-financial-life-map-home` (the configured `subrepl-*`
+remote in this env) exist and are on the same commit lineage. When pushing, fast-
+forward BOTH so they stay in sync; verify with `git ls-remote` + `merge-base
+--is-ancestor` before pushing.
