@@ -32,10 +32,14 @@ router.post("/assets", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { purchasePrice: rawPurchasePrice, ...restAssetInput } = parsed.data;
   const [asset] = await db.insert(assetsTable).values({
-    ...parsed.data,
+    ...restAssetInput,
     userId: req.userId,
     currentBalance: String(parsed.data.currentBalance),
+    purchasePrice: rawPurchasePrice != null ? String(rawPurchasePrice) : null,
+    // My Assets are always owned items; never liabilities.
+    isAsset: true,
   }).returning();
   res.status(201).json(CreateAssetResponse.parse(serialize(asset)));
 });
@@ -100,12 +104,17 @@ router.patch("/assets/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { currentBalance: rawBalance, ...restAssetData } = parsed.data;
+  const { currentBalance: rawBalance, purchasePrice: rawPurchasePrice, ...restAssetData } = parsed.data;
   const [asset] = await db
     .update(assetsTable)
     .set({
       ...restAssetData,
       ...(rawBalance !== undefined && { currentBalance: String(rawBalance) }),
+      ...(rawPurchasePrice !== undefined && {
+        purchasePrice: rawPurchasePrice != null ? String(rawPurchasePrice) : null,
+      }),
+      // My Assets are always owned items; never liabilities.
+      isAsset: true,
     })
     .where(and(eq(assetsTable.id, params.data.id), eq(assetsTable.userId, req.userId)))
     .returning();
@@ -137,6 +146,7 @@ function serialize(a: typeof assetsTable.$inferSelect) {
   return {
     ...a,
     currentBalance: parseFloat(String(a.currentBalance)),
+    purchasePrice: a.purchasePrice != null ? parseFloat(String(a.purchasePrice)) : null,
     createdAt: a.createdAt.toISOString(),
   };
 }

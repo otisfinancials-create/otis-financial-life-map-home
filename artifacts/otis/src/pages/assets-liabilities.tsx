@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Plus, MoreHorizontal, Home, Car, Package, Boxes, Trash2, Pencil, Scale } from "lucide-react";
+import { Plus, MoreHorizontal, Home, Car, Package, Boxes, Building2, Trash2, Pencil, Scale } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useListAssets, useGetAssetsSummary, useDeleteAsset, getListAssetsQueryKey, getGetAssetsSummaryQueryKey } from "@workspace/api-client-react";
+import { useListAssets, useGetAssetsSummary, useDeleteAsset, getListAssetsQueryKey, getGetAssetsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import type { Asset } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,16 +35,20 @@ const TYPE_LABELS: Record<string, string> = {
   real_estate: "Real Estate",
   vehicle: "Vehicle",
   personal_property: "Personal Property",
+  business_interest: "Business Interest",
   other: "Other",
 };
 
-const getTypeLabel = (type: string) => TYPE_LABELS[type] ?? type.replace(/_/g, " ");
+const getTypeLabel = (type: string) =>
+  TYPE_LABELS[type] ??
+  type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 const getAssetIcon = (type: string) => {
   switch (type) {
     case 'real_estate': return <Home className="h-4 w-4" />;
     case 'vehicle': return <Car className="h-4 w-4" />;
     case 'personal_property': return <Package className="h-4 w-4" />;
+    case 'business_interest': return <Building2 className="h-4 w-4" />;
     default: return <Boxes className="h-4 w-4" />;
   }
 };
@@ -54,6 +58,7 @@ const getAssetColor = (type: string) => {
     case 'real_estate': return 'text-chart-1';
     case 'vehicle': return 'text-chart-2';
     case 'personal_property': return 'text-chart-4';
+    case 'business_interest': return 'text-chart-5';
     default: return 'text-primary';
   }
 };
@@ -81,11 +86,12 @@ export default function AssetsLiabilities() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListAssetsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetAssetsSummaryQueryKey() });
-        toast({ title: "Entry deleted successfully" });
+        queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+        toast({ title: "Asset deleted successfully" });
         setAssetToDelete(undefined);
       },
       onError: () => {
-        toast({ title: "Failed to delete entry", variant: "destructive" });
+        toast({ title: "Failed to delete asset", variant: "destructive" });
         setAssetToDelete(undefined);
       }
     });
@@ -104,29 +110,29 @@ export default function AssetsLiabilities() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">My Assets</h1>
-          <p className="text-muted-foreground mt-1">Track property, vehicles, and other holdings outside your accounts.</p>
+          <p className="text-muted-foreground mt-1">Manually tracked items you own — property, vehicles, and other holdings.</p>
         </div>
         <AssetDialog
           trigger={
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Add Asset or Liability
+              Add Asset
             </Button>
           }
         />
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Card */}
       <div className="grid grid-cols-1 gap-4">
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Assets</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Asset Value</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoadingSummary ? (
               <Skeleton className="h-8 w-[120px]" />
             ) : (
-              <div className="text-2xl font-bold tracking-tight text-chart-2">
+              <div className="text-2xl font-bold tracking-tight text-foreground">
                 <FormatCurrency amount={summary?.totalAssets || 0} />
               </div>
             )}
@@ -150,7 +156,7 @@ export default function AssetsLiabilities() {
                     <span className={getAssetColor(type)}>{getAssetIcon(type)}</span>
                     <CardTitle className="text-sm font-medium">{getTypeLabel(type)}</CardTitle>
                   </div>
-                  <span className="font-mono font-medium text-sm">
+                  <span className="font-mono font-medium text-sm text-foreground">
                     <FormatCurrency amount={typeAssets.reduce((sum, a) => sum + a.currentBalance, 0)} />
                   </span>
                 </div>
@@ -159,23 +165,27 @@ export default function AssetsLiabilities() {
                 <div className="divide-y divide-border">
                   {typeAssets.map(asset => (
                     <div key={asset.id} className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors group">
-                      <div className="flex items-start gap-3">
-                        <div className="h-10 w-10 rounded-md bg-secondary border border-border flex items-center justify-center shrink-0">
-                          <span className="text-xs font-bold text-muted-foreground">{asset.institutionName.substring(0, 2).toUpperCase()}</span>
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-md bg-secondary border border-border flex items-center justify-center shrink-0 text-muted-foreground">
+                          {getAssetIcon(asset.assetType)}
                         </div>
-                        <div>
-                          <h4 className="text-sm font-medium">{asset.assetName}</h4>
-                          <p className="text-xs text-muted-foreground mt-0.5">{asset.institutionName}</p>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-sm font-medium truncate">{asset.assetName}</h4>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 leading-none shrink-0">
+                              {getTypeLabel(asset.assetType)}
+                            </Badge>
+                          </div>
+                          {asset.purchaseDate && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Purchased {new Date(asset.purchaseDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </p>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <div className="text-sm font-medium font-mono">
-                            <FormatCurrency amount={asset.currentBalance} />
-                          </div>
-                          {!asset.isAsset && (
-                            <Badge variant="outline" className="mt-1 border-destructive/20 text-destructive text-[10px] px-1 h-3 leading-none py-1">Liability</Badge>
-                          )}
+                      <div className="flex items-center gap-4 shrink-0">
+                        <div className="text-sm font-medium font-mono text-foreground">
+                          <FormatCurrency amount={asset.currentBalance} />
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -209,9 +219,9 @@ export default function AssetsLiabilities() {
       ) : (
         <EmptyState
           icon={<Scale className="h-8 w-8" />}
-          title="No assets or liabilities added"
+          title="No assets added"
           description="Add property, vehicles, and other holdings to get a complete view of your net worth."
-          action={<AssetDialog trigger={<Button>Add Asset or Liability</Button>} />}
+          action={<AssetDialog trigger={<Button>Add Asset</Button>} />}
         />
       )}
 
@@ -224,7 +234,7 @@ export default function AssetsLiabilities() {
       <AlertDialog open={!!assetToDelete} onOpenChange={(open) => !open && setAssetToDelete(undefined)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Entry?</AlertDialogTitle>
+            <AlertDialogTitle>Remove Asset?</AlertDialogTitle>
             <AlertDialogDescription>
               This will remove "{assetToDelete?.assetName}" and stop tracking its value.
             </AlertDialogDescription>

@@ -9,7 +9,12 @@
 export interface AssetInput {
   assetName: string;
   assetType: string;
-  institutionName: string;
+  institutionName?: string;
   currentBalance: number;
-  isAsset: boolean;
+  /** @nullable */
+  purchasePrice?: number | null;
+  /** @nullable */
+  purchaseDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }

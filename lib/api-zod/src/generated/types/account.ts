@@ -14,8 +14,13 @@ export interface Account {
   currentBalance: number;
   isAsset: boolean;
   /** @nullable */
+  accountNumberLast4?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
   plaidAccountId?: string | null;
   /** @nullable */
   lastSyncedAt?: string | null;
   createdAt: string;
+  updatedAt: string;
 }

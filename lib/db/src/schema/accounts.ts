@@ -10,11 +10,14 @@ export const accountsTable = pgTable("accounts", {
   institutionName: text("institution_name").notNull(),
   currentBalance: numeric("current_balance", { precision: 15, scale: 2 }).notNull(),
   isAsset: boolean("is_asset").notNull().default(true),
+  accountNumberLast4: text("account_number_last4"),
+  notes: text("notes"),
   plaidAccountId: text("plaid_account_id"),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertAccountSchema = createInsertSchema(accountsTable).omit({ id: true, userId: true, createdAt: true, plaidAccountId: true, lastSyncedAt: true });
+export const insertAccountSchema = createInsertSchema(accountsTable).omit({ id: true, userId: true, createdAt: true, updatedAt: true, plaidAccountId: true, lastSyncedAt: true });
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type Account = typeof accountsTable.$inferSelect;

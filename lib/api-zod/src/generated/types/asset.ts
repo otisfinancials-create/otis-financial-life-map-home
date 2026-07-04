@@ -13,5 +13,11 @@ export interface Asset {
   institutionName: string;
   currentBalance: number;
   isAsset: boolean;
+  /** @nullable */
+  purchasePrice?: number | null;
+  /** @nullable */
+  purchaseDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
   createdAt: string;
 }

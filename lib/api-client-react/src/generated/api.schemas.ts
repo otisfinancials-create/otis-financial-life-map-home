@@ -121,10 +121,15 @@ export interface Account {
   currentBalance: number;
   isAsset: boolean;
   /** @nullable */
+  accountNumberLast4?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
   plaidAccountId?: string | null;
   /** @nullable */
   lastSyncedAt?: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface AccountInput {
@@ -133,6 +138,13 @@ export interface AccountInput {
   institutionName: string;
   currentBalance: number;
   isAsset: boolean;
+  /**
+     * @nullable
+     * @pattern ^\d{4}$
+     */
+  accountNumberLast4?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export interface AccountUpdate {
@@ -141,6 +153,13 @@ export interface AccountUpdate {
   institutionName?: string;
   currentBalance?: number;
   isAsset?: boolean;
+  /**
+     * @nullable
+     * @pattern ^\d{4}$
+     */
+  accountNumberLast4?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export interface AccountTypeGroup {
@@ -163,15 +182,26 @@ export interface Asset {
   institutionName: string;
   currentBalance: number;
   isAsset: boolean;
+  /** @nullable */
+  purchasePrice?: number | null;
+  /** @nullable */
+  purchaseDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
   createdAt: string;
 }
 
 export interface AssetInput {
   assetName: string;
   assetType: string;
-  institutionName: string;
+  institutionName?: string;
   currentBalance: number;
-  isAsset: boolean;
+  /** @nullable */
+  purchasePrice?: number | null;
+  /** @nullable */
+  purchaseDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export interface AssetUpdate {
@@ -179,7 +209,12 @@ export interface AssetUpdate {
   assetType?: string;
   institutionName?: string;
   currentBalance?: number;
-  isAsset?: boolean;
+  /** @nullable */
+  purchasePrice?: number | null;
+  /** @nullable */
+  purchaseDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export interface AssetTypeGroup {

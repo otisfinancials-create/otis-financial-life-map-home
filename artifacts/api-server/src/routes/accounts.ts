@@ -108,6 +108,7 @@ router.patch("/accounts/:id", async (req, res): Promise<void> => {
     .set({
       ...restAccountData,
       ...(rawBalance !== undefined && { currentBalance: String(rawBalance) }),
+      updatedAt: new Date(),
     })
     .where(and(eq(accountsTable.id, params.data.id), eq(accountsTable.userId, req.userId)))
     .returning();
@@ -140,6 +141,7 @@ function serialize(a: typeof accountsTable.$inferSelect) {
     ...a,
     currentBalance: parseFloat(String(a.currentBalance)),
     createdAt: a.createdAt.toISOString(),
+    updatedAt: a.updatedAt.toISOString(),
     lastSyncedAt: a.lastSyncedAt ? a.lastSyncedAt.toISOString() : null,
   };
 }

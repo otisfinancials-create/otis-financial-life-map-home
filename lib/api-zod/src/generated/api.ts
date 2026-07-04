@@ -289,9 +289,12 @@ export const ListAccountsResponseItem = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "isAsset": zod.boolean(),
+  "accountNumberLast4": zod.string().nullish(),
+  "notes": zod.string().nullish(),
   "plaidAccountId": zod.string().nullish(),
   "lastSyncedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
 export const ListAccountsResponse = zod.array(ListAccountsResponseItem)
 
@@ -299,12 +302,17 @@ export const ListAccountsResponse = zod.array(ListAccountsResponseItem)
 /**
  * @summary Create an account
  */
+export const createAccountBodyAccountNumberLast4RegExp = new RegExp('^\\d{4}$');
+
+
 export const CreateAccountBody = zod.object({
   "accountName": zod.string(),
   "accountType": zod.string(),
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
-  "isAsset": zod.boolean()
+  "isAsset": zod.boolean(),
+  "accountNumberLast4": zod.string().regex(createAccountBodyAccountNumberLast4RegExp).nullish(),
+  "notes": zod.string().nullish()
 })
 
 export const CreateAccountResponse = zod.object({
@@ -314,9 +322,12 @@ export const CreateAccountResponse = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "isAsset": zod.boolean(),
+  "accountNumberLast4": zod.string().nullish(),
+  "notes": zod.string().nullish(),
   "plaidAccountId": zod.string().nullish(),
   "lastSyncedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
 
 
@@ -349,9 +360,12 @@ export const GetAccountResponse = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "isAsset": zod.boolean(),
+  "accountNumberLast4": zod.string().nullish(),
+  "notes": zod.string().nullish(),
   "plaidAccountId": zod.string().nullish(),
   "lastSyncedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
 
 
@@ -362,12 +376,17 @@ export const UpdateAccountParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateAccountBodyAccountNumberLast4RegExp = new RegExp('^\\d{4}$');
+
+
 export const UpdateAccountBody = zod.object({
   "accountName": zod.string().optional(),
   "accountType": zod.string().optional(),
   "institutionName": zod.string().optional(),
   "currentBalance": zod.number().optional(),
-  "isAsset": zod.boolean().optional()
+  "isAsset": zod.boolean().optional(),
+  "accountNumberLast4": zod.string().regex(updateAccountBodyAccountNumberLast4RegExp).nullish(),
+  "notes": zod.string().nullish()
 })
 
 export const UpdateAccountResponse = zod.object({
@@ -377,9 +396,12 @@ export const UpdateAccountResponse = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "isAsset": zod.boolean(),
+  "accountNumberLast4": zod.string().nullish(),
+  "notes": zod.string().nullish(),
   "plaidAccountId": zod.string().nullish(),
   "lastSyncedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
 
 
@@ -403,6 +425,9 @@ export const ListAssetsResponseItem = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "isAsset": zod.boolean(),
+  "purchasePrice": zod.number().nullish(),
+  "purchaseDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListAssetsResponse = zod.array(ListAssetsResponseItem)
@@ -414,9 +439,11 @@ export const ListAssetsResponse = zod.array(ListAssetsResponseItem)
 export const CreateAssetBody = zod.object({
   "assetName": zod.string(),
   "assetType": zod.string(),
-  "institutionName": zod.string(),
+  "institutionName": zod.string().optional(),
   "currentBalance": zod.number(),
-  "isAsset": zod.boolean()
+  "purchasePrice": zod.number().nullish(),
+  "purchaseDate": zod.string().nullish(),
+  "notes": zod.string().nullish()
 })
 
 export const CreateAssetResponse = zod.object({
@@ -426,6 +453,9 @@ export const CreateAssetResponse = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "isAsset": zod.boolean(),
+  "purchasePrice": zod.number().nullish(),
+  "purchaseDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -459,6 +489,9 @@ export const GetAssetResponse = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "isAsset": zod.boolean(),
+  "purchasePrice": zod.number().nullish(),
+  "purchaseDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -475,7 +508,9 @@ export const UpdateAssetBody = zod.object({
   "assetType": zod.string().optional(),
   "institutionName": zod.string().optional(),
   "currentBalance": zod.number().optional(),
-  "isAsset": zod.boolean().optional()
+  "purchasePrice": zod.number().nullish(),
+  "purchaseDate": zod.string().nullish(),
+  "notes": zod.string().nullish()
 })
 
 export const UpdateAssetResponse = zod.object({
@@ -485,6 +520,9 @@ export const UpdateAssetResponse = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "isAsset": zod.boolean(),
+  "purchasePrice": zod.number().nullish(),
+  "purchaseDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
   "createdAt": zod.string()
 })
 

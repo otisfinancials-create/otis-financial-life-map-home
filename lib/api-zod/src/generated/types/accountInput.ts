@@ -12,4 +12,11 @@ export interface AccountInput {
   institutionName: string;
   currentBalance: number;
   isAsset: boolean;
+  /**
+     * @nullable
+     * @pattern ^\d{4}$
+     */
+  accountNumberLast4?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }

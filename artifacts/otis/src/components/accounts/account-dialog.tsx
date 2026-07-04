@@ -17,13 +17,13 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -31,18 +31,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 import { useCreateAccount, useUpdateAccount, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import type { Account } from "@workspace/api-client-react";
 
+export const ACCOUNT_TYPE_OPTIONS = [
+  { value: "checking", label: "Checking" },
+  { value: "savings", label: "Savings" },
+  { value: "investment", label: "Investment" },
+  { value: "brokerage", label: "Brokerage" },
+  { value: "credit_card", label: "Credit Card" },
+  { value: "retirement", label: "Retirement" },
+  { value: "mortgage", label: "Mortgage" },
+  { value: "loan", label: "Loan" },
+] as const;
+
+const LIABILITY_TYPES = ["credit_card", "loan", "mortgage"];
+
 const accountSchema = z.object({
   accountName: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  accountType: z.string().min(1, { message: "Please select an account type." }),
   institutionName: z.string().min(1, { message: "Please provide an institution name." }),
+  accountType: z.string().min(1, { message: "Please select an account type." }),
   currentBalance: z.coerce.number(),
-  isAsset: z.boolean().default(true),
+  accountNumberLast4: z
+    .string()
+    .refine((v) => v === "" || /^\d{4}$/.test(v), { message: "Enter exactly 4 digits." }),
+  notes: z.string(),
 });
 
 type AccountFormValues = z.infer<typeof accountSchema>;
@@ -59,55 +74,53 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
   const isControlled = open !== undefined && onOpenChange !== undefined;
   const isOpen = isControlled ? open : internalOpen;
   const setIsOpen = isControlled ? onOpenChange : setInternalOpen;
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const isEditing = !!account;
 
+  const defaults = (): AccountFormValues => ({
+    accountName: account?.accountName || "",
+    institutionName: account?.institutionName || "",
+    accountType: account?.accountType || "",
+    currentBalance: account?.currentBalance || 0,
+    accountNumberLast4: account?.accountNumberLast4 || "",
+    notes: account?.notes || "",
+  });
+
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(accountSchema),
-    defaultValues: {
-      accountName: account?.accountName || "",
-      accountType: account?.accountType || "",
-      institutionName: account?.institutionName || "",
-      currentBalance: account?.currentBalance || 0,
-      isAsset: account?.isAsset ?? true,
-    },
+    defaultValues: defaults(),
   });
 
   useEffect(() => {
     if (isOpen) {
-      form.reset({
-        accountName: account?.accountName || "",
-        accountType: account?.accountType || "",
-        institutionName: account?.institutionName || "",
-        currentBalance: account?.currentBalance || 0,
-        isAsset: account?.isAsset ?? true,
-      });
+      form.reset(defaults());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, account?.id]);
 
-  // Automatically set isAsset based on accountType selection
-  const watchAccountType = form.watch("accountType");
-  const handleAccountTypeChange = (value: string) => {
-    form.setValue("accountType", value);
-    if (value === "loan" || value === "credit_card" || value === "mortgage") {
-      form.setValue("isAsset", false);
-    } else {
-      form.setValue("isAsset", true);
-    }
-  };
-
-  function onSubmit(data: AccountFormValues) {
+  function onSubmit(values: AccountFormValues) {
+    const data = {
+      accountName: values.accountName,
+      institutionName: values.institutionName,
+      accountType: values.accountType,
+      currentBalance: values.currentBalance,
+      isAsset: !LIABILITY_TYPES.includes(values.accountType),
+      accountNumberLast4: values.accountNumberLast4 || null,
+      notes: values.notes || null,
+    };
+    const invalidate = () => {
+      queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetAccountsSummaryQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    };
     if (isEditing) {
       updateAccount.mutate({ id: account.id, data }, {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetAccountsSummaryQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          invalidate();
           toast({ title: "Account updated successfully" });
           setIsOpen(false);
           if (!isControlled) form.reset();
@@ -119,9 +132,7 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
     } else {
       createAccount.mutate({ data }, {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetAccountsSummaryQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          invalidate();
           toast({ title: "Account created successfully" });
           setIsOpen(false);
           if (!isControlled) form.reset();
@@ -147,24 +158,11 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Account" : "Add Account"}</DialogTitle>
           <DialogDescription>
-            {isEditing ? "Make changes to your account details." : "Add a new financial account manually."}
+            {isEditing ? "Make changes to your account details." : "Add a financial account. Plaid sync is coming soon."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="institutionName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Institution</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. Chase, Vanguard, Fidelity" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <FormField
               control={form.control}
               name="accountName"
@@ -178,27 +176,36 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="institutionName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Institution Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. Wells Fargo, ETrade" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="accountType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Type</FormLabel>
-                    <Select onValueChange={handleAccountTypeChange} value={field.value}>
+                    <FormLabel>Account Type</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="checking">Checking</SelectItem>
-                        <SelectItem value="savings">Savings</SelectItem>
-                        <SelectItem value="investment">Investment / Brokerage</SelectItem>
-                        <SelectItem value="retirement">Retirement</SelectItem>
-                        <SelectItem value="credit_card">Credit Card</SelectItem>
-                        <SelectItem value="loan">Loan</SelectItem>
-                        <SelectItem value="mortgage">Mortgage</SelectItem>
+                        {ACCOUNT_TYPE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -219,25 +226,29 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                 )}
               />
             </div>
-            
             <FormField
               control={form.control}
-              name="isAsset"
+              name="accountNumberLast4"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Asset Account</FormLabel>
-                    <FormDescription className="text-xs">
-                      Adds to net worth if active, subtracts if inactive
-                    </FormDescription>
-                  </div>
+                <FormItem>
+                  <FormLabel>Account Number (last 4 digits)</FormLabel>
                   <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      disabled={watchAccountType === "loan" || watchAccountType === "credit_card" || watchAccountType === "mortgage"}
-                    />
+                    <Input placeholder="e.g. 4821" maxLength={4} inputMode="numeric" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Optional notes about this account" rows={2} {...field} />
+                  </FormControl>
+                  <FormMessage />
                 </FormItem>
               )}
             />

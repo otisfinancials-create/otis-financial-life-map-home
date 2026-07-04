@@ -1,0 +1,22 @@
+Here you go:
+
+"Please restructure the Accounts section into two distinct sections:
+1) Rename the current 'Accounts' section to 'Connected Accounts' — this is for financial accounts that will eventually sync via Plaid: Checking, Savings, Investment, Brokerage, Credit Card, Retirement, and Loans/Mortgage.
+2) Rename 'Assets & Liabilities' to 'My Assets' — this is for manually tracked items you own: Real Estate, Vehicles, Personal Property (jewelry, collectibles, art), Business Interests, and Other Assets.
+For Connected Accounts:
+
+The add/edit form should have fields for: Account Name, Institution Name (e.g. Wells Fargo, ETrade), Account Type (dropdown: Checking, Savings, Investment, Brokerage, Credit Card, Retirement, Mortgage, Loan), Current Balance, Account Number (last 4 digits only), Notes
+Positive balances shown in black, negative balances (credit cards, loans, mortgage) shown in red
+A 'Connect via Plaid' button placeholder on each account row (grayed out with tooltip 'Coming soon') so users know this feature is planned
+The list should show: Institution name + Account name, Account type badge, Balance, Last updated date, Actions (edit, delete)
+
+For My Assets:
+
+The add/edit form should have fields for: Asset Name, Asset Type (dropdown: Real Estate, Vehicle, Personal Property, Business Interest, Other), Estimated Value, Purchase Price (optional), Purchase Date (optional), Notes
+All values shown in black as they are always positive
+The list should show: Asset name, Asset type badge, Estimated value, Actions (edit, delete)
+
+3) Update the sidebar navigation labels to 'Connected Accounts' and 'My Assets'
+4) Update the Dashboard 'By Account Type' panel to pull from Connected Accounts only — My Assets should not appear there
+5) Make sure Net Worth on the dashboard still calculates correctly: Connected Account balances + My Asset values - negative account balances (credit cards, loans, mortgage) = Net Worth
+Capitalize all account type names properly throughout — no underscores, no lowercase. Use Tailwind for all styling and keep the design consistent with the rest of the app

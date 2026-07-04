@@ -942,7 +942,7 @@ components:
     # ── Accounts ─────────────────────────────────────────────────────────────
     Account:
       type: object
-      required: [id, accountName, accountType, institutionName, currentBalance, isAsset, createdAt]
+      required: [id, accountName, accountType, institutionName, currentBalance, isAsset, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -956,11 +956,17 @@ components:
           type: number
         isAsset:
           type: boolean
+        accountNumberLast4:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
         plaidAccountId:
           type: ["string", "null"]
         lastSyncedAt:
           type: ["string", "null"]
         createdAt:
+          type: string
+        updatedAt:
           type: string
 
     AccountInput:
@@ -977,6 +983,11 @@ components:
           type: number
         isAsset:
           type: boolean
+        accountNumberLast4:
+          type: ["string", "null"]
+          pattern: "^\\d{4}$"
+        notes:
+          type: ["string", "null"]
 
     AccountUpdate:
       type: object
@@ -991,6 +1002,11 @@ components:
           type: number
         isAsset:
           type: boolean
+        accountNumberLast4:
+          type: ["string", "null"]
+          pattern: "^\\d{4}$"
+        notes:
+          type: ["string", "null"]
 
     AccountsSummary:
       type: object
@@ -1035,12 +1051,18 @@ components:
           type: number
         isAsset:
           type: boolean
+        purchasePrice:
+          type: ["number", "null"]
+        purchaseDate:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
         createdAt:
           type: string
 
     AssetInput:
       type: object
-      required: [assetName, assetType, institutionName, currentBalance, isAsset]
+      required: [assetName, assetType, currentBalance]
       properties:
         assetName:
           type: string
@@ -1050,8 +1072,12 @@ components:
           type: string
         currentBalance:
           type: number
-        isAsset:
-          type: boolean
+        purchasePrice:
+          type: ["number", "null"]
+        purchaseDate:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
 
     AssetUpdate:
       type: object
@@ -1064,8 +1090,12 @@ components:
           type: string
         currentBalance:
           type: number
-        isAsset:
-          type: boolean
+        purchasePrice:
+          type: ["number", "null"]
+        purchaseDate:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
 
     AssetsSummary:
       type: object
