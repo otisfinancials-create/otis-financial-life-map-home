@@ -230,6 +230,83 @@ export interface AssetsSummary {
   byType: AssetTypeGroup[];
 }
 
+export interface Loan {
+  id: number;
+  loanName: string;
+  lenderName: string;
+  loanType: string;
+  originalAmount: number;
+  currentBalance: number;
+  interestRate: number;
+  monthlyPayment: number;
+  startDate: string;
+  termMonths: number;
+  nextPaymentDate: string;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LoanInput {
+  loanName: string;
+  lenderName: string;
+  loanType: string;
+  originalAmount: number;
+  currentBalance: number;
+  interestRate: number;
+  monthlyPayment: number;
+  startDate: string;
+  termMonths: number;
+  nextPaymentDate: string;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface LoanUpdate {
+  loanName?: string;
+  lenderName?: string;
+  loanType?: string;
+  originalAmount?: number;
+  currentBalance?: number;
+  interestRate?: number;
+  monthlyPayment?: number;
+  startDate?: string;
+  termMonths?: number;
+  nextPaymentDate?: string;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface LoansSummary {
+  totalDebt: number;
+  totalMonthlyPayments: number;
+  /** @nullable */
+  earliestPayoffDate: string | null;
+  /** @nullable */
+  latestPayoffDate: string | null;
+  loanCount: number;
+}
+
+export interface LoanAmortizationEntry {
+  paymentNumber: number;
+  paymentDate: string;
+  paymentAmount: number;
+  principal: number;
+  interest: number;
+  remainingBalance: number;
+}
+
+export interface LoanAmortization {
+  loanId: number;
+  totalInterest: number;
+  totalPaid: number;
+  /** @nullable */
+  payoffDate: string | null;
+  numberOfPayments: number;
+  schedule: LoanAmortizationEntry[];
+}
+
 export interface ForecastedTransaction {
   id: number;
   transactionDate: string;

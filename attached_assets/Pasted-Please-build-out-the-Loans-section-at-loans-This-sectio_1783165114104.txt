@@ -1,0 +1,92 @@
+Please build out the Loans section at /loans. This section tracks all debt obligations with full amortization detail — mortgage, auto loans, personal loans, student loans, and any other installment debt.
+### Part A: Loan List Page at /loans
+Show a summary card at the top with:
+
+Total Debt Balance (sum of all loan remaining balances)
+Total Monthly Payments (sum of all minimum payments)
+Earliest Payoff Date (the soonest any loan will be paid off)
+Latest Payoff Date (the last loan to be paid off)
+
+Below that, show each loan as a card with:
+
+Loan name and lender
+Loan type badge (Mortgage, Auto, Personal, Student, Other)
+Original loan amount
+Current remaining balance — shown as a horizontal progress bar (e.g. $287,000 remaining of $300,000 original — bar shows how much has been paid off in green)
+Interest rate (APR)
+Monthly payment amount
+Payoff date
+A clickable "View Amortization" link that expands or navigates to the full schedule
+
+### Part B: Add/Edit Loan Form
+Fields:
+
+Loan name (e.g. "Primary Mortgage", "Honda Civic Loan")
+Lender name (e.g. Wells Fargo, Toyota Financial)
+Loan type (dropdown: Mortgage, Auto, Personal, Student, Other)
+Original loan amount
+Current remaining balance
+Interest rate / APR (%)
+Monthly payment amount
+Loan start date
+Loan term (dropdown: 12, 24, 36, 48, 60, 84, 120, 180, 240, 360 months)
+Next payment due date
+Notes (optional)
+
+### Part C: Amortization Schedule
+For each loan, generate and display a full amortization table showing every payment from today until payoff:
+Columns:
+
+*Payment # *
+Payment Date
+Payment Amount
+Principal Portion
+Interest Portion
+Remaining Balance
+
+At the top of the schedule show a summary:
+
+Total interest you will pay over the life of the loan
+Total amount paid (principal + interest)
+Payoff date
+
+Add a toggle to switch between showing ALL payments or just YEARLY summaries (one row per year showing totals) — yearly view is much more readable for a 30-year mortgage.
+### Part D: Extra Payment Simulator (inline on the amortization page)
+Add a simple panel on the amortization page:
+
+"What if I pay an extra $X per month?"
+Input field for extra monthly payment amount
+When the user enters an amount, instantly recalculate and show:
+
+New payoff date
+Months saved
+Total interest saved
+
+
+This should update in real time without a page refresh
+
+### Part E: API Routes
+
+GET /api/loans — list all loans
+POST /api/loans — create new loan
+PUT /api/loans/[id] — update loan
+DELETE /api/loans/[id] — delete loan
+GET /api/loans/[id]/amortization — return full amortization schedule calculated server-side
+
+### Part F: Database
+Create a loans table:
+loans (
+  id, user_id, loan_name, lender_name, loan_type,
+  original_amount, current_balance, interest_rate,
+  monthly_payment, start_date, term_months,
+  next_payment_date, notes, created_at, updated_at
+)
+### Seed Data
+
+Create 3 sample loans for user_id = 1:
+
+Primary Mortgage: $300,000 original, $287,000 remaining, 6.5% APR, 30 year term, $2,000/month
+Honda Civic Auto Loan: $28,000 original, $19,500 remaining, 4.9% APR, 60 month term, $528/month
+Personal Loan: $10,000 original, $6,200 remaining, 8.9% APR, 36 month term, $318/month
+
+Use Tailwind for all styling, consistent with the rest of the app. The extra payment simulator is a key feature — make it feel interactive and satisfying to use

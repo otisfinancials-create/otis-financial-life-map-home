@@ -466,6 +466,132 @@ paths:
         "204":
           description: Deleted
 
+  # ── Loans ─────────────────────────────────────────────────────────────────
+  /loans:
+    get:
+      operationId: listLoans
+      tags: [loans]
+      summary: List all loans
+      responses:
+        "200":
+          description: List of loans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Loan"
+    post:
+      operationId: createLoan
+      tags: [loans]
+      summary: Create a loan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoanInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+
+  /loans/summary:
+    get:
+      operationId: getLoansSummary
+      tags: [loans]
+      summary: Get total debt, monthly payments, and payoff date range
+      responses:
+        "200":
+          description: Loans summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoansSummary"
+
+  /loans/{id}:
+    get:
+      operationId: getLoan
+      tags: [loans]
+      summary: Get a loan by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Loan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateLoan
+      tags: [loans]
+      summary: Update a loan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoanUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteLoan
+      tags: [loans]
+      summary: Delete a loan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /loans/{id}/amortization:
+    get:
+      operationId: getLoanAmortization
+      tags: [loans]
+      summary: Get the full amortization schedule for a loan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Amortization schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanAmortization"
+        "404":
+          description: Not found
+
   # ── Forecasted Transactions ──────────────────────────────────────────────
   /forecast:
     get:
@@ -1122,6 +1248,144 @@ components:
           type: number
         count:
           type: integer
+
+    # ── Loans ─────────────────────────────────────────────────────────────────
+    Loan:
+      type: object
+      required: [id, loanName, lenderName, loanType, originalAmount, currentBalance, interestRate, monthlyPayment, startDate, termMonths, nextPaymentDate, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        loanName:
+          type: string
+        lenderName:
+          type: string
+        loanType:
+          type: string
+        originalAmount:
+          type: number
+        currentBalance:
+          type: number
+        interestRate:
+          type: number
+        monthlyPayment:
+          type: number
+        startDate:
+          type: string
+        termMonths:
+          type: integer
+        nextPaymentDate:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    LoanInput:
+      type: object
+      required: [loanName, lenderName, loanType, originalAmount, currentBalance, interestRate, monthlyPayment, startDate, termMonths, nextPaymentDate]
+      properties:
+        loanName:
+          type: string
+        lenderName:
+          type: string
+        loanType:
+          type: string
+        originalAmount:
+          type: number
+        currentBalance:
+          type: number
+        interestRate:
+          type: number
+        monthlyPayment:
+          type: number
+        startDate:
+          type: string
+        termMonths:
+          type: integer
+        nextPaymentDate:
+          type: string
+        notes:
+          type: ["string", "null"]
+
+    LoanUpdate:
+      type: object
+      properties:
+        loanName:
+          type: string
+        lenderName:
+          type: string
+        loanType:
+          type: string
+        originalAmount:
+          type: number
+        currentBalance:
+          type: number
+        interestRate:
+          type: number
+        monthlyPayment:
+          type: number
+        startDate:
+          type: string
+        termMonths:
+          type: integer
+        nextPaymentDate:
+          type: string
+        notes:
+          type: ["string", "null"]
+
+    LoansSummary:
+      type: object
+      required: [totalDebt, totalMonthlyPayments, earliestPayoffDate, latestPayoffDate, loanCount]
+      properties:
+        totalDebt:
+          type: number
+        totalMonthlyPayments:
+          type: number
+        earliestPayoffDate:
+          type: ["string", "null"]
+        latestPayoffDate:
+          type: ["string", "null"]
+        loanCount:
+          type: integer
+
+    LoanAmortizationEntry:
+      type: object
+      required: [paymentNumber, paymentDate, paymentAmount, principal, interest, remainingBalance]
+      properties:
+        paymentNumber:
+          type: integer
+        paymentDate:
+          type: string
+        paymentAmount:
+          type: number
+        principal:
+          type: number
+        interest:
+          type: number
+        remainingBalance:
+          type: number
+
+    LoanAmortization:
+      type: object
+      required: [loanId, totalInterest, totalPaid, payoffDate, numberOfPayments, schedule]
+      properties:
+        loanId:
+          type: integer
+        totalInterest:
+          type: number
+        totalPaid:
+          type: number
+        payoffDate:
+          type: ["string", "null"]
+        numberOfPayments:
+          type: integer
+        schedule:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoanAmortizationEntry"
 
     # ── Forecasted Transactions ───────────────────────────────────────────────
     ForecastedTransaction:

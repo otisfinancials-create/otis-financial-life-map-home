@@ -538,6 +538,173 @@ export const DeleteAssetResponse = zod.void()
 
 
 /**
+ * @summary List all loans
+ */
+export const ListLoansResponseItem = zod.object({
+  "id": zod.number(),
+  "loanName": zod.string(),
+  "lenderName": zod.string(),
+  "loanType": zod.string(),
+  "originalAmount": zod.number(),
+  "currentBalance": zod.number(),
+  "interestRate": zod.number(),
+  "monthlyPayment": zod.number(),
+  "startDate": zod.string(),
+  "termMonths": zod.number(),
+  "nextPaymentDate": zod.string(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListLoansResponse = zod.array(ListLoansResponseItem)
+
+
+/**
+ * @summary Create a loan
+ */
+export const CreateLoanBody = zod.object({
+  "loanName": zod.string(),
+  "lenderName": zod.string(),
+  "loanType": zod.string(),
+  "originalAmount": zod.number(),
+  "currentBalance": zod.number(),
+  "interestRate": zod.number(),
+  "monthlyPayment": zod.number(),
+  "startDate": zod.string(),
+  "termMonths": zod.number(),
+  "nextPaymentDate": zod.string(),
+  "notes": zod.string().nullish()
+})
+
+export const CreateLoanResponse = zod.object({
+  "id": zod.number(),
+  "loanName": zod.string(),
+  "lenderName": zod.string(),
+  "loanType": zod.string(),
+  "originalAmount": zod.number(),
+  "currentBalance": zod.number(),
+  "interestRate": zod.number(),
+  "monthlyPayment": zod.number(),
+  "startDate": zod.string(),
+  "termMonths": zod.number(),
+  "nextPaymentDate": zod.string(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Get total debt, monthly payments, and payoff date range
+ */
+export const GetLoansSummaryResponse = zod.object({
+  "totalDebt": zod.number(),
+  "totalMonthlyPayments": zod.number(),
+  "earliestPayoffDate": zod.string().nullable(),
+  "latestPayoffDate": zod.string().nullable(),
+  "loanCount": zod.number()
+})
+
+
+/**
+ * @summary Get a loan by ID
+ */
+export const GetLoanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLoanResponse = zod.object({
+  "id": zod.number(),
+  "loanName": zod.string(),
+  "lenderName": zod.string(),
+  "loanType": zod.string(),
+  "originalAmount": zod.number(),
+  "currentBalance": zod.number(),
+  "interestRate": zod.number(),
+  "monthlyPayment": zod.number(),
+  "startDate": zod.string(),
+  "termMonths": zod.number(),
+  "nextPaymentDate": zod.string(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update a loan
+ */
+export const UpdateLoanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateLoanBody = zod.object({
+  "loanName": zod.string().optional(),
+  "lenderName": zod.string().optional(),
+  "loanType": zod.string().optional(),
+  "originalAmount": zod.number().optional(),
+  "currentBalance": zod.number().optional(),
+  "interestRate": zod.number().optional(),
+  "monthlyPayment": zod.number().optional(),
+  "startDate": zod.string().optional(),
+  "termMonths": zod.number().optional(),
+  "nextPaymentDate": zod.string().optional(),
+  "notes": zod.string().nullish()
+})
+
+export const UpdateLoanResponse = zod.object({
+  "id": zod.number(),
+  "loanName": zod.string(),
+  "lenderName": zod.string(),
+  "loanType": zod.string(),
+  "originalAmount": zod.number(),
+  "currentBalance": zod.number(),
+  "interestRate": zod.number(),
+  "monthlyPayment": zod.number(),
+  "startDate": zod.string(),
+  "termMonths": zod.number(),
+  "nextPaymentDate": zod.string(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a loan
+ */
+export const DeleteLoanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteLoanResponse = zod.void()
+
+
+/**
+ * @summary Get the full amortization schedule for a loan
+ */
+export const GetLoanAmortizationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLoanAmortizationResponse = zod.object({
+  "loanId": zod.number(),
+  "totalInterest": zod.number(),
+  "totalPaid": zod.number(),
+  "payoffDate": zod.string().nullable(),
+  "numberOfPayments": zod.number(),
+  "schedule": zod.array(zod.object({
+  "paymentNumber": zod.number(),
+  "paymentDate": zod.string(),
+  "paymentAmount": zod.number(),
+  "principal": zod.number(),
+  "interest": zod.number(),
+  "remainingBalance": zod.number()
+}))
+})
+
+
+/**
  * @summary List forecasted transactions (optionally filtered by date range)
  */
 export const ListForecastQueryParams = zod.object({
