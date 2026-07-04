@@ -9,7 +9,6 @@ import {
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { categoryColor } from "@/lib/category-colors";
 import { monthlyFactor } from "@/lib/bill-math";
 import {
   Wallet,
@@ -254,7 +253,15 @@ export default function Dashboard() {
     retirement: "Retirement",
     real_estate: "Real Estate",
     loan: "Loans",
+    credit_card: "Credit Card",
+    mortgage: "Mortgage",
   };
+  const typeLabel = (type: string) =>
+    TYPE_LABELS[type] ??
+    type
+      .split(/[_\s]+/)
+      .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
+      .join(" ");
 
   const urgencyColor = (days: number) =>
     days <= 3 ? "#ef4444" : days <= 7 ? "#f97316" : "#9ca3af";
@@ -496,7 +503,7 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <div className="px-2 text-center">
-                    <p className="text-3xl font-bold font-mono tabular-nums text-foreground">
+                    <p className="text-3xl font-bold font-mono tabular-nums text-emerald-600">
                       {billsRemainingThisMonth}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1.5 uppercase tracking-wider font-medium">
@@ -504,7 +511,7 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <div className="px-2 text-center">
-                    <p className="text-3xl font-bold font-mono tabular-nums text-blue-600">
+                    <p className="text-3xl font-bold font-mono tabular-nums text-emerald-600">
                       {daysUntilPaycheck === null
                         ? "—"
                         : daysUntilPaycheck === 0
@@ -568,8 +575,8 @@ export default function Dashboard() {
                     >
                       <span
                         className="h-2 w-2 rounded-full shrink-0 mt-1.5"
-                        style={{ backgroundColor: categoryColor(bill.category) }}
-                        title={bill.category}
+                        style={{ backgroundColor: urgencyColor(bill.daysUntilDue) }}
+                        title={`${bill.category} — due in ${bill.daysUntilDue}d`}
                       />
                       <div className="flex flex-col min-w-0 flex-1">
                         <span className="text-sm font-medium truncate">{bill.billName}</span>
@@ -639,7 +646,7 @@ export default function Dashboard() {
                     <div key={type}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm text-muted-foreground">
-                          {TYPE_LABELS[type] ?? type}
+                          {typeLabel(type)}
                         </span>
                         <span
                           className={`text-sm font-mono tabular-nums font-medium ${
