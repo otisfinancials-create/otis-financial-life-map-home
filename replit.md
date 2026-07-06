@@ -32,6 +32,7 @@ A personal finance web app for high-earning households. Combines cash flow forec
 - `lib/db/src/schema/` — Drizzle ORM table definitions (bills, pay_schedules, accounts, forecasted_transactions)
 - `artifacts/api-server/src/routes/` — Express route handlers (bills, accounts, pay_schedules, forecast, dashboard)
 - `artifacts/otis/src/` — React frontend (pages, components, layout)
+- `artifacts/coming-soon/` — standalone static "Coming Soon" landing page (self-contained `index.html`, no React; served at `/coming-soon/`)
 - `lib/api-client-react/src/generated/` — generated React Query hooks (do not edit)
 - `lib/api-zod/src/generated/` — generated Zod schemas for server validation (do not edit)
 
