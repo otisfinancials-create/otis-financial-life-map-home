@@ -127,8 +127,37 @@
     }
     .wordmark .paw { font-size: 26px; }
 
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 30px;
+      padding: 6px 14px;
+      font-size: 12.5px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--accent-dark);
+      background: rgba(45,155,111,0.10);
+      border: 1px solid rgba(45,155,111,0.25);
+      border-radius: 999px;
+    }
+    .badge .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    .d-badge { animation-delay: 0.10s; }
+
     .tagline {
-      margin-top: 40px;
+      margin-top: 18px;
       font-size: clamp(22px, 3.4vw, 34px);
       font-weight: 800;
       letter-spacing: -0.03em;
@@ -300,6 +329,11 @@
       <span>Otis</span>
     </div>
 
+    <div class="badge reveal d-badge">
+      <span class="dot" aria-hidden="true"></span>
+      <span>Now in Development</span>
+    </div>
+
     <h1 class="tagline reveal d2">
       Organize <span class="accent">·</span> Track <span class="accent">·</span> Invest <span class="accent">·</span> Simulate
     </h1>
@@ -337,12 +371,12 @@
         <span class="desc">See your financial future, 12 months out.</span>
       </div>
       <div class="feature">
-        <span class="icon">🏦</span>
+        <span class="icon">📊</span>
         <span class="title">Net Worth Tracking</span>
         <span class="desc">Assets, accounts, and liabilities in one view.</span>
       </div>
       <div class="feature">
-        <span class="icon">🏛️</span>
+        <span class="icon">⏰</span>
         <span class="title">Loan Amortization</span>
         <span class="desc">Track payoff dates and simulate extra payments.</span>
       </div>
