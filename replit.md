@@ -32,7 +32,8 @@ A personal finance web app for high-earning households. Combines cash flow forec
 - `lib/db/src/schema/` — Drizzle ORM table definitions (bills, pay_schedules, accounts, forecasted_transactions)
 - `artifacts/api-server/src/routes/` — Express route handlers (bills, accounts, pay_schedules, forecast, dashboard)
 - `artifacts/otis/src/` — React frontend (pages, components, layout)
-- `artifacts/coming-soon/` — standalone static "Coming Soon" landing page (self-contained `index.html`, no React; served at `/coming-soon/`)
+- `artifacts/coming-soon/` — standalone static "Coming Soon" landing page (self-contained `index.html`, no React; served at the root `/`). This is the public face of the deployment while the main app is not yet launched.
+- Routing note: the main Otis app is served at `/app/` (BASE_PATH `/app/`); the Coming Soon page owns the root `/`; the API server is at `/api`. To make the main app public at the root later, swap the `paths`/`previewPath`/`BASE_PATH` back in the two `artifact.toml` files via `verifyAndReplaceArtifactToml`.
 - `lib/api-client-react/src/generated/` — generated React Query hooks (do not edit)
 - `lib/api-zod/src/generated/` — generated Zod schemas for server validation (do not edit)
 

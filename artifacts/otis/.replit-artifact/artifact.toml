@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/"
+previewPath = "/app/"
 title = "Otis — Financial Life Map"
 version = "1.0.0"
 id = "artifacts/otis"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/" ]
+paths = [ "/app/" ]
 localPort = 26154
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "26154"
-BASE_PATH = "/"
+BASE_PATH = "/app/"

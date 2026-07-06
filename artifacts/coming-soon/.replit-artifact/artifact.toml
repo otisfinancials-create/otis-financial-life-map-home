@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/coming-soon/"
+previewPath = "/"
 title = "Otis — Coming Soon"
 version = "1.0.0"
 id = "artifacts/coming-soon"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/coming-soon/" ]
+paths = [ "/" ]
 localPort = 19580
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "19580"
-BASE_PATH = "/coming-soon/"
+BASE_PATH = "/"
