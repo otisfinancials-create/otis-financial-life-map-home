@@ -30,7 +30,8 @@ A personal finance web app for high-earning households. Combines cash flow forec
 
 - `lib/api-spec/openapi.yaml` — single source of truth for all API contracts
 - `lib/db/src/schema/` — Drizzle ORM table definitions (bills, pay_schedules, accounts, forecasted_transactions)
-- `artifacts/api-server/src/routes/` — Express route handlers (bills, accounts, pay_schedules, forecast, dashboard)
+- `artifacts/api-server/src/routes/` — Express route handlers (bills, accounts, pay_schedules, forecast, dashboard, subscribe)
+- `artifacts/api-server/src/routes/subscribe.ts` — public (pre-`requireAuth`) `POST /api/subscribe` that adds an email to the Mailchimp audience (used by the Coming Soon page). Reads `MAILCHIMP_API_KEY` + `MAILCHIMP_AUDIENCE_ID`; returns JSON `{ status: "subscribed" | "already" | "invalid_email" | "error" }`.
 - `artifacts/otis/src/` — React frontend (pages, components, layout)
 - `artifacts/coming-soon/` — standalone static "Coming Soon" landing page (self-contained `index.html`, no React; served at the root `/`). This is the public face of the deployment while the main app is not yet launched.
 - Routing note: the main Otis app is served at `/app/` (BASE_PATH `/app/`); the Coming Soon page owns the root `/`; the API server is at `/api`. To make the main app public at the root later, swap the `paths`/`previewPath`/`BASE_PATH` back in the two `artifact.toml` files via `verifyAndReplaceArtifactToml`.

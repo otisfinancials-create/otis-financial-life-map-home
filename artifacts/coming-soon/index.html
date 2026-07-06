@@ -403,6 +403,22 @@
       var thanks = document.getElementById('thanks');
       var email = document.getElementById('email');
 
+      var button = form.querySelector('button[type="submit"]');
+      var buttonLabel = button.textContent;
+
+      function showThanks(message) {
+        if (message) { thanks.textContent = message; }
+        form.style.display = 'none';
+        thanks.classList.add('show');
+      }
+
+      function showError(message) {
+        thanks.textContent = message;
+        thanks.classList.add('show');
+        button.disabled = false;
+        button.textContent = buttonLabel;
+      }
+
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         var value = email.value.trim();
@@ -413,8 +429,30 @@
           email.style.boxShadow = '0 0 0 3px rgba(224,85,78,0.15)';
           return;
         }
-        form.style.display = 'none';
-        thanks.classList.add('show');
+
+        button.disabled = true;
+        button.textContent = 'Submitting...';
+
+        fetch('/api/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: value })
+        })
+          .then(function (res) {
+            return res.json().catch(function () { return {}; });
+          })
+          .then(function (data) {
+            if (data && data.status === 'subscribed') {
+              showThanks("You're on the list! We'll be in touch.");
+            } else if (data && data.status === 'already') {
+              showThanks("You're already on the list — we'll be in touch soon!");
+            } else {
+              showError('Something went wrong, please try again.');
+            }
+          })
+          .catch(function () {
+            showError('Something went wrong, please try again.');
+          });
       });
 
       email.addEventListener('input', function () {
