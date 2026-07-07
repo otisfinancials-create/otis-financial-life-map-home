@@ -5,11 +5,10 @@ import {
   Landmark, 
   LineChart, 
   CalendarHeart, 
-  FlaskConical,
   PiggyBank,
   Scale,
   CreditCard,
-  Bot,
+  Sparkles,
   Banknote,
   LogOut
 } from "lucide-react";
@@ -26,7 +25,6 @@ const navigation = [
   { name: "Loans", href: "/loans", icon: CreditCard },
   { name: "Life Events", href: "/life-events", icon: CalendarHeart },
   { name: "Retirement", href: "/retirement", icon: PiggyBank },
-  { name: "Simulator", href: "/simulator", icon: FlaskConical },
 ];
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -85,22 +83,22 @@ export function Sidebar() {
             Intelligence
           </div>
           <Link 
-            href="/ai"
+            href="/otis"
             className={cn(
               "group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              location === "/ai"
+              location === "/otis"
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
             )}
           >
-            <Bot
+            <Sparkles
               className={cn(
                 "mr-3 h-4 w-4 shrink-0",
-                location === "/ai" ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-foreground"
+                location === "/otis" ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-foreground"
               )}
               aria-hidden="true"
             />
-            Otis AI
+            Otis
           </Link>
         </nav>
       </div>

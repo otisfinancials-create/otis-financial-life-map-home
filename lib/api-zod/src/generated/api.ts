@@ -1084,89 +1084,89 @@ export const GetRetirementProjectionResponse = zod.object({
 
 
 /**
- * @summary List all conversations
+ * @summary Send a chat message to Otis and receive an AI response (SSE stream)
  */
-export const ListAnthropicConversationsResponseItem = zod.object({
-  "id": zod.number(),
-  "title": zod.string(),
-  "createdAt": zod.coerce.date()
-})
-export const ListAnthropicConversationsResponse = zod.array(ListAnthropicConversationsResponseItem)
+export const sendOtisChatBodyMessagesMax = 20;
 
 
-/**
- * @summary Create a new conversation
- */
-export const CreateAnthropicConversationBody = zod.object({
-  "title": zod.string()
-})
 
-export const CreateAnthropicConversationResponse = zod.object({
-  "id": zod.number(),
-  "title": zod.string(),
-  "createdAt": zod.coerce.date()
-})
-
-
-/**
- * @summary Get conversation with messages
- */
-export const GetAnthropicConversationParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-export const GetAnthropicConversationResponse = zod.object({
-  "id": zod.number(),
-  "title": zod.string(),
-  "createdAt": zod.coerce.date(),
+export const SendOtisChatBody = zod.object({
   "messages": zod.array(zod.object({
-  "id": zod.number(),
-  "conversationId": zod.number(),
-  "role": zod.string(),
-  "content": zod.string(),
-  "createdAt": zod.coerce.date()
-}))
-})
-
-
-/**
- * @summary Delete a conversation
- */
-export const DeleteAnthropicConversationParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-export const DeleteAnthropicConversationResponse = zod.void()
-
-
-/**
- * @summary List messages in a conversation
- */
-export const ListAnthropicMessagesParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-export const ListAnthropicMessagesResponseItem = zod.object({
-  "id": zod.number(),
-  "conversationId": zod.number(),
-  "role": zod.string(),
-  "content": zod.string(),
-  "createdAt": zod.coerce.date()
-})
-export const ListAnthropicMessagesResponse = zod.array(ListAnthropicMessagesResponseItem)
-
-
-/**
- * @summary Send a message and receive an AI response (SSE stream)
- */
-export const SendAnthropicMessageParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-export const SendAnthropicMessageBody = zod.object({
+  "role": zod.enum(['user', 'assistant']),
   "content": zod.string()
+})).min(1).max(sendOtisChatBodyMessagesMax)
 })
 
-export const SendAnthropicMessageResponse = zod.unknown()
+export const SendOtisChatResponse = zod.unknown()
+
+
+/**
+ * @summary Run a what-if scenario calculation and return impact numbers
+ */
+export const RunOtisScenarioBody = zod.object({
+  "scenarioType": zod.enum(['job_change', 'buy_home', 'new_vehicle', 'major_vacation', 'extra_debt_payment', 'market_downturn', 'education_expense', 'growing_family', 'early_retirement', 'major_purchase', 'additional_savings']),
+  "inputs": zod.record(zod.string(), zod.unknown())
+})
+
+export const RunOtisScenarioResponse = zod.object({
+  "monthlyCashFlowImpact": zod.number(),
+  "netWorthImpactOneYear": zod.number(),
+  "retirementImpactLabel": zod.string(),
+  "points": zod.array(zod.object({
+  "monthIndex": zod.number(),
+  "label": zod.string(),
+  "baseline": zod.number(),
+  "scenario": zod.number()
+})),
+  "commentary": zod.string()
+})
+
+
+/**
+ * @summary List saved scenarios
+ */
+export const ListScenariosResponseItem = zod.object({
+  "id": zod.number(),
+  "scenarioName": zod.string(),
+  "scenarioType": zod.string(),
+  "inputParameters": zod.record(zod.string(), zod.unknown()),
+  "resultsSummary": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date()
+})
+export const ListScenariosResponse = zod.array(ListScenariosResponseItem)
+
+
+/**
+ * @summary Save a scenario
+ */
+export const createScenarioBodyScenarioNameMax = 120;
+
+
+
+export const CreateScenarioBody = zod.object({
+  "scenarioName": zod.string().min(1).max(createScenarioBodyScenarioNameMax),
+  "scenarioType": zod.string(),
+  "inputParameters": zod.record(zod.string(), zod.unknown()),
+  "resultsSummary": zod.record(zod.string(), zod.unknown())
+})
+
+export const CreateScenarioResponse = zod.object({
+  "id": zod.number(),
+  "scenarioName": zod.string(),
+  "scenarioType": zod.string(),
+  "inputParameters": zod.record(zod.string(), zod.unknown()),
+  "resultsSummary": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a saved scenario
+ */
+export const DeleteScenarioParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteScenarioResponse = zod.void()
 
 

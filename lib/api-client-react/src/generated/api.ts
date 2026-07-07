@@ -24,12 +24,6 @@ import type {
   AccountInput,
   AccountUpdate,
   AccountsSummary,
-  AnthropicConversation,
-  AnthropicConversationInput,
-  AnthropicConversationWithMessages,
-  AnthropicError,
-  AnthropicMessage,
-  AnthropicMessageInput,
   Asset,
   AssetInput,
   AssetUpdate,
@@ -52,6 +46,7 @@ import type {
   LoanUpdate,
   LoansSummary,
   MonthlyForecast,
+  OtisChatRequest,
   PaySchedule,
   PayScheduleInput,
   PayScheduleUpdate,
@@ -62,6 +57,10 @@ import type {
   RetirementSettings,
   RetirementSettingsInput,
   RetirementSummary,
+  RunScenarioRequest,
+  SavedScenario,
+  SavedScenarioInput,
+  ScenarioResult,
   UpcomingBill,
   UserSettings,
   UserSettingsInput
@@ -3706,113 +3705,36 @@ export function useGetRetirementProjection<TData = Awaited<ReturnType<typeof get
 
 
 
-export const getListAnthropicConversationsUrl = () => {
+export const getSendOtisChatUrl = () => {
 
 
 
 
-  return `/api/anthropic/conversations`
+  return `/api/otis/chat`
 }
 
 /**
- * @summary List all conversations
+ * @summary Send a chat message to Otis and receive an AI response (SSE stream)
  */
-export const listAnthropicConversations = async ( options?: RequestInit): Promise<AnthropicConversation[]> => {
+export const sendOtisChat = async (otisChatRequest: OtisChatRequest, options?: RequestInit): Promise<unknown> => {
 
-  return customFetch<AnthropicConversation[]>(getListAnthropicConversationsUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getListAnthropicConversationsQueryKey = () => {
-    return [
-    `/api/anthropic/conversations`
-    ] as const;
-    }
-
-
-export const getListAnthropicConversationsQueryOptions = <TData = Awaited<ReturnType<typeof listAnthropicConversations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAnthropicConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListAnthropicConversationsQueryKey();
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAnthropicConversations>>> = ({ signal }) => listAnthropicConversations({ signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAnthropicConversations>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListAnthropicConversationsQueryResult = NonNullable<Awaited<ReturnType<typeof listAnthropicConversations>>>
-export type ListAnthropicConversationsQueryError = ErrorType<unknown>
-
-
-/**
- * @summary List all conversations
- */
-
-export function useListAnthropicConversations<TData = Awaited<ReturnType<typeof listAnthropicConversations>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAnthropicConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListAnthropicConversationsQueryOptions(options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export const getCreateAnthropicConversationUrl = () => {
-
-
-
-
-  return `/api/anthropic/conversations`
-}
-
-/**
- * @summary Create a new conversation
- */
-export const createAnthropicConversation = async (anthropicConversationInput: AnthropicConversationInput, options?: RequestInit): Promise<AnthropicConversation> => {
-
-  return customFetch<AnthropicConversation>(getCreateAnthropicConversationUrl(),
+  return customFetch<unknown>(getSendOtisChatUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(anthropicConversationInput)
+    body: JSON.stringify(otisChatRequest)
   }
 );}
 
 
 
 
-export const getCreateAnthropicConversationMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAnthropicConversation>>, TError,{data: BodyType<AnthropicConversationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createAnthropicConversation>>, TError,{data: BodyType<AnthropicConversationInput>}, TContext> => {
+export const getSendOtisChatMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOtisChat>>, TError,{data: BodyType<OtisChatRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendOtisChat>>, TError,{data: BodyType<OtisChatRequest>}, TContext> => {
 
-const mutationKey = ['createAnthropicConversation'];
+const mutationKey = ['sendOtisChat'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -3822,10 +3744,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAnthropicConversation>>, {data: BodyType<AnthropicConversationInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendOtisChat>>, {data: BodyType<OtisChatRequest>}> = (props) => {
           const {data} = props ?? {};
 
-          return  createAnthropicConversation(data,requestOptions)
+          return  sendOtisChat(data,requestOptions)
         }
 
 
@@ -3835,38 +3757,108 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateAnthropicConversationMutationResult = NonNullable<Awaited<ReturnType<typeof createAnthropicConversation>>>
-    export type CreateAnthropicConversationMutationBody = BodyType<AnthropicConversationInput>
-    export type CreateAnthropicConversationMutationError = ErrorType<unknown>
+    export type SendOtisChatMutationResult = NonNullable<Awaited<ReturnType<typeof sendOtisChat>>>
+    export type SendOtisChatMutationBody = BodyType<OtisChatRequest>
+    export type SendOtisChatMutationError = ErrorType<unknown>
 
     /**
- * @summary Create a new conversation
+ * @summary Send a chat message to Otis and receive an AI response (SSE stream)
  */
-export const useCreateAnthropicConversation = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAnthropicConversation>>, TError,{data: BodyType<AnthropicConversationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useSendOtisChat = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOtisChat>>, TError,{data: BodyType<OtisChatRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof createAnthropicConversation>>,
+        Awaited<ReturnType<typeof sendOtisChat>>,
         TError,
-        {data: BodyType<AnthropicConversationInput>},
+        {data: BodyType<OtisChatRequest>},
         TContext
       > => {
-      return useMutation(getCreateAnthropicConversationMutationOptions(options));
+      return useMutation(getSendOtisChatMutationOptions(options));
     }
 
-export const getGetAnthropicConversationUrl = (id: number,) => {
+export const getRunOtisScenarioUrl = () => {
 
 
 
 
-  return `/api/anthropic/conversations/${id}`
+  return `/api/otis/scenario`
 }
 
 /**
- * @summary Get conversation with messages
+ * @summary Run a what-if scenario calculation and return impact numbers
  */
-export const getAnthropicConversation = async (id: number, options?: RequestInit): Promise<AnthropicConversationWithMessages> => {
+export const runOtisScenario = async (runScenarioRequest: RunScenarioRequest, options?: RequestInit): Promise<ScenarioResult> => {
 
-  return customFetch<AnthropicConversationWithMessages>(getGetAnthropicConversationUrl(id),
+  return customFetch<ScenarioResult>(getRunOtisScenarioUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(runScenarioRequest)
+  }
+);}
+
+
+
+
+export const getRunOtisScenarioMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runOtisScenario>>, TError,{data: BodyType<RunScenarioRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof runOtisScenario>>, TError,{data: BodyType<RunScenarioRequest>}, TContext> => {
+
+const mutationKey = ['runOtisScenario'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof runOtisScenario>>, {data: BodyType<RunScenarioRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  runOtisScenario(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RunOtisScenarioMutationResult = NonNullable<Awaited<ReturnType<typeof runOtisScenario>>>
+    export type RunOtisScenarioMutationBody = BodyType<RunScenarioRequest>
+    export type RunOtisScenarioMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Run a what-if scenario calculation and return impact numbers
+ */
+export const useRunOtisScenario = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runOtisScenario>>, TError,{data: BodyType<RunScenarioRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof runOtisScenario>>,
+        TError,
+        {data: BodyType<RunScenarioRequest>},
+        TContext
+      > => {
+      return useMutation(getRunOtisScenarioMutationOptions(options));
+    }
+
+export const getListScenariosUrl = () => {
+
+
+
+
+  return `/api/scenarios`
+}
+
+/**
+ * @summary List saved scenarios
+ */
+export const listScenarios = async ( options?: RequestInit): Promise<SavedScenario[]> => {
+
+  return customFetch<SavedScenario[]>(getListScenariosUrl(),
   {
     ...options,
     method: 'GET'
@@ -3879,45 +3871,45 @@ export const getAnthropicConversation = async (id: number, options?: RequestInit
 
 
 
-export const getGetAnthropicConversationQueryKey = (id: number,) => {
+export const getListScenariosQueryKey = () => {
     return [
-    `/api/anthropic/conversations/${id}`
+    `/api/scenarios`
     ] as const;
     }
 
 
-export const getGetAnthropicConversationQueryOptions = <TData = Awaited<ReturnType<typeof getAnthropicConversation>>, TError = ErrorType<AnthropicError>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAnthropicConversation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListScenariosQueryOptions = <TData = Awaited<ReturnType<typeof listScenarios>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listScenarios>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetAnthropicConversationQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getListScenariosQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAnthropicConversation>>> = ({ signal }) => getAnthropicConversation(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listScenarios>>> = ({ signal }) => listScenarios({ signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAnthropicConversation>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listScenarios>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type GetAnthropicConversationQueryResult = NonNullable<Awaited<ReturnType<typeof getAnthropicConversation>>>
-export type GetAnthropicConversationQueryError = ErrorType<AnthropicError>
+export type ListScenariosQueryResult = NonNullable<Awaited<ReturnType<typeof listScenarios>>>
+export type ListScenariosQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Get conversation with messages
+ * @summary List saved scenarios
  */
 
-export function useGetAnthropicConversation<TData = Awaited<ReturnType<typeof getAnthropicConversation>>, TError = ErrorType<AnthropicError>>(
- id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAnthropicConversation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useListScenarios<TData = Awaited<ReturnType<typeof listScenarios>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listScenarios>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetAnthropicConversationQueryOptions(id,options)
+  const queryOptions = getListScenariosQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -3930,20 +3922,90 @@ export function useGetAnthropicConversation<TData = Awaited<ReturnType<typeof ge
 
 
 
-export const getDeleteAnthropicConversationUrl = (id: number,) => {
+export const getCreateScenarioUrl = () => {
 
 
 
 
-  return `/api/anthropic/conversations/${id}`
+  return `/api/scenarios`
 }
 
 /**
- * @summary Delete a conversation
+ * @summary Save a scenario
  */
-export const deleteAnthropicConversation = async (id: number, options?: RequestInit): Promise<void> => {
+export const createScenario = async (savedScenarioInput: SavedScenarioInput, options?: RequestInit): Promise<SavedScenario> => {
 
-  return customFetch<void>(getDeleteAnthropicConversationUrl(id),
+  return customFetch<SavedScenario>(getCreateScenarioUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(savedScenarioInput)
+  }
+);}
+
+
+
+
+export const getCreateScenarioMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createScenario>>, TError,{data: BodyType<SavedScenarioInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createScenario>>, TError,{data: BodyType<SavedScenarioInput>}, TContext> => {
+
+const mutationKey = ['createScenario'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createScenario>>, {data: BodyType<SavedScenarioInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createScenario(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateScenarioMutationResult = NonNullable<Awaited<ReturnType<typeof createScenario>>>
+    export type CreateScenarioMutationBody = BodyType<SavedScenarioInput>
+    export type CreateScenarioMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save a scenario
+ */
+export const useCreateScenario = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createScenario>>, TError,{data: BodyType<SavedScenarioInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createScenario>>,
+        TError,
+        {data: BodyType<SavedScenarioInput>},
+        TContext
+      > => {
+      return useMutation(getCreateScenarioMutationOptions(options));
+    }
+
+export const getDeleteScenarioUrl = (id: number,) => {
+
+
+
+
+  return `/api/scenarios/${id}`
+}
+
+/**
+ * @summary Delete a saved scenario
+ */
+export const deleteScenario = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteScenarioUrl(id),
   {
     ...options,
     method: 'DELETE'
@@ -3955,11 +4017,11 @@ export const deleteAnthropicConversation = async (id: number, options?: RequestI
 
 
 
-export const getDeleteAnthropicConversationMutationOptions = <TError = ErrorType<AnthropicError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAnthropicConversation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteAnthropicConversation>>, TError,{id: number}, TContext> => {
+export const getDeleteScenarioMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteScenario>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteScenario>>, TError,{id: number}, TContext> => {
 
-const mutationKey = ['deleteAnthropicConversation'];
+const mutationKey = ['deleteScenario'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -3969,10 +4031,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAnthropicConversation>>, {id: number}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteScenario>>, {id: number}> = (props) => {
           const {id} = props ?? {};
 
-          return  deleteAnthropicConversation(id,requestOptions)
+          return  deleteScenario(id,requestOptions)
         }
 
 
@@ -3982,169 +4044,21 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type DeleteAnthropicConversationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAnthropicConversation>>>
+    export type DeleteScenarioMutationResult = NonNullable<Awaited<ReturnType<typeof deleteScenario>>>
 
-    export type DeleteAnthropicConversationMutationError = ErrorType<AnthropicError>
+    export type DeleteScenarioMutationError = ErrorType<void>
 
     /**
- * @summary Delete a conversation
+ * @summary Delete a saved scenario
  */
-export const useDeleteAnthropicConversation = <TError = ErrorType<AnthropicError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAnthropicConversation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useDeleteScenario = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteScenario>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof deleteAnthropicConversation>>,
+        Awaited<ReturnType<typeof deleteScenario>>,
         TError,
         {id: number},
         TContext
       > => {
-      return useMutation(getDeleteAnthropicConversationMutationOptions(options));
-    }
-
-export const getListAnthropicMessagesUrl = (id: number,) => {
-
-
-
-
-  return `/api/anthropic/conversations/${id}/messages`
-}
-
-/**
- * @summary List messages in a conversation
- */
-export const listAnthropicMessages = async (id: number, options?: RequestInit): Promise<AnthropicMessage[]> => {
-
-  return customFetch<AnthropicMessage[]>(getListAnthropicMessagesUrl(id),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getListAnthropicMessagesQueryKey = (id: number,) => {
-    return [
-    `/api/anthropic/conversations/${id}/messages`
-    ] as const;
-    }
-
-
-export const getListAnthropicMessagesQueryOptions = <TData = Awaited<ReturnType<typeof listAnthropicMessages>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAnthropicMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListAnthropicMessagesQueryKey(id);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAnthropicMessages>>> = ({ signal }) => listAnthropicMessages(id, { signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAnthropicMessages>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListAnthropicMessagesQueryResult = NonNullable<Awaited<ReturnType<typeof listAnthropicMessages>>>
-export type ListAnthropicMessagesQueryError = ErrorType<unknown>
-
-
-/**
- * @summary List messages in a conversation
- */
-
-export function useListAnthropicMessages<TData = Awaited<ReturnType<typeof listAnthropicMessages>>, TError = ErrorType<unknown>>(
- id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAnthropicMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListAnthropicMessagesQueryOptions(id,options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export const getSendAnthropicMessageUrl = (id: number,) => {
-
-
-
-
-  return `/api/anthropic/conversations/${id}/messages`
-}
-
-/**
- * @summary Send a message and receive an AI response (SSE stream)
- */
-export const sendAnthropicMessage = async (id: number,
-    anthropicMessageInput: AnthropicMessageInput, options?: RequestInit): Promise<unknown> => {
-
-  return customFetch<unknown>(getSendAnthropicMessageUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(anthropicMessageInput)
-  }
-);}
-
-
-
-
-export const getSendAnthropicMessageMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAnthropicMessage>>, TError,{id: number;data: BodyType<AnthropicMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof sendAnthropicMessage>>, TError,{id: number;data: BodyType<AnthropicMessageInput>}, TContext> => {
-
-const mutationKey = ['sendAnthropicMessage'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendAnthropicMessage>>, {id: number;data: BodyType<AnthropicMessageInput>}> = (props) => {
-          const {id,data} = props ?? {};
-
-          return  sendAnthropicMessage(id,data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type SendAnthropicMessageMutationResult = NonNullable<Awaited<ReturnType<typeof sendAnthropicMessage>>>
-    export type SendAnthropicMessageMutationBody = BodyType<AnthropicMessageInput>
-    export type SendAnthropicMessageMutationError = ErrorType<unknown>
-
-    /**
- * @summary Send a message and receive an AI response (SSE stream)
- */
-export const useSendAnthropicMessage = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAnthropicMessage>>, TError,{id: number;data: BodyType<AnthropicMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof sendAnthropicMessage>>,
-        TError,
-        {id: number;data: BodyType<AnthropicMessageInput>},
-        TContext
-      > => {
-      return useMutation(getSendAnthropicMessageMutationOptions(options));
+      return useMutation(getDeleteScenarioMutationOptions(options));
     }
 

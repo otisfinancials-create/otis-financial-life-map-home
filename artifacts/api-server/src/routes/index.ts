@@ -12,7 +12,8 @@ import loansRouter from "./loans";
 import forecastRouter from "./forecast";
 import userSettingsRouter from "./user_settings";
 import retirementRouter from "./retirement";
-import anthropicRouter from "./anthropic/index";
+import otisRouter from "./otis";
+import scenariosRouter from "./scenarios";
 
 const router: IRouter = Router();
 
@@ -29,6 +30,7 @@ router.use(loansRouter);
 router.use(forecastRouter);
 router.use(userSettingsRouter);
 router.use(retirementRouter);
-router.use(anthropicRouter);
+router.use(otisRouter);
+router.use(scenariosRouter);
 
 export default router;

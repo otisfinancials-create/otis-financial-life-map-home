@@ -573,37 +573,92 @@ export interface RetirementProjection {
   hasSettings: boolean;
 }
 
-export interface AnthropicConversation {
-  id: number;
-  title: string;
-  createdAt: string;
-}
+export type OtisChatMessageRole = typeof OtisChatMessageRole[keyof typeof OtisChatMessageRole];
 
-export interface AnthropicMessage {
-  id: number;
-  conversationId: number;
-  role: string;
-  content: string;
-  createdAt: string;
-}
 
-export interface AnthropicConversationInput {
-  title: string;
-}
+export const OtisChatMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
 
-export interface AnthropicMessageInput {
+export interface OtisChatMessage {
+  role: OtisChatMessageRole;
   content: string;
 }
 
-export interface AnthropicConversationWithMessages {
-  id: number;
-  title: string;
-  createdAt: string;
-  messages: AnthropicMessage[];
+export interface OtisChatRequest {
+  /**
+     * @minItems 1
+     * @maxItems 20
+     */
+  messages: OtisChatMessage[];
 }
 
-export interface AnthropicError {
-  error: string;
+export type RunScenarioRequestScenarioType = typeof RunScenarioRequestScenarioType[keyof typeof RunScenarioRequestScenarioType];
+
+
+export const RunScenarioRequestScenarioType = {
+  job_change: 'job_change',
+  buy_home: 'buy_home',
+  new_vehicle: 'new_vehicle',
+  major_vacation: 'major_vacation',
+  extra_debt_payment: 'extra_debt_payment',
+  market_downturn: 'market_downturn',
+  education_expense: 'education_expense',
+  growing_family: 'growing_family',
+  early_retirement: 'early_retirement',
+  major_purchase: 'major_purchase',
+  additional_savings: 'additional_savings',
+} as const;
+
+export type RunScenarioRequestInputs = { [key: string]: unknown };
+
+export interface RunScenarioRequest {
+  scenarioType: RunScenarioRequestScenarioType;
+  inputs: RunScenarioRequestInputs;
+}
+
+export interface ScenarioChartPoint {
+  monthIndex: number;
+  label: string;
+  baseline: number;
+  scenario: number;
+}
+
+export interface ScenarioResult {
+  monthlyCashFlowImpact: number;
+  netWorthImpactOneYear: number;
+  retirementImpactLabel: string;
+  points: ScenarioChartPoint[];
+  commentary: string;
+}
+
+export type SavedScenarioInputParameters = { [key: string]: unknown };
+
+export type SavedScenarioResultsSummary = { [key: string]: unknown };
+
+export interface SavedScenario {
+  id: number;
+  scenarioName: string;
+  scenarioType: string;
+  inputParameters: SavedScenarioInputParameters;
+  resultsSummary: SavedScenarioResultsSummary;
+  createdAt: string;
+}
+
+export type SavedScenarioInputInputParameters = { [key: string]: unknown };
+
+export type SavedScenarioInputResultsSummary = { [key: string]: unknown };
+
+export interface SavedScenarioInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  scenarioName: string;
+  scenarioType: string;
+  inputParameters: SavedScenarioInputInputParameters;
+  resultsSummary: SavedScenarioInputResultsSummary;
 }
 
 export type ListForecastParams = {

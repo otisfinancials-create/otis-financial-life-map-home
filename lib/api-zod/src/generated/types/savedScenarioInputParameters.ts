@@ -6,6 +6,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface AnthropicError {
-  error: string;
-}
+export type SavedScenarioInputParameters = { [key: string]: unknown };

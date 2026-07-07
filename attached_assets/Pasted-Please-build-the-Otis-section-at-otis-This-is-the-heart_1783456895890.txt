@@ -1,0 +1,227 @@
+Please build the Otis section at /otis. This is the heart of the app — a combined AI financial advisor and what-if simulator that lets users explore their financial future through conversation or pre-built scenario cards. This feature is Otis's biggest differentiator from every competitor.
+### The Experience
+When a user lands on /otis they see:
+
+A warm greeting at the top: "Hi [name], what's on your financial mind today?"
+A text input for Ask Otis (conversational mode)
+A 4x3 grid of scenario cards below with the heading "Or explore a scenario:"
+
+The page feels like a financial advisor's office — warm, smart, and personal. Not like a chatbot. Not like a calculator.
+---
+### Part A: Ask Otis (Conversational AI Mode)
+A chat interface at the top of the page where users type questions in plain English:
+Examples of what Otis can answer:
+
+"What happens to my retirement if I take a $15K pay cut?"
+"Can I afford a kitchen remodel next year?"
+"What if I paid an extra $300/month on my mortgage?"
+"How long until I pay off all my debt?"
+"Am I on track to retire at 62?"
+"What would happen if I lost my job for 3 months?"
+
+Implementation:
+
+Use the Anthropic Claude API (claude-sonnet-4-6) for all AI responses
+Before sending to Claude, build a context object containing the user's real financial data:
+
+Current account balances
+Monthly bills and total monthly expenses
+Pay schedules and monthly income
+Loan balances, interest rates, and monthly payments
+Retirement savings and monthly contributions
+Net worth (assets minus liabilities)
+Life events and their costs
+Forecasted cash flow for next 12 months
+
+
+Send this context to Claude with a system prompt that says: "You are Otis, a warm, smart, and deeply personal financial advisor. You have access to the user's complete financial picture. You give clear, specific, actionable answers based on their real numbers — not generic advice. You are encouraging but honest. You explain things simply without jargon. When running what-if scenarios, always show the specific dollar impact on their monthly cash flow, net worth, and retirement projection. You have the personality of a loyal, intelligent dog who always has their owner's best interests at heart — friendly, attentive, and always making eye contact. Your answers are concise but complete. Never recommend specific investments or give regulated financial advice."
+Display Otis's responses in a clean chat bubble format
+Show a subtle animated paw print 🐾 while Otis is thinking
+Keep the last 10 messages in conversation history so Otis remembers context within the session
+Add a "Start New Conversation" button to clear the chat
+
+---
+### Part B: Scenario Cards Grid
+Below the chat interface, show a 4x3 grid of scenario cards. Each card has:
+
+A large emoji icon
+A bold scenario name
+A one-line description
+A subtle "Explore →" link
+
+The 12 scenario cards:
+Row 1:
+
+💼 Job Change — "What if your income changed?"
+🏠 Buy a Home — "What if you bought or upgraded your home?"
+🚗 New Vehicle — "What if you bought a new car?"
+
+Row 2:
+
+✈️ Major Vacation — "What if you took the trip of a lifetime?"
+💰 Extra Debt Payment — "What if you paid down debt faster?"
+📈 Market Downturn — "What if your investments dropped?"
+
+Row 3:
+
+🎓 Education Expense — "What if you invested in education?"
+👶 Growing the Family — "What if your family grew?"
+🏖️ Early Retirement — "What if you retired sooner?"
+
+Row 4:
+
+💳 Major Purchase — "What if you made a big purchase?"
+💵 Additional Savings — "What if you saved more each month?"
+✏️ Custom Scenario — "Something else on your mind? Describe it."
+
+---
+### Part C: Scenario Detail Panel
+When a user clicks any scenario card, open a full-width panel below the grid (or a side drawer on desktop) with:
+1. A scenario-specific input form with relevant sliders and fields. Examples:
+💼 Job Change:
+
+New monthly income (slider: -50% to +50% of current)
+When does this happen? (date picker)
+Is this temporary or permanent? (toggle)
+Severance or signing bonus? (optional number)
+
+🏠 Buy a Home:
+
+Purchase price (number)
+Down payment amount (number)
+Estimated mortgage rate (% — default to current market rate)
+Monthly HOA/maintenance (number)
+Will you sell your current home? (toggle — if yes, show sale price field)
+
+🚗 New Vehicle:
+
+Vehicle price (number)
+Down payment (number)
+Loan term (dropdown: 36, 48, 60, 72 months)
+Interest rate (%)
+Trade-in value (optional)
+
+✈️ Major Vacation:
+
+Total estimated cost (number)
+When? (date picker)
+How will you pay? (dropdown: cash, credit card, savings)
+
+💰 Extra Debt Payment:
+
+Which loan? (dropdown of existing loans)
+Extra monthly payment amount (slider: $50 to $1,000)
+Show: months saved and interest saved in real time
+
+📈 Market Downturn:
+
+Portfolio drop percentage (slider: -10% to -50%)
+Recovery timeline (dropdown: 1 year, 2 years, 3 years, 5 years)
+
+🎓 Education Expense:
+
+Total cost (number)
+When does it start? (date picker)
+Duration (number of years)
+Monthly cost (auto-calculated)
+Who is this for? (dropdown: Myself, Child, Other)
+
+👶 Growing the Family:
+
+Expected one-time costs (number — hospital, nursery, etc.)
+Expected monthly ongoing costs (number — childcare, diapers, etc.)
+When? (date picker)
+Will income change? (toggle — maternity/paternity leave)
+
+🏖️ Early Retirement:
+
+New target retirement age (slider: current age to 70)
+Show updated projection instantly on the retirement chart
+
+💳 Major Purchase:
+
+Item description (text)
+Total cost (number)
+When? (date picker)
+How will you pay? (dropdown: cash, financing)
+If financing: loan term and rate
+
+💵 Additional Savings:
+
+Extra monthly savings amount (slider: $100 to $2,000)
+Where will it go? (dropdown: Emergency Fund, Retirement, General Savings)
+Starting when? (date picker)
+
+✏️ Custom Scenario:
+
+A free-form text area: "Describe your scenario in plain English — Otis will run the numbers."
+Submit button that sends to the Ask Otis AI with the scenario pre-filled
+
+---
+### Part D: Scenario Results Panel
+After the user fills in a scenario form and clicks "Run Scenario", show a results panel with:
+1. Impact Summary Cards (3 cards side by side):
+
+*Monthly Cash Flow Impact: "+X"or"−X" or "-
+X"or"−X per month"*
+*Net Worth Impact at 1 Year: "+X"or"−X" or "-
+X"or"−X"*
+Retirement Impact: "X months earlier/later" or "$X more/less at retirement"
+
+2. Before vs After Chart: A simple side-by-side or overlaid line chart showing:
+
+Current trajectory (gray line)
+With this scenario (colored line — green if positive, orange if negative)
+Time range: next 5 years
+
+3. Otis Commentary: A 2-3 sentence plain English summary from Otis explaining the impact. Use the Claude API to generate this dynamically based on the actual numbers. Example: "Taking a $15K pay cut would reduce your monthly cash flow by $1,250. At your current spending level, you'd start drawing down savings after 4 months. The good news — your retirement timeline only shifts by about 8 months if you keep your current contribution rate."
+4. Save Scenario button: Saves the scenario with a user-defined name to a scenarios table
+5. "Ask Otis about this" button: Pre-fills the chat with the scenario details so the user can have a deeper conversation
+---
+### Part E: Saved Scenarios
+A collapsible "Saved Scenarios" section at the bottom of the page showing:
+
+Scenario name (user-defined)
+Scenario type (which card it came from)
+Date saved
+Key impact summary (one line)
+Reopen and Delete buttons
+
+This lets users compare scenarios over time — "I saved three versions of my job change scenario last month, let me see which one made the most sense."
+---
+### Part F: Database
+Create a scenarios table:
+scenarios (
+  id, user_id, scenario_name, scenario_type, 
+  input_parameters (JSON), 
+  results_summary (JSON),
+  created_at, updated_at
+)
+---
+### Part G: API Routes
+
+POST /api/otis/chat — send message to Claude API with user financial context, return response
+POST /api/otis/scenario — run a specific scenario calculation, return impact numbers
+GET /api/scenarios — list saved scenarios
+POST /api/scenarios — save a scenario
+DELETE /api/scenarios/[id] — delete a scenario
+
+---
+### Part H: Seed Data & Testing
+Pre-populate 2 saved scenarios for user_id = 1:
+
+"Extra Mortgage Payment" — Extra Debt Payment scenario, $300/month extra on primary mortgage
+"Beach House Dream" — Major Purchase scenario, $450,000 vacation home, 20% down, 30-year mortgage
+
+---
+### Design Notes
+This page should feel different from every other page in the app — warmer, more conversational, more alive:
+
+The chat area should have a subtle different background — maybe a very light warm gray vs the white of the rest of the app
+Otis's chat bubbles should have a distinct color — the teal accent
+The paw print 🐾 appears subtly throughout — in the thinking animation, in the empty state, in the Otis commentary cards
+Scenario cards should have a gentle hover animation — slight lift and shadow
+The results panel should animate in smoothly when a scenario is run
+Empty state message when no conversation yet: "Ask me anything about your financial future. I know your numbers and I'm here to help. 🐾"
+
+Use the Anthropic Claude API (claude-sonnet-4-6) for all AI responses. The ANTHROPIC_API_KEY environment variable is already saved in Secrets. Use recharts for all charts. Use Tailwind for all styling consistent with the rest of the app

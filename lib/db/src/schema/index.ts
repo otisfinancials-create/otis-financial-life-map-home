@@ -5,6 +5,5 @@ export * from "./assets";
 export * from "./loans";
 export * from "./forecasted_transactions";
 export * from "./life_events";
-export * from "./conversations";
-export * from "./messages";
+export * from "./scenarios";
 export * from "./user_settings";

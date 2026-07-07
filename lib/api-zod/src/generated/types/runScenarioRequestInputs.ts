@@ -6,6 +6,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface AnthropicConversationInput {
-  title: string;
-}
+export type RunScenarioRequestInputs = { [key: string]: unknown };

@@ -17,9 +17,8 @@ import Forecast from "@/pages/forecast";
 import PaySchedules from "@/pages/pay-schedules";
 import LifeEvents from "@/pages/life-events";
 import Retirement from "@/pages/retirement";
-import Simulator from "@/pages/simulator";
 import Loans from "@/pages/loans";
-import AI from "@/pages/ai";
+import Otis from "@/pages/otis";
 import NotFound from "@/pages/not-found";
 
 const clerkPubKey = publishableKeyFromHost(
@@ -238,14 +237,11 @@ function ClerkProviderWithRoutes() {
             <Route path="/retirement">
               <ProtectedShell><Retirement /></ProtectedShell>
             </Route>
-            <Route path="/simulator">
-              <ProtectedShell><Simulator /></ProtectedShell>
-            </Route>
             <Route path="/loans">
               <ProtectedShell><Loans /></ProtectedShell>
             </Route>
-            <Route path="/ai">
-              <ProtectedShell><AI /></ProtectedShell>
+            <Route path="/otis">
+              <ProtectedShell><Otis /></ProtectedShell>
             </Route>
             <Route>
               <ProtectedShell><NotFound /></ProtectedShell>
