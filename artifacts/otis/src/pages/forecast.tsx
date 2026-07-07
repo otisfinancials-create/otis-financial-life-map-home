@@ -72,6 +72,13 @@ const CAT_STYLES: Record<string, string> = {
   Transportation:"bg-yellow-100 text-yellow-700",
   salary:        "bg-emerald-100 text-emerald-700",
   Other:         "bg-gray-100 text-gray-600",
+  pets:              "bg-teal-100 text-teal-700",
+  vacations:         "bg-teal-100 text-teal-700",
+  home_improvements: "bg-teal-100 text-teal-700",
+  education:         "bg-teal-100 text-teal-700",
+  celebrations:      "bg-teal-100 text-teal-700",
+  vehicle:           "bg-teal-100 text-teal-700",
+  medical:           "bg-teal-100 text-teal-700",
 };
 const catStyle = (c: string) => CAT_STYLES[c] ?? "bg-gray-100 text-gray-600";
 
@@ -91,6 +98,7 @@ type TxRow = {
   category: string;
   sourceBillId?: number | null;
   sourcePayId?: number | null;
+  sourceLifeEventId?: number | null;
   isActual: boolean;
   isCommitted: boolean;
   createdAt: string;
@@ -694,8 +702,8 @@ export default function Forecast() {
 
                               {/* Type */}
                               <div className="px-4 py-2.5 flex items-center">
-                                <span className={`text-[11px] font-medium ${tx.transactionType === "income" ? "text-emerald-400" : "text-zinc-400"}`}>
-                                  {tx.transactionType === "income" ? "Income" : "Bill"}
+                                <span className={`text-[11px] font-medium ${tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-zinc-400"}`}>
+                                  {tx.transactionType === "income" ? "Income" : tx.sourceLifeEventId != null ? "Life Event" : "Bill"}
                                 </span>
                               </div>
 
@@ -721,7 +729,7 @@ export default function Forecast() {
                                   />
                                 ) : (
                                   <span
-                                    className={`font-mono text-sm ${tx.transactionType === "income" ? "text-emerald-400" : "text-foreground"}`}
+                                    className={`font-mono text-sm ${tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-foreground"}`}
                                     title={tx.isActual ? "Locked — already paid" : "Double-click to edit"}
                                   >
                                     {tx.isVariable && <span className="text-muted-foreground mr-0.5">~</span>}

@@ -12,7 +12,7 @@
  *   (await window.Clerk.user).id
  */
 
-import { db, billsTable, paySchedulesTable, forecastedTransactionsTable } from "@workspace/db";
+import { db, billsTable, paySchedulesTable, forecastedTransactionsTable, lifeEventsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const rawUserId = process.env.SEED_USER_ID;
@@ -69,6 +69,33 @@ function advanceByFrequency(date: Date, frequency: string): Date {
       d.setMonth(d.getMonth() + 1);
   }
   return d;
+}
+
+function toLocalIso(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function addMonthsIso(iso: string, months: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const base = new Date(Date.UTC(y, m - 1 + months, 1));
+  const daysInTarget = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();
+  base.setUTCDate(Math.min(d, daysInTarget));
+  return base.toISOString().slice(0, 10);
+}
+
+function advanceIsoByFrequency(iso: string, frequency: string): string {
+  switch (frequency.toLowerCase()) {
+    case "monthly":
+      return addMonthsIso(iso, 1);
+    case "quarterly":
+      return addMonthsIso(iso, 3);
+    case "annual":
+    case "annually":
+    case "yearly":
+      return addMonthsIso(iso, 12);
+    default:
+      return addMonthsIso(iso, 12);
+  }
 }
 
 async function seed() {
@@ -158,6 +185,73 @@ async function seed() {
 
   console.log(`Inserted ${insertedSchedules.length} pay schedule(s). Next pay date: ${nextPayDate}`);
 
+  const year = today.getFullYear();
+  const insertedLifeEvents = await db
+    .insert(lifeEventsTable)
+    .values([
+      {
+        userId,
+        eventName: "European Vacation",
+        category: "vacations",
+        amount: "6500.00",
+        timingType: "one_time",
+        eventDate: `${year}-08-15`,
+        priority: "planning_to",
+        notes: "Two weeks, flights and hotels",
+        isActive: true,
+      },
+      {
+        userId,
+        eventName: "New Puppy",
+        category: "pets",
+        amount: "2200.00",
+        timingType: "one_time",
+        eventDate: `${year + 1}-07-01`,
+        priority: "just_dreaming",
+        notes: "Adoption plus first-year supplies",
+        isActive: true,
+      },
+      {
+        userId,
+        eventName: "Kitchen Remodel",
+        category: "home_improvements",
+        amount: "24000.00",
+        timingType: "spread",
+        startDate: `${year + 1}-01-01`,
+        endDate: `${year + 1}-06-30`,
+        priority: "planning_to",
+        notes: "Cabinets, counters, appliances",
+        isActive: true,
+      },
+      {
+        userId,
+        eventName: "Christmas Gifts",
+        category: "celebrations",
+        amount: "1500.00",
+        timingType: "recurring",
+        startDate: `${year}-12-01`,
+        frequency: "annually",
+        priority: "must_do",
+        notes: "Family and friends",
+        isActive: true,
+      },
+      {
+        userId,
+        eventName: "Car Service",
+        category: "vehicle",
+        amount: "600.00",
+        timingType: "recurring",
+        startDate: `${year}-10-01`,
+        frequency: "annually",
+        priority: "must_do",
+        notes: "Annual maintenance",
+        isActive: true,
+      },
+    ])
+    .returning();
+
+  console.log(`Inserted ${insertedLifeEvents.length} life event(s).`);
+
   // Forecast regeneration is done inline rather than via POST /api/forecast/regenerate
   // because that endpoint requires Clerk auth — a CLI script has no browser session token.
   // This logic mirrors the route exactly; keep both in sync when changing the engine.
@@ -223,6 +317,63 @@ async function seed() {
         });
       }
       current = advanceByFrequency(current, ps.frequency);
+    }
+  }
+
+  const activeLifeEvents = await db
+    .select()
+    .from(lifeEventsTable)
+    .where(and(eq(lifeEventsTable.isActive, true), eq(lifeEventsTable.userId, userId)));
+
+  const todayStr = toLocalIso(today);
+  const endStr = toLocalIso(endDate);
+
+  for (const ev of activeLifeEvents) {
+    const total = parseFloat(String(ev.amount));
+    const category = ev.category === "custom" && ev.customCategory ? ev.customCategory : ev.category;
+
+    const pushRow = (dateStr: string, amount: number, description: string) => {
+      toInsert.push({
+        userId,
+        transactionDate: dateStr,
+        description,
+        amount: String(Math.round(amount * 100) / 100),
+        transactionType: "expense",
+        category,
+        sourceLifeEventId: ev.id,
+        isActual: false,
+        isCommitted: false,
+      });
+    };
+
+    if (ev.timingType === "one_time" && ev.eventDate) {
+      if (ev.eventDate >= todayStr && ev.eventDate <= endStr) {
+        pushRow(ev.eventDate, total, ev.eventName);
+      }
+    } else if (ev.timingType === "spread" && ev.startDate && ev.endDate) {
+      const [sy, sm] = ev.startDate.split("-").map(Number);
+      const [ey, em] = ev.endDate.split("-").map(Number);
+      const months = (ey - sy) * 12 + (em - sm) + 1;
+      if (months > 0) {
+        const perMonth = total / months;
+        let current = ev.startDate;
+        for (let i = 0; i < months; i++) {
+          if (current >= todayStr && current <= endStr) {
+            pushRow(current, perMonth, `${ev.eventName} (${i + 1}/${months})`);
+          }
+          current = addMonthsIso(current, 1);
+        }
+      }
+    } else if (ev.timingType === "recurring" && ev.startDate) {
+      const frequency = ev.frequency ?? "annually";
+      const recurEndStr = ev.endDate && ev.endDate < endStr ? ev.endDate : endStr;
+      let current = ev.startDate;
+      while (current <= recurEndStr) {
+        if (current >= todayStr) {
+          pushRow(current, total, ev.eventName);
+        }
+        current = advanceIsoByFrequency(current, frequency);
+      }
     }
   }
 

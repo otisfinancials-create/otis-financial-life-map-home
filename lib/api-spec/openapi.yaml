@@ -164,6 +164,81 @@ paths:
         "404":
           description: Not found
 
+  # ── Life Events ───────────────────────────────────────────────────────────
+  /life-events:
+    get:
+      operationId: listLifeEvents
+      tags: [lifeEvents]
+      summary: List all life events
+      responses:
+        "200":
+          description: List of life events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LifeEvent"
+    post:
+      operationId: createLifeEvent
+      tags: [lifeEvents]
+      summary: Create a life event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LifeEventInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LifeEvent"
+
+  /life-events/{id}:
+    patch:
+      operationId: updateLifeEvent
+      tags: [lifeEvents]
+      summary: Update a life event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LifeEventUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LifeEvent"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteLifeEvent
+      tags: [lifeEvents]
+      summary: Delete a life event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
   # ── Pay Schedules ─────────────────────────────────────────────────────────
   /pay-schedules:
     get:
@@ -995,6 +1070,99 @@ components:
         notes:
           type: string
 
+    # ── Life Events ────────────────────────────────────────────────────────────
+    LifeEvent:
+      type: object
+      required: [id, eventName, category, amount, timingType, priority, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        eventName:
+          type: string
+        category:
+          type: string
+        customCategory:
+          type: ["string", "null"]
+        amount:
+          type: number
+        timingType:
+          type: string
+        eventDate:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        frequency:
+          type: ["string", "null"]
+        priority:
+          type: string
+        notes:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    LifeEventInput:
+      type: object
+      required: [eventName, category, amount, timingType, priority]
+      properties:
+        eventName:
+          type: string
+        category:
+          type: string
+        customCategory:
+          type: string
+        amount:
+          type: number
+        timingType:
+          type: string
+        eventDate:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        frequency:
+          type: string
+        priority:
+          type: string
+        notes:
+          type: string
+        isActive:
+          type: boolean
+
+    LifeEventUpdate:
+      type: object
+      properties:
+        eventName:
+          type: string
+        category:
+          type: string
+        customCategory:
+          type: ["string", "null"]
+        amount:
+          type: number
+        timingType:
+          type: string
+        eventDate:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        frequency:
+          type: ["string", "null"]
+        priority:
+          type: string
+        notes:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+
     UpcomingBill:
       type: object
       required: [id, billName, category, amount, dueDate, daysUntilDue]
@@ -1408,6 +1576,8 @@ components:
           type: ["integer", "null"]
         sourcePayId:
           type: ["integer", "null"]
+        sourceLifeEventId:
+          type: ["integer", "null"]
         isActual:
           type: boolean
         isCommitted:
@@ -1477,7 +1647,7 @@ components:
 
     MonthlyForecast:
       type: object
-      required: [month, year, label, totalIncome, totalExpenses, netCashFlow]
+      required: [month, year, label, totalIncome, totalExpenses, totalLifeEvents, netCashFlow]
       properties:
         month:
           type: integer
@@ -1488,6 +1658,8 @@ components:
         totalIncome:
           type: number
         totalExpenses:
+          type: number
+        totalLifeEvents:
           type: number
         netCashFlow:
           type: number

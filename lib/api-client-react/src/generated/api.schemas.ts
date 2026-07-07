@@ -74,6 +74,66 @@ export interface BillUpdate {
   notes?: string;
 }
 
+export interface LifeEvent {
+  id: number;
+  eventName: string;
+  category: string;
+  /** @nullable */
+  customCategory?: string | null;
+  amount: number;
+  timingType: string;
+  /** @nullable */
+  eventDate?: string | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+  /** @nullable */
+  frequency?: string | null;
+  priority: string;
+  /** @nullable */
+  notes?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LifeEventInput {
+  eventName: string;
+  category: string;
+  customCategory?: string;
+  amount: number;
+  timingType: string;
+  eventDate?: string;
+  startDate?: string;
+  endDate?: string;
+  frequency?: string;
+  priority: string;
+  notes?: string;
+  isActive?: boolean;
+}
+
+export interface LifeEventUpdate {
+  eventName?: string;
+  category?: string;
+  /** @nullable */
+  customCategory?: string | null;
+  amount?: number;
+  timingType?: string;
+  /** @nullable */
+  eventDate?: string | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+  /** @nullable */
+  frequency?: string | null;
+  priority?: string;
+  /** @nullable */
+  notes?: string | null;
+  isActive?: boolean;
+}
+
 export interface UpcomingBill {
   id: number;
   billName: string;
@@ -318,6 +378,8 @@ export interface ForecastedTransaction {
   sourceBillId?: number | null;
   /** @nullable */
   sourcePayId?: number | null;
+  /** @nullable */
+  sourceLifeEventId?: number | null;
   isActual: boolean;
   isCommitted: boolean;
   sortOrder: number;
@@ -361,6 +423,7 @@ export interface MonthlyForecast {
   label: string;
   totalIncome: number;
   totalExpenses: number;
+  totalLifeEvents: number;
   netCashFlow: number;
 }
 

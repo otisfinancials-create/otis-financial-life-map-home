@@ -1,0 +1,83 @@
+Please build the Life Events section at /life-events. This feature allows users to plan for expected future costs — vacations, home improvements, pet expenses, and custom categories — and automatically integrates them into the forecast engine as future transactions.
+### Part A: Life Events List Page at /life-events
+Show a summary panel at the top with:
+
+Total Planned Spending (sum of all future life event costs)
+Next Upcoming Event (name, date, and amount)
+Events This Year (count and total cost)
+
+Below that, display events grouped by category with a colored category header. Each event card shows:
+
+Event name
+Category badge with icon
+Amount (or total if spread over time)
+Date or date range
+Frequency badge if recurring (One-time, Monthly, Annual)
+A subtle "Impact" indicator showing how this affects monthly cash flow
+Edit and Delete actions
+
+### Part B: Add/Edit Life Event Form
+Keep the form clean and simple — no jargon. Fields:
+1. Event name (text — e.g. "Beach Vacation", "Roof Replacement", "Bella's Annual Vet Visit")
+2. Category (dropdown with icons):
+
+🐾 Pets
+✈️ Vacations
+🏠 Home Improvements
+🎓 Education
+🎉 Celebrations (weddings, birthdays, holidays)
+🚗 Vehicle (maintenance, repairs, upgrades)
+💊 Medical / Health
+➕ Custom (lets user type their own category name)
+
+3. Amount (number — total expected cost)
+4. Timing type (radio button — this changes which fields appear below):
+
+One-time expense — show a single date picker ("When does this happen?")
+Spread over a period — show start date + end date + monthly amount auto-calculated
+Recurring — show start date + frequency dropdown (Monthly, Quarterly, Annually) + optional end date
+
+5. Notes (optional text area — e.g. "Get quotes in March", "Book 6 months ahead")
+6. Priority (dropdown: Must Do, Planning To, Just Dreaming — this affects how prominently it shows in the dashboard)
+### Part C: Forecast Integration
+When a life event is saved, automatically insert it into the forecasted_transactions table:
+
+One-time expense → single row on the specified date
+Spread over period → monthly rows from start to end date, amount divided equally
+Recurring → rows generated for each occurrence for the next 12 months
+All life event transactions should have a category of their event type and a source field marked as 'life_event' so they can be filtered separately in the forecast view
+Life event transactions should appear in the forecast ledger in a distinct color — use purple or teal to differentiate from regular bills (red) and income (green)
+
+### Part D: Dashboard Integration
+Add a new "Upcoming Life Events" widget to the main dashboard:
+
+Show the next 3-5 upcoming life events sorted by date
+Each row shows: category icon, event name, date, amount
+Color code by priority: Must Do = solid, Planning To = slightly muted, Just Dreaming = dashed border
+Show a "View all →" link to the full life events page
+Add life event costs to the Cash Flow Trend chart as a separate color so users can visually see the impact of planned events on their monthly cash flow
+
+### Part E: API Routes
+
+GET /api/life-events — list all life events for user
+POST /api/life-events — create new life event and trigger forecast insertion
+PUT /api/life-events/[id] — update event and refresh forecast rows
+DELETE /api/life-events/[id] — delete event and remove from forecast
+
+### Part F: Database
+Create a life_events table:
+life_events (
+  id, user_id, event_name, category, custom_category,
+  amount, timing_type, event_date, start_date, end_date,
+  frequency, priority, notes, is_active, created_at, updated_at
+)
+### Seed Data
+Create 5 sample life events for user_id = 1:
+
+🐾 Bella's Annual Vaccines — Pets — $320 — one-time — August 15, 2026 — Must Do
+✈️ Family Beach Vacation — Vacations — $4,500 — one-time — July 2027 — Planning To
+🏠 Kitchen Remodel — Home Improvements — $18,000 — spread over 6 months starting Jan 2027 — Just Dreaming
+🎉 Christmas Gifts — Celebrations — $1,200 — recurring annually — December 2026 — Must Do
+🚗 Car Service & Tires — Vehicle — $800 — recurring annually — October 2026 — Must Do
+
+Use Tailwind for all styling, consistent with the rest of the app. Keep the form simple and friendly — this should feel like planning with excitement, not filling out a tax form. The priority levels (Must Do, Planning To, Just Dreaming) are important — they give users permission to dream without feeling financially irresponsible

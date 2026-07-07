@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lt, inArray } from "drizzle-orm";
-import { db, forecastedTransactionsTable, billsTable, paySchedulesTable } from "@workspace/db";
+import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable } from "@workspace/db";
 import {
   CreateForecastedTransactionBody,
   UpdateForecastedTransactionBody,
@@ -70,7 +70,7 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
     .from(forecastedTransactionsTable)
     .where(eq(forecastedTransactionsTable.userId, req.userId));
 
-  const monthlyMap: Record<string, { month: number; year: number; label: string; totalIncome: number; totalExpenses: number }> = {};
+  const monthlyMap: Record<string, { month: number; year: number; label: string; totalIncome: number; totalExpenses: number; totalLifeEvents: number }> = {};
 
   for (let i = 0; i < 12; i++) {
     const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
@@ -81,6 +81,7 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
       label: d.toLocaleString("en-US", { month: "short", year: "numeric" }),
       totalIncome: 0,
       totalExpenses: 0,
+      totalLifeEvents: 0,
     };
   }
 
@@ -92,7 +93,12 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
     if (row.transactionType === "income") {
       monthlyMap[key].totalIncome += amount;
     } else {
+      // Life-event costs remain part of totalExpenses (so netCashFlow is correct)
+      // but are also tracked separately so the UI can break them out.
       monthlyMap[key].totalExpenses += amount;
+      if (row.sourceLifeEventId != null) {
+        monthlyMap[key].totalLifeEvents += amount;
+      }
     }
   }
 
@@ -176,6 +182,67 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
         });
       }
       current = advanceByFrequency(current, ps.frequency);
+    }
+  }
+
+  // Generate from life events
+  const lifeEvents = await db
+    .select()
+    .from(lifeEventsTable)
+    .where(and(eq(lifeEventsTable.isActive, true), eq(lifeEventsTable.userId, userId)));
+
+  // Compare life-event dates as YYYY-MM-DD strings (not Date objects) so that
+  // same-day events are included regardless of the current time of day, and use
+  // clamped month stepping so month-end starts (e.g. Jan 31) never skip a month.
+  const todayStr = toLocalIso(today);
+  const endStr = toLocalIso(endDate);
+
+  for (const ev of lifeEvents) {
+    const total = parseFloat(String(ev.amount));
+    const category = ev.category === "custom" && ev.customCategory ? ev.customCategory : ev.category;
+
+    const pushRow = (dateStr: string, amount: number, description: string) => {
+      toInsert.push({
+        userId,
+        transactionDate: dateStr,
+        description,
+        amount: String(Math.round(amount * 100) / 100),
+        transactionType: "expense",
+        category,
+        sourceLifeEventId: ev.id,
+        isActual: false,
+        isCommitted: false,
+      });
+    };
+
+    if (ev.timingType === "one_time" && ev.eventDate) {
+      if (ev.eventDate >= todayStr && ev.eventDate <= endStr) {
+        pushRow(ev.eventDate, total, ev.eventName);
+      }
+    } else if (ev.timingType === "spread" && ev.startDate && ev.endDate) {
+      const [sy, sm] = ev.startDate.split("-").map(Number);
+      const [ey, em] = ev.endDate.split("-").map(Number);
+      const months = (ey - sy) * 12 + (em - sm) + 1;
+      if (months > 0) {
+        const perMonth = total / months;
+        let current = ev.startDate;
+        for (let i = 0; i < months; i++) {
+          if (current >= todayStr && current <= endStr) {
+            pushRow(current, perMonth, `${ev.eventName} (${i + 1}/${months})`);
+          }
+          current = addMonthsIso(current, 1);
+        }
+      }
+    } else if (ev.timingType === "recurring" && ev.startDate) {
+      const frequency = ev.frequency ?? "annually";
+      const recurEndStr = ev.endDate && ev.endDate < endStr ? ev.endDate : endStr;
+      let current = ev.startDate;
+      while (current <= recurEndStr) {
+        if (current >= todayStr) {
+          pushRow(current, total, ev.eventName);
+        }
+        current = advanceIsoByFrequency(current, frequency);
+      }
     }
   }
 
@@ -298,6 +365,30 @@ function advanceByFrequency(date: Date, frequency: string): Date {
     default: d.setMonth(d.getMonth() + 1);
   }
   return d;
+}
+
+// Local YYYY-MM-DD (no timezone shift) for string-based date comparisons.
+function toLocalIso(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+// Adds months to a YYYY-MM-DD string, clamping the day to the target month's
+// length so month-end dates (e.g. Jan 31 + 1mo) never overflow into a later month.
+function addMonthsIso(iso: string, months: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const base = new Date(Date.UTC(y, m - 1 + months, 1));
+  const daysInTarget = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();
+  base.setUTCDate(Math.min(d, daysInTarget));
+  return base.toISOString().slice(0, 10);
+}
+
+function advanceIsoByFrequency(iso: string, frequency: string): string {
+  switch (frequency.toLowerCase()) {
+    case "monthly": return addMonthsIso(iso, 1);
+    case "quarterly": return addMonthsIso(iso, 3);
+    case "annual": case "annually": case "yearly": return addMonthsIso(iso, 12);
+    default: return addMonthsIso(iso, 12);
+  }
 }
 
 function serialize(tx: typeof forecastedTransactionsTable.$inferSelect) {

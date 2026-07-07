@@ -5,6 +5,7 @@ import {
   useGetMonthlyForecast,
   useListBills,
   useListForecast,
+  useListLifeEvents,
 } from "@workspace/api-client-react";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +22,7 @@ import {
   ArrowDownRight,
   Minus,
   ExternalLink,
+  CalendarHeart,
 } from "lucide-react";
 import {
   ComposedChart,
@@ -181,6 +183,7 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
   const { data: upcomingBills, isLoading: isLoadingBills } = useGetUpcomingBills();
+  const { data: lifeEvents, isLoading: isLoadingLifeEvents } = useListLifeEvents();
   const { data: accounts, isLoading: isLoadingAccounts } = useListAccounts();
   const { data: monthlyForecast, isLoading: isLoadingForecast } = useGetMonthlyForecast();
   const { data: bills } = useListBills();
@@ -193,13 +196,27 @@ export default function Dashboard() {
     endDate: snapshotEndStr,
   });
 
-  /* Chart data */
+  /* Chart data.
+     Life-event costs are part of totalExpenses (so netCashFlow stays correct),
+     so we break them out and show regular expenses = total − life events. The
+     two stack together to equal total spending. */
   const cashFlowData = (monthlyForecast ?? []).slice(0, 6).map((m) => ({
     month: m.label,
     income: m.totalIncome,
-    expenses: m.totalExpenses,
+    expenses: Math.max(0, m.totalExpenses - m.totalLifeEvents),
+    lifeEvents: m.totalLifeEvents,
     net: m.netCashFlow,
   }));
+  const hasLifeEvents = cashFlowData.some((m) => m.lifeEvents > 0);
+
+  /* Upcoming life events: soonest by date, active only, in the future. */
+  const todayIso = format(today, "yyyy-MM-dd");
+  const upcomingLifeEvents = (lifeEvents ?? [])
+    .filter((e) => e.isActive)
+    .map((e) => ({ event: e, date: e.eventDate || e.startDate || "" }))
+    .filter((x) => x.date && x.date >= todayIso)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 4);
   const avgIncome =
     cashFlowData.length > 0
       ? cashFlowData.reduce((s, m) => s + m.income, 0) / cashFlowData.length
@@ -432,7 +449,13 @@ export default function Dashboard() {
                         itemStyle={{ color: "hsl(var(--foreground))" }}
                         formatter={(value: number, name: string) => [
                           fmt(value),
-                          name === "income" ? "Income" : name === "expenses" ? "Expenses" : "Net",
+                          name === "income"
+                            ? "Income"
+                            : name === "expenses"
+                              ? "Expenses"
+                              : name === "lifeEvents"
+                                ? "Life Events"
+                                : "Net",
                         ]}
                       />
                       <Area
@@ -461,10 +484,21 @@ export default function Dashboard() {
                       <Bar
                         dataKey="expenses"
                         name="expenses"
+                        stackId="spending"
                         fill="#f97316"
-                        radius={[5, 5, 0, 0]}
+                        radius={hasLifeEvents ? [0, 0, 0, 0] : [5, 5, 0, 0]}
                         maxBarSize={36}
                       />
+                      {hasLifeEvents && (
+                        <Bar
+                          dataKey="lifeEvents"
+                          name="lifeEvents"
+                          stackId="spending"
+                          fill="#14b8a6"
+                          radius={[5, 5, 0, 0]}
+                          maxBarSize={36}
+                        />
+                      )}
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -612,6 +646,66 @@ export default function Dashboard() {
               ) : (
                 <div className="py-6 flex items-center justify-center text-muted-foreground text-sm">
                   No bills due soon.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Upcoming Life Events */}
+          <Card className={cardChrome}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-semibold tracking-tight">Upcoming Life Events</CardTitle>
+                <Link
+                  href="/life-events"
+                  className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
+                >
+                  All events <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+              <CardDescription>Your next milestones</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingLifeEvents ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex justify-between items-center">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-3.5 w-28" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                      <Skeleton className="h-3.5 w-14" />
+                    </div>
+                  ))}
+                </div>
+              ) : upcomingLifeEvents.length ? (
+                <div className="space-y-1">
+                  {upcomingLifeEvents.map(({ event, date }) => (
+                    <div
+                      key={event.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate("/life-events")}
+                      onKeyDown={(e) => e.key === "Enter" && navigate("/life-events")}
+                      className="flex items-start justify-between gap-3 rounded-md cursor-pointer hover:bg-muted/40 transition-colors py-2 px-1.5 -mx-1.5"
+                    >
+                      <span className="h-2 w-2 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: "#14b8a6" }} />
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="text-sm font-medium truncate">{event.eventName}</span>
+                        <span className="text-xs text-muted-foreground mt-0.5">
+                          {format(new Date(date + "T00:00:00"), "MMM d, yyyy")}
+                        </span>
+                      </div>
+                      <span className="text-sm font-mono tabular-nums font-medium shrink-0">
+                        <FormatCurrency amount={event.amount} />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-6 flex flex-col items-center justify-center gap-2 text-muted-foreground text-sm">
+                  <CalendarHeart className="h-5 w-5" />
+                  <span>No upcoming life events.</span>
                 </div>
               )}
             </CardContent>

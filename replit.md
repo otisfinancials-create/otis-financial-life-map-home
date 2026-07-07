@@ -52,7 +52,7 @@ A personal finance web app for high-earning households. Combines cash flow forec
 - **Bills** — full CRUD for recurring bills with categories, frequency, due day, active/inactive
 - **Accounts** — financial accounts grouped by type (checking, savings, investment, retirement, loan)
 - **Forecast** — 12-month cash flow projection by month, per-transaction ledger
-- **Life Events** — placeholder (coming soon)
+- **Life Events** — full CRUD for major milestones (Pets, Vacations, Home Improvements, Education, Celebrations, Vehicle, Medical, Custom) with timing (one-time / spread-over-months / recurring), priority (Must Do / Planning To / Just Dreaming), and notes. Costs flow into the forecast as `forecasted_transactions` marked with `sourceLifeEventId` (shown in teal). Dashboard has an "Upcoming Life Events" widget and life-event costs are stacked as a distinct teal series on the Cash Flow Trend chart.
 - **Loans** — placeholder (coming soon)
 - **Otis AI** — AI assistant persona placeholder (Claude integration coming soon)
 

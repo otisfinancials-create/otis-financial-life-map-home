@@ -42,6 +42,9 @@ import type {
   ForecastedTransactionInput,
   ForecastedTransactionUpdate,
   HealthStatus,
+  LifeEvent,
+  LifeEventInput,
+  LifeEventUpdate,
   ListForecastParams,
   Loan,
   LoanAmortization,
@@ -681,6 +684,294 @@ export const useDeleteBill = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getDeleteBillMutationOptions(options));
+    }
+
+export const getListLifeEventsUrl = () => {
+
+
+
+
+  return `/api/life-events`
+}
+
+/**
+ * @summary List all life events
+ */
+export const listLifeEvents = async ( options?: RequestInit): Promise<LifeEvent[]> => {
+
+  return customFetch<LifeEvent[]>(getListLifeEventsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLifeEventsQueryKey = () => {
+    return [
+    `/api/life-events`
+    ] as const;
+    }
+
+
+export const getListLifeEventsQueryOptions = <TData = Awaited<ReturnType<typeof listLifeEvents>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLifeEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLifeEventsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLifeEvents>>> = ({ signal }) => listLifeEvents({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLifeEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLifeEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listLifeEvents>>>
+export type ListLifeEventsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all life events
+ */
+
+export function useListLifeEvents<TData = Awaited<ReturnType<typeof listLifeEvents>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLifeEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLifeEventsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateLifeEventUrl = () => {
+
+
+
+
+  return `/api/life-events`
+}
+
+/**
+ * @summary Create a life event
+ */
+export const createLifeEvent = async (lifeEventInput: LifeEventInput, options?: RequestInit): Promise<LifeEvent> => {
+
+  return customFetch<LifeEvent>(getCreateLifeEventUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(lifeEventInput)
+  }
+);}
+
+
+
+
+export const getCreateLifeEventMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLifeEvent>>, TError,{data: BodyType<LifeEventInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLifeEvent>>, TError,{data: BodyType<LifeEventInput>}, TContext> => {
+
+const mutationKey = ['createLifeEvent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLifeEvent>>, {data: BodyType<LifeEventInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createLifeEvent(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLifeEventMutationResult = NonNullable<Awaited<ReturnType<typeof createLifeEvent>>>
+    export type CreateLifeEventMutationBody = BodyType<LifeEventInput>
+    export type CreateLifeEventMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a life event
+ */
+export const useCreateLifeEvent = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLifeEvent>>, TError,{data: BodyType<LifeEventInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createLifeEvent>>,
+        TError,
+        {data: BodyType<LifeEventInput>},
+        TContext
+      > => {
+      return useMutation(getCreateLifeEventMutationOptions(options));
+    }
+
+export const getUpdateLifeEventUrl = (id: number,) => {
+
+
+
+
+  return `/api/life-events/${id}`
+}
+
+/**
+ * @summary Update a life event
+ */
+export const updateLifeEvent = async (id: number,
+    lifeEventUpdate: LifeEventUpdate, options?: RequestInit): Promise<LifeEvent> => {
+
+  return customFetch<LifeEvent>(getUpdateLifeEventUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(lifeEventUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateLifeEventMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLifeEvent>>, TError,{id: number;data: BodyType<LifeEventUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLifeEvent>>, TError,{id: number;data: BodyType<LifeEventUpdate>}, TContext> => {
+
+const mutationKey = ['updateLifeEvent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLifeEvent>>, {id: number;data: BodyType<LifeEventUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateLifeEvent(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLifeEventMutationResult = NonNullable<Awaited<ReturnType<typeof updateLifeEvent>>>
+    export type UpdateLifeEventMutationBody = BodyType<LifeEventUpdate>
+    export type UpdateLifeEventMutationError = ErrorType<void>
+
+    /**
+ * @summary Update a life event
+ */
+export const useUpdateLifeEvent = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLifeEvent>>, TError,{id: number;data: BodyType<LifeEventUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLifeEvent>>,
+        TError,
+        {id: number;data: BodyType<LifeEventUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateLifeEventMutationOptions(options));
+    }
+
+export const getDeleteLifeEventUrl = (id: number,) => {
+
+
+
+
+  return `/api/life-events/${id}`
+}
+
+/**
+ * @summary Delete a life event
+ */
+export const deleteLifeEvent = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteLifeEventUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteLifeEventMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLifeEvent>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLifeEvent>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteLifeEvent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLifeEvent>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteLifeEvent(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteLifeEventMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLifeEvent>>>
+
+    export type DeleteLifeEventMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete a life event
+ */
+export const useDeleteLifeEvent = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLifeEvent>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteLifeEvent>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteLifeEventMutationOptions(options));
     }
 
 export const getListPaySchedulesUrl = () => {
