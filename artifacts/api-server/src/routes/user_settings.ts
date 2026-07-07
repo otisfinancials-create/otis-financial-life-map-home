@@ -17,7 +17,7 @@ router.get("/user-settings", async (req, res): Promise<void> => {
   const [settings] = await db
     .select()
     .from(userSettingsTable)
-    .where(eq(userSettingsTable.userId, 1))
+    .where(eq(userSettingsTable.userId, req.userId))
     .limit(1);
 
   if (!settings) {
@@ -34,26 +34,15 @@ router.post("/user-settings", async (req, res): Promise<void> => {
     return;
   }
 
-  const existing = await db
-    .select()
-    .from(userSettingsTable)
-    .where(eq(userSettingsTable.userId, 1))
-    .limit(1);
-
-  if (existing.length > 0) {
-    const [updated] = await db
-      .update(userSettingsTable)
-      .set({ startingBalance: String(startingBalance), balanceAsOfDate, updatedAt: new Date() })
-      .where(eq(userSettingsTable.userId, 1))
-      .returning();
-    res.json(serialize(updated));
-  } else {
-    const [created] = await db
-      .insert(userSettingsTable)
-      .values({ userId: 1, startingBalance: String(startingBalance), balanceAsOfDate })
-      .returning();
-    res.json(serialize(created));
-  }
+  const [saved] = await db
+    .insert(userSettingsTable)
+    .values({ userId: req.userId, startingBalance: String(startingBalance), balanceAsOfDate })
+    .onConflictDoUpdate({
+      target: userSettingsTable.userId,
+      set: { startingBalance: String(startingBalance), balanceAsOfDate, updatedAt: new Date() },
+    })
+    .returning();
+  res.json(serialize(saved));
 });
 
 export default router;

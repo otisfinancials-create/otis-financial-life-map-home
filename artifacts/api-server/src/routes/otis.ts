@@ -61,10 +61,7 @@ async function buildFinancialContext(userId: string): Promise<FinancialContext> 
       db.select().from(paySchedulesTable).where(eq(paySchedulesTable.userId, userId)),
       db.select().from(loansTable).where(eq(loansTable.userId, userId)),
       db.select().from(lifeEventsTable).where(eq(lifeEventsTable.userId, userId)),
-      // Known limitation: user_settings is a legacy single-user table keyed by
-      // integer userId (always 1). The retirement routes share this pattern.
-      // Migrating it to Clerk string user IDs is a separate schema change.
-      db.select().from(userSettingsTable).where(eq(userSettingsTable.userId, 1)).limit(1),
+      db.select().from(userSettingsTable).where(eq(userSettingsTable.userId, userId)).limit(1),
     ]);
 
   const settings = settingsRows[0];

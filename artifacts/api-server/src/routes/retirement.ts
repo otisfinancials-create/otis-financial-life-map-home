@@ -43,11 +43,11 @@ function serializeSettings(s: typeof userSettingsTable.$inferSelect) {
   };
 }
 
-async function loadSettings() {
+async function loadSettings(userId: string) {
   const [row] = await db
     .select()
     .from(userSettingsTable)
-    .where(eq(userSettingsTable.userId, 1))
+    .where(eq(userSettingsTable.userId, userId))
     .limit(1);
   return row ? serializeSettings(row) : { ...DEFAULTS };
 }
@@ -87,8 +87,8 @@ export function projectRetirement(
   return points;
 }
 
-router.get("/retirement/settings", async (_req, res): Promise<void> => {
-  const settings = await loadSettings();
+router.get("/retirement/settings", async (req, res): Promise<void> => {
+  const settings = await loadSettings(req.userId);
   res.json(GetRetirementSettingsResponse.parse(settings));
 });
 
@@ -116,36 +116,25 @@ router.post("/retirement/settings", async (req, res): Promise<void> => {
     updatedAt: new Date(),
   };
 
-  const [existing] = await db
-    .select()
-    .from(userSettingsTable)
-    .where(eq(userSettingsTable.userId, 1))
-    .limit(1);
-
-  let saved: typeof userSettingsTable.$inferSelect;
-  if (existing) {
-    [saved] = await db
-      .update(userSettingsTable)
-      .set(values)
-      .where(eq(userSettingsTable.userId, 1))
-      .returning();
-  } else {
-    [saved] = await db
-      .insert(userSettingsTable)
-      .values({
-        userId: 1,
-        balanceAsOfDate: new Date().toISOString().split("T")[0],
-        ...values,
-      })
-      .returning();
-  }
+  const [saved] = await db
+    .insert(userSettingsTable)
+    .values({
+      userId: req.userId,
+      balanceAsOfDate: new Date().toISOString().split("T")[0],
+      ...values,
+    })
+    .onConflictDoUpdate({
+      target: userSettingsTable.userId,
+      set: values,
+    })
+    .returning();
   req.log.info("Saved retirement settings");
   res.json(SaveRetirementSettingsResponse.parse(serializeSettings(saved)));
 });
 
 router.get("/retirement/summary", async (req, res): Promise<void> => {
   const [settings, accounts] = await Promise.all([
-    loadSettings(),
+    loadSettings(req.userId),
     loadRetirementAccounts(req.userId),
   ]);
 
@@ -186,7 +175,7 @@ router.get("/retirement/summary", async (req, res): Promise<void> => {
 
 router.get("/retirement/projection", async (req, res): Promise<void> => {
   const [settings, accounts] = await Promise.all([
-    loadSettings(),
+    loadSettings(req.userId),
     loadRetirementAccounts(req.userId),
   ]);
 

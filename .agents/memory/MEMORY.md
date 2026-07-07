@@ -2,7 +2,6 @@
 - [Otis light/dark theming](otis-theming.md) — class-based dark via @custom-variant; a stray `dark` class on Shell.tsx made the authenticated app dark while the sign-in page stayed light.
 - [Git ops from the agent](git-write-block.md) — local object writes (commit, tag) are blocked, but `git push` works; GitHub rejects pushes of repos with CI files unless token has `workflow` scope; create tags via the REST API.
 - [Clerk dev iframe 401s](clerk-dev-iframe-cookies.md) — preview-pane iframe blocks Clerk session cookie; signed-in app 401s with sessionStatus null. Fix: open app in own tab. Not data loss.
-- [Single-user user_settings table](single-user-settings-table.md) — user_settings is integer-keyed (always 1), shared across users; retirement + Otis read it globally. Don't pass Clerk IDs.
 - [Forecast date stepping](forecast-date-stepping.md) — recurring/spread generation must clamp month day (addMonthsIso) and compare YYYY-MM-DD strings, not Date objects.
 - [Life events timing normalization](life-events-timing-normalization.md) — server clears non-applicable date/frequency fields on create+update; PATCH merges existing then normalizes on final timingType.
 - [Artifact root routing swap](artifact-root-routing-swap.md) — to serve a different web artifact at `/`, swap previewPath+paths+BASE_PATH in both artifact.tomls; otis survives moving to /app/ (root-relative API + wouter base).

@@ -1,9 +1,9 @@
-import { pgTable, serial, integer, numeric, date, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, numeric, date, timestamp, text } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
 
 export const userSettingsTable = pgTable("user_settings", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().default(1),
+  userId: text("user_id").notNull().unique(),
   startingBalance: numeric("starting_balance", { precision: 12, scale: 2 }).notNull().default("0"),
   balanceAsOfDate: date("balance_as_of_date", { mode: "string" }).notNull(),
   currentAge: integer("current_age"),
