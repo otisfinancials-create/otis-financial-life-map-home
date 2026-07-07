@@ -6,6 +6,14 @@ export const userSettingsTable = pgTable("user_settings", {
   userId: integer("user_id").notNull().default(1),
   startingBalance: numeric("starting_balance", { precision: 12, scale: 2 }).notNull().default("0"),
   balanceAsOfDate: date("balance_as_of_date", { mode: "string" }).notNull(),
+  currentAge: integer("current_age"),
+  retirementAge: integer("retirement_age").notNull().default(65),
+  retirementGoal: numeric("retirement_goal", { precision: 15, scale: 2 }),
+  expectedReturnRate: numeric("expected_return_rate", { precision: 5, scale: 2 }).notNull().default("7"),
+  inflationRate: numeric("inflation_rate", { precision: 5, scale: 2 }).notNull().default("3"),
+  monthlySpendingGoal: numeric("monthly_spending_goal", { precision: 12, scale: 2 }),
+  socialSecurityMonthly: numeric("social_security_monthly", { precision: 12, scale: 2 }),
+  retirementDurationYears: integer("retirement_duration_years").notNull().default(25),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

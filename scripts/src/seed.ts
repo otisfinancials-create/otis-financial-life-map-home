@@ -12,7 +12,7 @@
  *   (await window.Clerk.user).id
  */
 
-import { db, billsTable, paySchedulesTable, forecastedTransactionsTable, lifeEventsTable } from "@workspace/db";
+import { db, billsTable, paySchedulesTable, forecastedTransactionsTable, lifeEventsTable, userSettingsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const rawUserId = process.env.SEED_USER_ID;
@@ -382,6 +382,30 @@ async function seed() {
   }
 
   console.log(`Created ${toInsert.length} forecasted transactions.`);
+
+  // Retirement settings live on the global user_settings row (userId = 1).
+  const retirementValues = {
+    currentAge: 42,
+    retirementAge: 65,
+    retirementGoal: "2000000",
+    expectedReturnRate: "7",
+    inflationRate: "3",
+    monthlySpendingGoal: "8000",
+    socialSecurityMonthly: "2200",
+    retirementDurationYears: 25,
+  };
+  const existingSettings = await db.select().from(userSettingsTable).where(eq(userSettingsTable.userId, 1)).limit(1);
+  if (existingSettings.length > 0) {
+    await db.update(userSettingsTable).set(retirementValues).where(eq(userSettingsTable.userId, 1));
+  } else {
+    await db.insert(userSettingsTable).values({
+      userId: 1,
+      balanceAsOfDate: toLocalIso(today),
+      ...retirementValues,
+    });
+  }
+  console.log("Seeded retirement settings.");
+
   console.log("\nSeed complete! Open the dashboard to see your data.");
   process.exit(0);
 }

@@ -1,0 +1,84 @@
+Please build the Retirement section at /retirement. This section gives users a clear picture of where they stand today against their retirement goals, and projects whether they're on track based on current savings, contributions, and expected growth.
+### Part A: Retirement Overview Page at /retirement
+Show a summary panel at the top with 4 cards:
+
+Current Retirement Savings (total across all retirement accounts)
+Projected Value at Retirement (based on current contributions and growth rate)
+Monthly Contribution (total across all accounts)
+Retirement Readiness Score (simple percentage — projected value ÷ retirement goal × 100, shown as a colored progress bar: red <50%, orange 50-80%, green 80%+)
+
+### Part B: Retirement Settings Form
+A clean settings panel where the user enters their retirement assumptions:
+
+Current age (number)
+Planned retirement age (number — default 65)
+Retirement goal amount (number — how much they want saved by retirement)
+Expected annual return rate (% — default 7%)
+Expected inflation rate (% — default 3%)
+Monthly retirement spending goal (number — what they want to spend per month in retirement)
+Social Security estimated monthly benefit (optional number — from SSA.gov)
+Expected retirement duration (number of years — default 25)
+
+Store these in the user_settings table (add columns if needed).
+### Part C: Retirement Accounts List
+Show all accounts tagged as "Retirement" type from Connected Accounts with:
+
+Account name and institution
+Current balance
+Monthly contribution amount (add this field to the account if not already there)
+Account type badge (401k, IRA, Roth IRA, Pension, Other)
+A simple "Edit Contribution" button to update monthly contribution amount
+
+If no retirement accounts exist, show a friendly empty state: "Add your retirement accounts in Connected Accounts to get started."
+### Part D: Retirement Projection Chart
+A line chart showing projected retirement savings growth from today until retirement age:
+
+X axis: years (current age to retirement age)
+Y axis: dollar amount
+Two lines:
+
+"On Track" line — projected value if contributions and growth rate continue
+"Goal" line — flat horizontal line showing retirement goal amount
+
+
+If the projected line crosses above the goal line — show a green "On Track" badge
+If projected never reaches goal — show a red "Gap" badge and the dollar amount of the shortfall
+Add a tooltip on hover showing age, year, and projected balance at that point
+
+### Part E: What-If Retirement Scenarios (inline)
+A simple panel below the chart with three sliders:
+
+"What if I increase my monthly contribution by $X?"
+"What if I retire at age X instead?"
+"What if my annual return is X% instead?"
+
+When any slider moves, instantly recalculate and update the projection chart in real time showing the new projected line alongside the original. Show the impact summary: "Retiring at 67 instead of 65 adds $X to your projected savings."
+### Part F: Retirement Income Summary
+A clean breakdown showing expected monthly income in retirement:
+
+From retirement savings (projected monthly withdrawal using the 4% rule)
+From Social Security (if entered)
+Total monthly retirement income
+vs. Monthly spending goal
+Show surplus or shortfall clearly: "Your projected retirement income covers X% of your monthly goal"
+
+### Part G: API Routes
+
+GET /api/retirement/summary — return current savings, projected value, readiness score
+GET /api/retirement/projection — return year-by-year projection data for chart
+POST /api/retirement/settings — save retirement assumptions
+GET /api/retirement/settings — retrieve retirement assumptions
+
+### Seed Data
+Set up retirement settings for user_id = 1:
+
+Current age: 42
+Retirement age: 65
+Retirement goal: $2,000,000
+Expected return: 7%
+Inflation rate: 3%
+Monthly spending goal in retirement: $8,000
+Social Security estimate: $2,200/month
+The ETrade Investment account and Retirement account already in Connected Accounts should be used as the retirement account base
+
+Use recharts for the projection chart since it's already in the project. Use Tailwind for all styling consistent with the rest of the app. Keep the language warm and encouraging — not clinical. Instead of "Retirement Readiness Score: 67%" say "You're 67% of the way to your retirement goal." Small language choices make a big difference in how users feel about their financial situation

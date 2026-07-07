@@ -5,6 +5,7 @@
  * Otis Financial Life Map API
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountRetirementSubtype } from './accountRetirementSubtype';
 
 export interface Account {
   id: number;
@@ -12,6 +13,9 @@ export interface Account {
   accountType: string;
   institutionName: string;
   currentBalance: number;
+  monthlyContribution: number;
+  /** @nullable */
+  retirementSubtype?: AccountRetirementSubtype;
   isAsset: boolean;
   /** @nullable */
   accountNumberLast4?: string | null;

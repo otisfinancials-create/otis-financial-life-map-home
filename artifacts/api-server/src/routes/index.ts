@@ -11,6 +11,7 @@ import assetsRouter from "./assets";
 import loansRouter from "./loans";
 import forecastRouter from "./forecast";
 import userSettingsRouter from "./user_settings";
+import retirementRouter from "./retirement";
 import anthropicRouter from "./anthropic/index";
 
 const router: IRouter = Router();
@@ -27,6 +28,7 @@ router.use(assetsRouter);
 router.use(loansRouter);
 router.use(forecastRouter);
 router.use(userSettingsRouter);
+router.use(retirementRouter);
 router.use(anthropicRouter);
 
 export default router;

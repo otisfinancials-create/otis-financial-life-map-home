@@ -399,6 +399,8 @@ export const ListAccountsResponseItem = zod.object({
   "accountType": zod.string(),
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
+  "monthlyContribution": zod.number(),
+  "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -421,6 +423,8 @@ export const CreateAccountBody = zod.object({
   "accountType": zod.string(),
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
+  "monthlyContribution": zod.number().optional(),
+  "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().regex(createAccountBodyAccountNumberLast4RegExp).nullish(),
   "notes": zod.string().nullish()
@@ -432,6 +436,8 @@ export const CreateAccountResponse = zod.object({
   "accountType": zod.string(),
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
+  "monthlyContribution": zod.number(),
+  "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -470,6 +476,8 @@ export const GetAccountResponse = zod.object({
   "accountType": zod.string(),
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
+  "monthlyContribution": zod.number(),
+  "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -495,6 +503,8 @@ export const UpdateAccountBody = zod.object({
   "accountType": zod.string().optional(),
   "institutionName": zod.string().optional(),
   "currentBalance": zod.number().optional(),
+  "monthlyContribution": zod.number().optional(),
+  "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean().optional(),
   "accountNumberLast4": zod.string().regex(updateAccountBodyAccountNumberLast4RegExp).nullish(),
   "notes": zod.string().nullish()
@@ -506,6 +516,8 @@ export const UpdateAccountResponse = zod.object({
   "accountType": zod.string(),
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
+  "monthlyContribution": zod.number(),
+  "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -977,6 +989,97 @@ export const SaveUserSettingsResponse = zod.object({
   "startingBalance": zod.number(),
   "balanceAsOfDate": zod.string(),
   "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Get retirement assumptions
+ */
+export const GetRetirementSettingsResponse = zod.object({
+  "currentAge": zod.number().nullable(),
+  "retirementAge": zod.number(),
+  "retirementGoal": zod.number().nullable(),
+  "expectedReturnRate": zod.number(),
+  "inflationRate": zod.number(),
+  "monthlySpendingGoal": zod.number().nullable(),
+  "socialSecurityMonthly": zod.number().nullable(),
+  "retirementDurationYears": zod.number()
+})
+
+
+/**
+ * @summary Upsert retirement assumptions
+ */
+export const saveRetirementSettingsBodyCurrentAgeMax = 100;
+
+export const saveRetirementSettingsBodyRetirementAgeMax = 100;
+
+export const saveRetirementSettingsBodyRetirementGoalMin = 0;
+
+export const saveRetirementSettingsBodyExpectedReturnRateMin = 0;
+export const saveRetirementSettingsBodyExpectedReturnRateMax = 100;
+
+export const saveRetirementSettingsBodyInflationRateMin = 0;
+export const saveRetirementSettingsBodyInflationRateMax = 100;
+
+export const saveRetirementSettingsBodyMonthlySpendingGoalMin = 0;
+
+export const saveRetirementSettingsBodySocialSecurityMonthlyMin = 0;
+
+export const saveRetirementSettingsBodyRetirementDurationYearsMax = 60;
+
+
+
+export const SaveRetirementSettingsBody = zod.object({
+  "currentAge": zod.number().min(1).max(saveRetirementSettingsBodyCurrentAgeMax),
+  "retirementAge": zod.number().min(1).max(saveRetirementSettingsBodyRetirementAgeMax),
+  "retirementGoal": zod.number().min(saveRetirementSettingsBodyRetirementGoalMin),
+  "expectedReturnRate": zod.number().min(saveRetirementSettingsBodyExpectedReturnRateMin).max(saveRetirementSettingsBodyExpectedReturnRateMax),
+  "inflationRate": zod.number().min(saveRetirementSettingsBodyInflationRateMin).max(saveRetirementSettingsBodyInflationRateMax),
+  "monthlySpendingGoal": zod.number().min(saveRetirementSettingsBodyMonthlySpendingGoalMin),
+  "socialSecurityMonthly": zod.number().min(saveRetirementSettingsBodySocialSecurityMonthlyMin).nullish(),
+  "retirementDurationYears": zod.number().min(1).max(saveRetirementSettingsBodyRetirementDurationYearsMax)
+})
+
+export const SaveRetirementSettingsResponse = zod.object({
+  "currentAge": zod.number().nullable(),
+  "retirementAge": zod.number(),
+  "retirementGoal": zod.number().nullable(),
+  "expectedReturnRate": zod.number(),
+  "inflationRate": zod.number(),
+  "monthlySpendingGoal": zod.number().nullable(),
+  "socialSecurityMonthly": zod.number().nullable(),
+  "retirementDurationYears": zod.number()
+})
+
+
+/**
+ * @summary Current savings, projected value, and readiness score
+ */
+export const GetRetirementSummaryResponse = zod.object({
+  "currentSavings": zod.number(),
+  "projectedValue": zod.number(),
+  "monthlyContribution": zod.number(),
+  "readinessScore": zod.number(),
+  "retirementGoal": zod.number().nullable(),
+  "hasSettings": zod.boolean()
+})
+
+
+/**
+ * @summary Year-by-year projected savings growth until retirement
+ */
+export const GetRetirementProjectionResponse = zod.object({
+  "points": zod.array(zod.object({
+  "age": zod.number(),
+  "year": zod.number(),
+  "projected": zod.number()
+})),
+  "projectedValue": zod.number(),
+  "retirementGoal": zod.number().nullable(),
+  "onTrack": zod.boolean(),
+  "shortfall": zod.number(),
+  "hasSettings": zod.boolean()
 })
 
 

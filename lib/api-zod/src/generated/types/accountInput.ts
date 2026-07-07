@@ -5,12 +5,16 @@
  * Otis Financial Life Map API
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountInputRetirementSubtype } from './accountInputRetirementSubtype';
 
 export interface AccountInput {
   accountName: string;
   accountType: string;
   institutionName: string;
   currentBalance: number;
+  monthlyContribution?: number;
+  /** @nullable */
+  retirementSubtype?: AccountInputRetirementSubtype;
   isAsset: boolean;
   /**
      * @nullable

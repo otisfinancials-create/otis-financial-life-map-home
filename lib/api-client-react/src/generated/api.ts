@@ -58,6 +58,10 @@ import type {
   RegenerateForecastResult,
   ReorderForecastInput,
   ReorderForecastResult,
+  RetirementProjection,
+  RetirementSettings,
+  RetirementSettingsInput,
+  RetirementSummary,
   UpcomingBill,
   UserSettings,
   UserSettingsInput
@@ -3400,6 +3404,307 @@ export const useSaveUserSettings = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getSaveUserSettingsMutationOptions(options));
     }
+
+export const getGetRetirementSettingsUrl = () => {
+
+
+
+
+  return `/api/retirement/settings`
+}
+
+/**
+ * @summary Get retirement assumptions
+ */
+export const getRetirementSettings = async ( options?: RequestInit): Promise<RetirementSettings> => {
+
+  return customFetch<RetirementSettings>(getGetRetirementSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRetirementSettingsQueryKey = () => {
+    return [
+    `/api/retirement/settings`
+    ] as const;
+    }
+
+
+export const getGetRetirementSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getRetirementSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRetirementSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRetirementSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRetirementSettings>>> = ({ signal }) => getRetirementSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRetirementSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRetirementSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getRetirementSettings>>>
+export type GetRetirementSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get retirement assumptions
+ */
+
+export function useGetRetirementSettings<TData = Awaited<ReturnType<typeof getRetirementSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRetirementSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRetirementSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveRetirementSettingsUrl = () => {
+
+
+
+
+  return `/api/retirement/settings`
+}
+
+/**
+ * @summary Upsert retirement assumptions
+ */
+export const saveRetirementSettings = async (retirementSettingsInput: RetirementSettingsInput, options?: RequestInit): Promise<RetirementSettings> => {
+
+  return customFetch<RetirementSettings>(getSaveRetirementSettingsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(retirementSettingsInput)
+  }
+);}
+
+
+
+
+export const getSaveRetirementSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveRetirementSettings>>, TError,{data: BodyType<RetirementSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveRetirementSettings>>, TError,{data: BodyType<RetirementSettingsInput>}, TContext> => {
+
+const mutationKey = ['saveRetirementSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveRetirementSettings>>, {data: BodyType<RetirementSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveRetirementSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveRetirementSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof saveRetirementSettings>>>
+    export type SaveRetirementSettingsMutationBody = BodyType<RetirementSettingsInput>
+    export type SaveRetirementSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Upsert retirement assumptions
+ */
+export const useSaveRetirementSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveRetirementSettings>>, TError,{data: BodyType<RetirementSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveRetirementSettings>>,
+        TError,
+        {data: BodyType<RetirementSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getSaveRetirementSettingsMutationOptions(options));
+    }
+
+export const getGetRetirementSummaryUrl = () => {
+
+
+
+
+  return `/api/retirement/summary`
+}
+
+/**
+ * @summary Current savings, projected value, and readiness score
+ */
+export const getRetirementSummary = async ( options?: RequestInit): Promise<RetirementSummary> => {
+
+  return customFetch<RetirementSummary>(getGetRetirementSummaryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRetirementSummaryQueryKey = () => {
+    return [
+    `/api/retirement/summary`
+    ] as const;
+    }
+
+
+export const getGetRetirementSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getRetirementSummary>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRetirementSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRetirementSummaryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRetirementSummary>>> = ({ signal }) => getRetirementSummary({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRetirementSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRetirementSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getRetirementSummary>>>
+export type GetRetirementSummaryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Current savings, projected value, and readiness score
+ */
+
+export function useGetRetirementSummary<TData = Awaited<ReturnType<typeof getRetirementSummary>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRetirementSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRetirementSummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetRetirementProjectionUrl = () => {
+
+
+
+
+  return `/api/retirement/projection`
+}
+
+/**
+ * @summary Year-by-year projected savings growth until retirement
+ */
+export const getRetirementProjection = async ( options?: RequestInit): Promise<RetirementProjection> => {
+
+  return customFetch<RetirementProjection>(getGetRetirementProjectionUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRetirementProjectionQueryKey = () => {
+    return [
+    `/api/retirement/projection`
+    ] as const;
+    }
+
+
+export const getGetRetirementProjectionQueryOptions = <TData = Awaited<ReturnType<typeof getRetirementProjection>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRetirementProjection>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRetirementProjectionQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRetirementProjection>>> = ({ signal }) => getRetirementProjection({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRetirementProjection>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRetirementProjectionQueryResult = NonNullable<Awaited<ReturnType<typeof getRetirementProjection>>>
+export type GetRetirementProjectionQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Year-by-year projected savings growth until retirement
+ */
+
+export function useGetRetirementProjection<TData = Awaited<ReturnType<typeof getRetirementProjection>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRetirementProjection>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRetirementProjectionQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListAnthropicConversationsUrl = () => {
 

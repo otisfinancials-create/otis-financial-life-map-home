@@ -26,6 +26,8 @@ tags:
     description: Anthropic AI chat operations
   - name: userSettings
     description: User preferences and settings
+  - name: retirement
+    description: Retirement planning and projections
 
 paths:
   /healthz:
@@ -827,6 +829,63 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserSettings"
 
+  # ── Retirement ───────────────────────────────────────────────────────────────
+  /retirement/settings:
+    get:
+      operationId: getRetirementSettings
+      tags: [retirement]
+      summary: Get retirement assumptions
+      responses:
+        "200":
+          description: Retirement settings (defaults if never saved)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetirementSettings"
+    post:
+      operationId: saveRetirementSettings
+      tags: [retirement]
+      summary: Upsert retirement assumptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetirementSettingsInput"
+      responses:
+        "200":
+          description: Saved retirement settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetirementSettings"
+
+  /retirement/summary:
+    get:
+      operationId: getRetirementSummary
+      tags: [retirement]
+      summary: Current savings, projected value, and readiness score
+      responses:
+        "200":
+          description: Retirement summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetirementSummary"
+
+  /retirement/projection:
+    get:
+      operationId: getRetirementProjection
+      tags: [retirement]
+      summary: Year-by-year projected savings growth until retirement
+      responses:
+        "200":
+          description: Retirement projection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetirementProjection"
+
   # ── Anthropic AI ────────────────────────────────────────────────────────────
   /anthropic/conversations:
     get:
@@ -1236,7 +1295,7 @@ components:
     # ── Accounts ─────────────────────────────────────────────────────────────
     Account:
       type: object
-      required: [id, accountName, accountType, institutionName, currentBalance, isAsset, createdAt, updatedAt]
+      required: [id, accountName, accountType, institutionName, currentBalance, monthlyContribution, isAsset, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -1248,6 +1307,11 @@ components:
           type: string
         currentBalance:
           type: number
+        monthlyContribution:
+          type: number
+        retirementSubtype:
+          type: ["string", "null"]
+          enum: ["401k", "ira", "roth_ira", "pension", "other", null]
         isAsset:
           type: boolean
         accountNumberLast4:
@@ -1275,6 +1339,11 @@ components:
           type: string
         currentBalance:
           type: number
+        monthlyContribution:
+          type: number
+        retirementSubtype:
+          type: ["string", "null"]
+          enum: ["401k", "ira", "roth_ira", "pension", "other", null]
         isAsset:
           type: boolean
         accountNumberLast4:
@@ -1294,6 +1363,11 @@ components:
           type: string
         currentBalance:
           type: number
+        monthlyContribution:
+          type: number
+        retirementSubtype:
+          type: ["string", "null"]
+          enum: ["401k", "ira", "roth_ira", "pension", "other", null]
         isAsset:
           type: boolean
         accountNumberLast4:
@@ -1694,6 +1768,109 @@ components:
           type: number
         balanceAsOfDate:
           type: string
+
+    # ── Retirement ───────────────────────────────────────────────────────────
+    RetirementSettings:
+      type: object
+      required: [currentAge, retirementAge, retirementGoal, expectedReturnRate, inflationRate, monthlySpendingGoal, socialSecurityMonthly, retirementDurationYears]
+      properties:
+        currentAge:
+          type: ["integer", "null"]
+        retirementAge:
+          type: integer
+        retirementGoal:
+          type: ["number", "null"]
+        expectedReturnRate:
+          type: number
+        inflationRate:
+          type: number
+        monthlySpendingGoal:
+          type: ["number", "null"]
+        socialSecurityMonthly:
+          type: ["number", "null"]
+        retirementDurationYears:
+          type: integer
+
+    RetirementSettingsInput:
+      type: object
+      required: [currentAge, retirementAge, retirementGoal, expectedReturnRate, inflationRate, monthlySpendingGoal, retirementDurationYears]
+      properties:
+        currentAge:
+          type: integer
+          minimum: 1
+          maximum: 100
+        retirementAge:
+          type: integer
+          minimum: 1
+          maximum: 100
+        retirementGoal:
+          type: number
+          minimum: 0
+        expectedReturnRate:
+          type: number
+          minimum: 0
+          maximum: 100
+        inflationRate:
+          type: number
+          minimum: 0
+          maximum: 100
+        monthlySpendingGoal:
+          type: number
+          minimum: 0
+        socialSecurityMonthly:
+          type: ["number", "null"]
+          minimum: 0
+        retirementDurationYears:
+          type: integer
+          minimum: 1
+          maximum: 60
+
+    RetirementSummary:
+      type: object
+      required: [currentSavings, projectedValue, monthlyContribution, readinessScore, retirementGoal, hasSettings]
+      properties:
+        currentSavings:
+          type: number
+        projectedValue:
+          type: number
+        monthlyContribution:
+          type: number
+        readinessScore:
+          type: number
+        retirementGoal:
+          type: ["number", "null"]
+        hasSettings:
+          type: boolean
+
+    RetirementProjectionPoint:
+      type: object
+      required: [age, year, projected]
+      properties:
+        age:
+          type: integer
+        year:
+          type: integer
+        projected:
+          type: number
+
+    RetirementProjection:
+      type: object
+      required: [points, projectedValue, retirementGoal, onTrack, shortfall, hasSettings]
+      properties:
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetirementProjectionPoint"
+        projectedValue:
+          type: number
+        retirementGoal:
+          type: ["number", "null"]
+        onTrack:
+          type: boolean
+        shortfall:
+          type: number
+        hasSettings:
+          type: boolean
 
     AnthropicConversation:
       type: object

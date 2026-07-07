@@ -173,12 +173,29 @@ export interface PayScheduleUpdate {
   notes?: string;
 }
 
+/**
+ * @nullable
+ */
+export type AccountRetirementSubtype = typeof AccountRetirementSubtype[keyof typeof AccountRetirementSubtype] | null;
+
+
+export const AccountRetirementSubtype = {
+  '401k': '401k',
+  ira: 'ira',
+  roth_ira: 'roth_ira',
+  pension: 'pension',
+  other: 'other',
+} as const;
+
 export interface Account {
   id: number;
   accountName: string;
   accountType: string;
   institutionName: string;
   currentBalance: number;
+  monthlyContribution: number;
+  /** @nullable */
+  retirementSubtype?: AccountRetirementSubtype;
   isAsset: boolean;
   /** @nullable */
   accountNumberLast4?: string | null;
@@ -192,11 +209,28 @@ export interface Account {
   updatedAt: string;
 }
 
+/**
+ * @nullable
+ */
+export type AccountInputRetirementSubtype = typeof AccountInputRetirementSubtype[keyof typeof AccountInputRetirementSubtype] | null;
+
+
+export const AccountInputRetirementSubtype = {
+  '401k': '401k',
+  ira: 'ira',
+  roth_ira: 'roth_ira',
+  pension: 'pension',
+  other: 'other',
+} as const;
+
 export interface AccountInput {
   accountName: string;
   accountType: string;
   institutionName: string;
   currentBalance: number;
+  monthlyContribution?: number;
+  /** @nullable */
+  retirementSubtype?: AccountInputRetirementSubtype;
   isAsset: boolean;
   /**
      * @nullable
@@ -207,11 +241,28 @@ export interface AccountInput {
   notes?: string | null;
 }
 
+/**
+ * @nullable
+ */
+export type AccountUpdateRetirementSubtype = typeof AccountUpdateRetirementSubtype[keyof typeof AccountUpdateRetirementSubtype] | null;
+
+
+export const AccountUpdateRetirementSubtype = {
+  '401k': '401k',
+  ira: 'ira',
+  roth_ira: 'roth_ira',
+  pension: 'pension',
+  other: 'other',
+} as const;
+
 export interface AccountUpdate {
   accountName?: string;
   accountType?: string;
   institutionName?: string;
   currentBalance?: number;
+  monthlyContribution?: number;
+  /** @nullable */
+  retirementSubtype?: AccountUpdateRetirementSubtype;
   isAsset?: boolean;
   /**
      * @nullable
@@ -442,6 +493,84 @@ export interface UserSettings {
 export interface UserSettingsInput {
   startingBalance: number;
   balanceAsOfDate: string;
+}
+
+export interface RetirementSettings {
+  /** @nullable */
+  currentAge: number | null;
+  retirementAge: number;
+  /** @nullable */
+  retirementGoal: number | null;
+  expectedReturnRate: number;
+  inflationRate: number;
+  /** @nullable */
+  monthlySpendingGoal: number | null;
+  /** @nullable */
+  socialSecurityMonthly: number | null;
+  retirementDurationYears: number;
+}
+
+export interface RetirementSettingsInput {
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  currentAge: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  retirementAge: number;
+  /** @minimum 0 */
+  retirementGoal: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  expectedReturnRate: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  inflationRate: number;
+  /** @minimum 0 */
+  monthlySpendingGoal: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  socialSecurityMonthly?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 60
+     */
+  retirementDurationYears: number;
+}
+
+export interface RetirementSummary {
+  currentSavings: number;
+  projectedValue: number;
+  monthlyContribution: number;
+  readinessScore: number;
+  /** @nullable */
+  retirementGoal: number | null;
+  hasSettings: boolean;
+}
+
+export interface RetirementProjectionPoint {
+  age: number;
+  year: number;
+  projected: number;
+}
+
+export interface RetirementProjection {
+  points: RetirementProjectionPoint[];
+  projectedValue: number;
+  /** @nullable */
+  retirementGoal: number | null;
+  onTrack: boolean;
+  shortfall: number;
+  hasSettings: boolean;
 }
 
 export interface AnthropicConversation {

@@ -36,6 +36,7 @@ router.post("/accounts", async (req, res): Promise<void> => {
     ...parsed.data,
     userId: req.userId,
     currentBalance: String(parsed.data.currentBalance),
+    monthlyContribution: String(parsed.data.monthlyContribution ?? 0),
   }).returning();
   res.status(201).json(CreateAccountResponse.parse(serialize(account)));
 });
@@ -102,12 +103,13 @@ router.patch("/accounts/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { currentBalance: rawBalance, ...restAccountData } = parsed.data;
+  const { currentBalance: rawBalance, monthlyContribution: rawContribution, ...restAccountData } = parsed.data;
   const [account] = await db
     .update(accountsTable)
     .set({
       ...restAccountData,
       ...(rawBalance !== undefined && { currentBalance: String(rawBalance) }),
+      ...(rawContribution !== undefined && { monthlyContribution: String(rawContribution) }),
       updatedAt: new Date(),
     })
     .where(and(eq(accountsTable.id, params.data.id), eq(accountsTable.userId, req.userId)))
@@ -140,6 +142,7 @@ function serialize(a: typeof accountsTable.$inferSelect) {
   return {
     ...a,
     currentBalance: parseFloat(String(a.currentBalance)),
+    monthlyContribution: parseFloat(String(a.monthlyContribution)),
     createdAt: a.createdAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
     lastSyncedAt: a.lastSyncedAt ? a.lastSyncedAt.toISOString() : null,
