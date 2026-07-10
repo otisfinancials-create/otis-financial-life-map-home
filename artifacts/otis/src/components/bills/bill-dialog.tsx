@@ -71,21 +71,69 @@ const PAYMENT_METHODS = [
   { value: "credit-card", label: "Credit Card" },
 ];
 
-const billSchema = z.object({
-  billName: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  category: z.string().min(1, { message: "Please select a category." }),
-  amount: z.coerce.number().positive({ message: "Amount must be greater than 0." }),
-  frequency: z.string().min(1, { message: "Please select a frequency." }),
-  dueDay: z.coerce.number().min(1).max(31, { message: "Due day must be between 1 and 31." }),
-  paymentMethod: z.string().optional(),
-  creditCardName: z.string().optional(),
-  companyUrl: z.string().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  isVariable: z.boolean().default(false),
-  isActive: z.boolean().default(true),
-  notes: z.string().optional(),
-});
+const MAX_TEXT = 100;
+
+const billSchema = z
+  .object({
+    billName: z
+      .string()
+      .min(2, { message: "Name must be at least 2 characters." })
+      .max(MAX_TEXT, { message: `Name must be ${MAX_TEXT} characters or fewer.` }),
+    category: z.string().min(1, { message: "Please select a category." }),
+    amount: z.coerce.number().positive({ message: "Amount must be greater than 0." }),
+    frequency: z.string().min(1, { message: "Please select a frequency." }),
+    dueDay: z.preprocess(
+      (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
+      z.number().int().min(1).max(31).optional(),
+    ),
+    paymentMethod: z.string().min(1, { message: "Please select a payment method." }),
+    creditCardName: z.string().optional(),
+    companyUrl: z
+      .string()
+      .max(MAX_TEXT, { message: `URL must be ${MAX_TEXT} characters or fewer.` })
+      .optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    isVariable: z.boolean().default(false),
+    isActive: z.boolean().default(true),
+    notes: z
+      .string()
+      .max(MAX_TEXT, { message: `Notes must be ${MAX_TEXT} characters or fewer.` })
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    // Due-date requirement depends on frequency.
+    if (data.frequency === "monthly") {
+      if (data.dueDay == null) {
+        ctx.addIssue({ path: ["dueDay"], code: "custom", message: "Please enter a due day." });
+      }
+    } else if (!data.startDate) {
+      ctx.addIssue({
+        path: ["startDate"],
+        code: "custom",
+        message: "First bill date is required.",
+      });
+    }
+
+    // Company URL: must contain a dot and no spaces (blank is allowed).
+    const url = data.companyUrl?.trim();
+    if (url && (!url.includes(".") || /\s/.test(url))) {
+      ctx.addIssue({
+        path: ["companyUrl"],
+        code: "custom",
+        message: "Please enter a valid URL (e.g. netflix.com)",
+      });
+    }
+
+    // End date must be on or after the start date.
+    if (data.startDate && data.endDate && data.endDate < data.startDate) {
+      ctx.addIssue({
+        path: ["endDate"],
+        code: "custom",
+        message: "End date must be after start date.",
+      });
+    }
+  });
 
 type BillFormValues = z.infer<typeof billSchema>;
 
@@ -95,6 +143,80 @@ function parsePaymentMethod(raw: string | null | undefined): { paymentMethod: st
     return { paymentMethod: "credit-card", creditCardName: raw.slice("credit-card:".length).trim() };
   }
   return { paymentMethod: raw, creditCardName: "" };
+}
+
+// ── Occurrence preview helpers (mirror the server forecast engine) ───────────
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function clampDayIso(year: number, month1: number, day: number): string {
+  const daysInMonth = new Date(Date.UTC(year, month1, 0)).getUTCDate();
+  const d = Math.min(Math.max(day, 1), daysInMonth);
+  return `${year}-${String(month1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function addDaysIso(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+function addMonthsIso(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const total = (y * 12 + (m - 1)) + n;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  return clampDayIso(ny, nm, d);
+}
+
+function formatMonthDay(iso: string): string {
+  const [, m, d] = iso.split("-").map(Number);
+  return `${MONTHS[m - 1]} ${d}`;
+}
+
+function previewOccurrences(frequency: string, dueDay?: number, startDate?: string): string[] {
+  const today = todayIso();
+  const out: string[] = [];
+  const freq = frequency.toLowerCase();
+
+  if (freq === "monthly") {
+    if (dueDay == null || Number.isNaN(dueDay)) return [];
+    let y = Number(today.slice(0, 4));
+    let m = Number(today.slice(5, 7));
+    for (let i = 0; i < 36 && out.length < 3; i++) {
+      const occ = clampDayIso(y, m, dueDay);
+      if (occ >= today) out.push(occ);
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+    return out;
+  }
+
+  if (!startDate) return [];
+  const step = (iso: string): string => {
+    switch (freq) {
+      case "weekly": return addDaysIso(iso, 7);
+      case "biweekly": case "bi-weekly": return addDaysIso(iso, 14);
+      case "quarterly": return addMonthsIso(iso, 3);
+      case "annual": case "annually": case "yearly": return addMonthsIso(iso, 12);
+      default: return addMonthsIso(iso, 1);
+    }
+  };
+  let current = startDate;
+  let guard = 0;
+  while (current < today && guard++ < 500) current = step(current);
+  guard = 0;
+  while (out.length < 3 && guard++ < 500) {
+    out.push(current);
+    current = step(current);
+  }
+  return out;
 }
 
 interface BillDialogProps {
@@ -126,7 +248,7 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
       category: bill?.category || "",
       amount: bill?.amount || 0,
       frequency: bill?.frequency || "monthly",
-      dueDay: bill?.dueDay || 1,
+      dueDay: bill?.dueDay,
       paymentMethod: parsedMethod,
       creditCardName: parsedCard,
       companyUrl: bill?.companyUrl || "",
@@ -146,7 +268,7 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
         category: bill?.category || "",
         amount: bill?.amount || 0,
         frequency: bill?.frequency || "monthly",
-        dueDay: bill?.dueDay || 1,
+        dueDay: bill?.dueDay,
         paymentMethod: parsed.paymentMethod,
         creditCardName: parsed.creditCardName,
         companyUrl: bill?.companyUrl || "",
@@ -162,6 +284,20 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
 
   const watchedPaymentMethod = form.watch("paymentMethod");
   const watchedIsVariable = form.watch("isVariable");
+  const watchedFrequency = form.watch("frequency");
+  const watchedDueDay = form.watch("dueDay");
+  const watchedStartDate = form.watch("startDate");
+  const watchedBillName = form.watch("billName") ?? "";
+  const watchedNotes = form.watch("notes") ?? "";
+
+  const isMonthly = watchedFrequency === "monthly";
+  const isAnnual = watchedFrequency === "annually" || watchedFrequency === "annual";
+
+  const preview = previewOccurrences(
+    watchedFrequency,
+    typeof watchedDueDay === "number" ? watchedDueDay : watchedDueDay ? Number(watchedDueDay) : undefined,
+    watchedStartDate || undefined,
+  );
 
   function buildPaymentMethod(values: BillFormValues): string | undefined {
     if (!values.paymentMethod) return undefined;
@@ -172,14 +308,21 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
   }
 
   function onSubmit(data: BillFormValues) {
+    // dueDay is required by the API. For date-driven frequencies we derive it
+    // from the first bill date's day-of-month.
+    let dueDay = data.dueDay;
+    if (data.frequency !== "monthly" && data.startDate) {
+      dueDay = Number(data.startDate.slice(8, 10));
+    }
+
     const payload = {
       billName: data.billName,
       category: data.category,
       amount: data.amount,
       frequency: data.frequency,
-      dueDay: data.dueDay,
+      dueDay: dueDay ?? 1,
       paymentMethod: buildPaymentMethod(data),
-      companyUrl: data.companyUrl || undefined,
+      companyUrl: data.companyUrl?.trim() || undefined,
       startDate: data.startDate || undefined,
       endDate: data.endDate || undefined,
       isVariable: data.isVariable,
@@ -225,6 +368,12 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
     setIsOpen(newOpen);
   };
 
+  const dueDateLabel = isMonthly
+    ? "Due day of month"
+    : isAnnual
+    ? "Annual due date"
+    : "First bill date";
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
@@ -238,15 +387,24 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
             <FormField
               control={form.control}
               name="billName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Bill Name</FormLabel>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Bill Name</FormLabel>
+                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                      {watchedBillName.length}/{MAX_TEXT}
+                    </span>
+                  </div>
                   <FormControl>
-                    <Input placeholder="e.g. Netflix, Rent, Car Insurance" {...field} />
+                    <Input
+                      placeholder="e.g. Netflix, Rent, Car Insurance"
+                      maxLength={MAX_TEXT}
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -306,38 +464,66 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
                 name="amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Amount</FormLabel>
+                    <FormLabel>{watchedIsVariable ? "Estimated Amount" : "Amount"}</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        disabled={watchedIsVariable}
-                        className={watchedIsVariable ? "opacity-50" : ""}
-                        {...field}
-                      />
+                      <Input type="number" step="0.01" {...field} />
                     </FormControl>
                     {watchedIsVariable && (
-                      <FormDescription className="text-[10px]">Estimated — marked as variable</FormDescription>
+                      <FormDescription className="text-[10px]">
+                        Estimate — actual amount may vary
+                      </FormDescription>
                     )}
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="dueDay"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Due Day</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="1" max="31" {...field} />
-                    </FormControl>
-                    <FormDescription className="text-[10px]">Day of month (1–31)</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
+              {isMonthly ? (
+                <FormField
+                  control={form.control}
+                  name="dueDay"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{dueDateLabel}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="e.g. 15"
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                      </FormControl>
+                      <FormDescription className="text-[10px]">Day of month (1–31)</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{dueDateLabel}</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} value={field.value ?? ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
+
+            {preview.length > 0 && (
+              <p className="text-[11px] text-muted-foreground -mt-1">
+                This bill will next appear on{" "}
+                <span className="text-foreground font-medium">{formatMonthDay(preview[0])}</span>
+                {preview[1] && <>, then {formatMonthDay(preview[1])}</>}
+                {preview[2] && <>, then {formatMonthDay(preview[2])}</>}
+                …
+              </p>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -370,7 +556,7 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
                     <FormItem>
                       <FormLabel>Which Card?</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. Amex Blue Cash" {...field} />
+                        <Input placeholder="e.g. Amex Blue Cash" maxLength={MAX_TEXT} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -386,7 +572,7 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
                 <FormItem>
                   <FormLabel>Company Website <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                   <FormControl>
-                    <Input placeholder="https://example.com" {...field} />
+                    <Input placeholder="e.g. netflix.com" maxLength={MAX_TEXT} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -394,19 +580,21 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
             />
 
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Start Date <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {isMonthly && (
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Date <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} value={field.value ?? ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <FormField
                 control={form.control}
                 name="endDate"
@@ -414,7 +602,7 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
                   <FormItem>
                     <FormLabel>End Date <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="date" {...field} value={field.value ?? ""} />
                     </FormControl>
                     <FormDescription className="text-[10px]">e.g. loan payoff date</FormDescription>
                     <FormMessage />
@@ -428,12 +616,18 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                      {watchedNotes.length}/{MAX_TEXT}
+                    </span>
+                  </div>
                   <FormControl>
                     <Textarea
                       placeholder="Any notes about this bill..."
                       className="resize-none"
                       rows={2}
+                      maxLength={MAX_TEXT}
                       {...field}
                     />
                   </FormControl>

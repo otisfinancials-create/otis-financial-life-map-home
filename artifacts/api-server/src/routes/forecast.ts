@@ -112,8 +112,14 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
 
 router.post("/forecast/regenerate", async (req, res): Promise<void> => {
   req.log.info("Regenerating forecast");
-  const userId = req.userId;
+  const created = await regenerateForecastForUser(req.userId);
+  res.json(RegenerateForecastResponse.parse({ created, message: `Created ${created} forecasted transactions` }));
+});
 
+// Deletes a user's non-actual forecasted transactions and rebuilds them from
+// bills, pay schedules, and life events. Returns the number of rows created.
+// Exported so one-off scripts can re-seed forecasts for existing users.
+export async function regenerateForecastForUser(userId: string): Promise<number> {
   // Delete existing non-actual forecasted transactions for this user
   await db.delete(forecastedTransactionsTable).where(
     and(
@@ -126,6 +132,11 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
   const endDate = new Date(today.getFullYear(), today.getMonth() + 12, 0);
   const toInsert: Array<typeof forecastedTransactionsTable.$inferInsert> = [];
 
+  // All date math below compares YYYY-MM-DD strings (lexicographic order is valid
+  // for ISO dates) so results never shift with the local timezone / time of day.
+  const todayStr = toLocalIso(today);
+  const endStr = toLocalIso(endDate);
+
   // Generate from bills
   const bills = await db
     .select()
@@ -134,17 +145,10 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
 
   for (const bill of bills) {
     const amount = parseFloat(String(bill.amount));
-    const frequency = bill.frequency;
-
-    let current = new Date(today.getFullYear(), today.getMonth(), bill.dueDay);
-    if (current < today) {
-      current = advanceByFrequency(current, frequency);
-    }
-
-    while (current <= endDate) {
+    for (const dateStr of generateBillOccurrences(bill, todayStr, endStr)) {
       toInsert.push({
         userId,
-        transactionDate: current.toISOString().split("T")[0],
+        transactionDate: dateStr,
         description: bill.billName,
         amount: String(amount),
         transactionType: "expense",
@@ -153,7 +157,6 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
         isActual: false,
         isCommitted: false,
       });
-      current = advanceByFrequency(current, frequency);
     }
   }
 
@@ -190,12 +193,6 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
     .select()
     .from(lifeEventsTable)
     .where(and(eq(lifeEventsTable.isActive, true), eq(lifeEventsTable.userId, userId)));
-
-  // Compare life-event dates as YYYY-MM-DD strings (not Date objects) so that
-  // same-day events are included regardless of the current time of day, and use
-  // clamped month stepping so month-end starts (e.g. Jan 31) never skip a month.
-  const todayStr = toLocalIso(today);
-  const endStr = toLocalIso(endDate);
 
   for (const ev of lifeEvents) {
     const total = parseFloat(String(ev.amount));
@@ -250,8 +247,8 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
     await db.insert(forecastedTransactionsTable).values(toInsert);
   }
 
-  res.json(RegenerateForecastResponse.parse({ created: toInsert.length, message: `Created ${toInsert.length} forecasted transactions` }));
-});
+  return toInsert.length;
+}
 
 router.post("/forecast/reorder", async (req, res): Promise<void> => {
   const parsed = ReorderForecastBody.safeParse(req.body);
@@ -389,6 +386,95 @@ function advanceIsoByFrequency(iso: string, frequency: string): string {
     case "annual": case "annually": case "yearly": return addMonthsIso(iso, 12);
     default: return addMonthsIso(iso, 12);
   }
+}
+
+// Returns a YYYY-MM-DD string for the given year / 1-based month, clamping the
+// day to the month's length so e.g. day 31 in April becomes the 30th and day 31
+// in February becomes the 28th/29th (never skipped, never overflowed).
+function clampDay(year: number, month1: number, day: number): string {
+  const daysInMonth = new Date(Date.UTC(year, month1, 0)).getUTCDate();
+  const d = Math.min(Math.max(day, 1), daysInMonth);
+  return `${year}-${String(month1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+// Adds n calendar days to a YYYY-MM-DD string (UTC, no timezone shift).
+function addDaysIso(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+type BillLike = {
+  frequency: string;
+  dueDay: number;
+  startDate: string | null;
+  endDate: string | null;
+};
+
+// Produces every occurrence date (YYYY-MM-DD) for a bill within the forecast
+// window [todayStr, windowEndStr], honoring the bill's own start/end dates.
+//
+//   - monthly           → anchored on dueDay, clamped to each month's length
+//   - weekly / biweekly → stepped in days from the first bill date (startDate)
+//   - quarterly         → stepped +3 months from the first bill date
+//   - annual            → stepped +12 months from the first bill date
+//
+// The same start/end-date clamping applies to every frequency, so a bill never
+// generates rows before its start date or after its end date.
+export function generateBillOccurrences(
+  bill: BillLike,
+  todayStr: string,
+  windowEndStr: string,
+): string[] {
+  const freq = bill.frequency.toLowerCase();
+
+  // Clamp the generation window to the bill's own start/end dates.
+  const startBoundary =
+    bill.startDate && bill.startDate > todayStr ? bill.startDate : todayStr;
+  const endBoundary =
+    bill.endDate && bill.endDate < windowEndStr ? bill.endDate : windowEndStr;
+  if (startBoundary > endBoundary) return [];
+
+  const out: string[] = [];
+  const MAX = 2000; // safety guard against pathological inputs
+
+  if (freq === "monthly") {
+    let y = Number(startBoundary.slice(0, 4));
+    let m = Number(startBoundary.slice(5, 7));
+    for (let i = 0; i < MAX; i++) {
+      const occ = clampDay(y, m, bill.dueDay);
+      if (occ > endBoundary) break;
+      if (occ >= startBoundary) out.push(occ);
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+    return out;
+  }
+
+  // Date-driven frequencies. Seed from the first bill date when set; otherwise
+  // fall back to dueDay in today's month for legacy rows without a start date.
+  const seed =
+    bill.startDate ??
+    clampDay(Number(todayStr.slice(0, 4)), Number(todayStr.slice(5, 7)), bill.dueDay);
+
+  const step = (iso: string): string => {
+    switch (freq) {
+      case "weekly": return addDaysIso(iso, 7);
+      case "biweekly": case "bi-weekly": return addDaysIso(iso, 14);
+      case "quarterly": return addMonthsIso(iso, 3);
+      case "annual": case "annually": case "yearly": return addMonthsIso(iso, 12);
+      default: return addMonthsIso(iso, 1);
+    }
+  };
+
+  let current = seed;
+  let guard = 0;
+  while (current < startBoundary && guard++ < MAX) current = step(current);
+  guard = 0;
+  while (current <= endBoundary && guard++ < MAX) {
+    out.push(current);
+    current = step(current);
+  }
+  return out;
 }
 
 function serialize(tx: typeof forecastedTransactionsTable.$inferSelect) {

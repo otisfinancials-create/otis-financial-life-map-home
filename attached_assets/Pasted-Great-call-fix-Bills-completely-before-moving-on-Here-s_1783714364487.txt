@@ -1,0 +1,47 @@
+Great call — fix Bills completely before moving on. Here's your prompt:
+
+"Please fix the following bugs and implement the following enhancements in the Bills section. Address every item completely before finishing.
+### BUGS TO FIX
+1. Annual bill not appearing in forecast (TC-B02)
+ An annual bill with a start date of 8/20/2026 is not showing in the forecast at all. Fix the forecast generation engine to correctly handle annual bills — they should appear once per year on their specified date, starting from the start date entered.
+2. End date not being respected in forecast (TC-B06)
+ Bills with an end date are continuing to appear in the forecast past their end date. Fix the forecast engine so that no bill rows are generated after the bill's end date.
+3. Start date not being respected in forecast (TC-B07)
+ Bills with a future start date are appearing in the forecast immediately instead of waiting until the start date. Fix the forecast engine so that no bill rows are generated before the bill's start date.
+4. URL field accepts invalid format (TC-B11)
+ The Company URL field currently accepts any text including invalid URLs. Add format validation: the URL must contain at least one dot and no spaces. Show a subtle warning message below the field if the format is invalid: "Please enter a valid URL (e.g. netflix.com)". The bill should still save if the URL is blank — it is optional.
+5. Due day validation shows duplicate error messages (TC-B12)
+ When a user enters an invalid due day (e.g. 32), both a red font inline message AND a popup are showing the same error. Remove the popup. Keep only the inline red font validation message below the field, consistent with all other field validation in the form.
+6. End date before start date is allowed (TC-B13)
+ The form currently allows saving a bill where the end date is before the start date. Add a logic check: if end date is before start date, show an inline validation error: "End date must be after start date." Prevent saving until this is corrected.
+7. Bill due on day 31 missing from months with fewer than 31 days (TC-B14)
+ A bill set to due day 31 does not appear in the forecast for months with 30 days (April, June, September, November) or 28/29 days (February). Fix the forecast engine so that when a bill is due on day 31 (or 30 for February), it falls on the last day of that month instead of being skipped entirely. Same logic applies to day 30 bills in February.
+---
+### ENHANCEMENTS TO IMPLEMENT
+8. Delete button with confirmation dialog
+ Add a Delete button to each bill row in the bills table. When clicked, show a confirmation dialog: "This will permanently remove this bill and all its forecast data. This cannot be undone. Are you sure?" with Cancel and Delete buttons. On confirmation, hard delete the bill and all its associated forecasted_transactions rows.
+9. Hide/Show Inactive Bills toggle
+ Change the default bills list view to show active bills only. Add a toggle button above the table labeled "Show Inactive (N)" where N is the count of inactive bills. When toggled on, inactive bills appear at the bottom of the list with muted/grayed styling and a 💤 badge. When toggled off, inactive bills are hidden again.
+10. Variable bill behavior change
+ Instead of graying out the amount field when Variable is toggled on, keep the field active but change its label to "Estimated Amount". In the forecast, variable bill amounts should display with a ~ prefix (e.g. ~$150) and a tooltip on hover: "This is an estimate — your actual bill may vary". The Variable badge still shows on the bill row in the table.
+11. Dynamic due date field based on frequency
+ Change the due date field behavior based on the selected frequency:
+Monthly → label: "Due day of month" — number input 1-31 only
+Weekly → label: "First bill date" — date picker (required)
+Bi-weekly → label: "First bill date" — date picker (required)
+Quarterly → label: "First bill date" — date picker (required, app calculates subsequent quarters automatically)
+Annual → label: "Annual due date" — month and day picker (required)
+Below the date field, show a real-time plain English preview that updates as the user fills in the form: "This bill will next appear on August 14, then September 14, then October 14..." Show the next 3 occurrences. This preview should update instantly as frequency or date values change.
+First bill date is required for Weekly, Bi-weekly, Quarterly, and Annual frequencies. Monthly due day defaults to blank (do not default to 1 — user must enter it).
+12. Payment method required field
+ Make Payment Method a required field. The user must select Auto-pay, Manual, or Credit Card before saving. Show inline validation error if left blank: "Please select a payment method."
+13. Field character limits
+Bill Name: maximum 100 characters. Show character count below field (e.g. "45/100"). In the bills table, truncate long names with ellipsis (...) and show full name on hover tooltip.
+Company Website: maximum 100 characters
+Notes: maximum 100 characters. Show character count below field.
+### AFTER ALL CHANGES:
+ 1. Make sure all forecast generation changes (bugs 1, 2, 3, 7) are applied consistently — the same fix should work for all bill frequencies (monthly, bi-weekly, weekly, quarterly, annual)
+ 2. Re-seed the forecast for user_id=1 to pick up all the fixes
+ 3. Confirm all form validations are visually consistent — inline red text below the field, no popups
+ 4. Push all changes to GitHub when complete
+

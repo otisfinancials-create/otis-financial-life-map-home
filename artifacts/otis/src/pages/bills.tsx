@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -69,7 +69,8 @@ export default function Bills() {
   const [searchTerm, setSearchTerm] = useState("");
   const [billToEdit, setBillToEdit] = useState<Bill | undefined>(undefined);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [billToDeactivate, setBillToDeactivate] = useState<Bill | undefined>(undefined);
+  const [billToDelete, setBillToDelete] = useState<Bill | undefined>(undefined);
+  const [showInactive, setShowInactive] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -78,10 +79,25 @@ export default function Bills() {
   const updateBill = useUpdateBill();
   const { sync: syncForecast } = useSyncForecast();
 
-  const filteredBills = bills?.filter((bill) =>
-    bill.billName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    bill.category.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const searchedBills = useMemo(
+    () =>
+      bills?.filter((bill) =>
+        bill.billName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        bill.category.toLowerCase().includes(searchTerm.toLowerCase())
+      ) || [],
+    [bills, searchTerm],
+  );
+
+  const inactiveCount = useMemo(
+    () => searchedBills.filter((b) => !b.isActive).length,
+    [searchedBills],
+  );
+
+  // Active bills first; inactive bills (when shown) sorted to the bottom.
+  const visibleBills = useMemo(() => {
+    const list = showInactive ? searchedBills : searchedBills.filter((b) => b.isActive);
+    return [...list].sort((a, b) => Number(b.isActive) - Number(a.isActive));
+  }, [searchedBills, showInactive]);
 
   const handleEdit = (bill: Bill) => {
     setBillToEdit(bill);
@@ -105,20 +121,20 @@ export default function Bills() {
     );
   };
 
-  const handleDeactivate = () => {
-    if (!billToDeactivate) return;
-    deleteBill.mutate({ id: billToDeactivate.id }, {
+  const handleDelete = () => {
+    if (!billToDelete) return;
+    deleteBill.mutate({ id: billToDelete.id }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetUpcomingBillsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-        toast({ title: "Bill deactivated", description: "It will no longer appear in your forecast." });
-        setBillToDeactivate(undefined);
+        toast({ title: "Bill deleted", description: "It and its forecast entries have been removed." });
+        setBillToDelete(undefined);
         syncForecast();
       },
       onError: () => {
-        toast({ title: "Failed to deactivate bill", variant: "destructive" });
-        setBillToDeactivate(undefined);
+        toast({ title: "Failed to delete bill", variant: "destructive" });
+        setBillToDelete(undefined);
       },
     });
   };
@@ -141,6 +157,14 @@ export default function Bills() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          {inactiveCount > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setShowInactive((v) => !v)}
+            >
+              {showInactive ? "Hide Inactive" : `Show Inactive (${inactiveCount})`}
+            </Button>
+          )}
           <BillDialog
             trigger={
               <Button>
@@ -159,7 +183,7 @@ export default function Bills() {
           <div className="p-8 space-y-4">
             {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
           </div>
-        ) : filteredBills.length > 0 ? (
+        ) : visibleBills.length > 0 ? (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -175,8 +199,11 @@ export default function Bills() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredBills.map((bill) => (
-                  <TableRow key={bill.id} className="border-border group">
+                {visibleBills.map((bill) => (
+                  <TableRow
+                    key={bill.id}
+                    className={`border-border group ${bill.isActive ? "" : "opacity-60"}`}
+                  >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-1.5">
                         {bill.companyUrl ? (
@@ -184,17 +211,29 @@ export default function Bills() {
                             href={bill.companyUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="hover:text-primary transition-colors flex items-center gap-1 group/link"
+                            title={bill.billName}
+                            className="hover:text-primary transition-colors flex items-center gap-1 group/link max-w-[200px]"
                           >
-                            {bill.billName}
-                            <ExternalLink className="h-3 w-3 opacity-0 group-hover/link:opacity-60 transition-opacity" />
+                            <span className="truncate">{bill.billName}</span>
+                            <ExternalLink className="h-3 w-3 shrink-0 opacity-0 group-hover/link:opacity-60 transition-opacity" />
                           </a>
                         ) : (
-                          bill.billName
+                          <span className="truncate max-w-[200px]" title={bill.billName}>
+                            {bill.billName}
+                          </span>
                         )}
                         {bill.isVariable && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground shrink-0">
                             Var
+                          </Badge>
+                        )}
+                        {!bill.isActive && (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground shrink-0 flex items-center gap-0.5"
+                          >
+                            <Moon className="h-2.5 w-2.5" />
+                            Inactive
                           </Badge>
                         )}
                       </div>
@@ -242,11 +281,11 @@ export default function Bills() {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => setBillToDeactivate(bill)}
+                            onClick={() => setBillToDelete(bill)}
                             className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
-                            Deactivate
+                            Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -282,24 +321,25 @@ export default function Bills() {
       />
 
       <AlertDialog
-        open={!!billToDeactivate}
-        onOpenChange={(open) => !open && setBillToDeactivate(undefined)}
+        open={!!billToDelete}
+        onOpenChange={(open) => !open && setBillToDelete(undefined)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate this bill?</AlertDialogTitle>
+            <AlertDialogTitle>Delete this bill?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{billToDeactivate?.billName}" will be marked inactive and removed from future forecasts.
-              You can re-activate it at any time by toggling it back on.
+              "{billToDelete?.billName}" and all of its forecasted transactions will be permanently
+              deleted. This cannot be undone. To keep the bill but exclude it from your forecast,
+              toggle it inactive instead.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeactivate}
+              onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteBill.isPending ? "Deactivating..." : "Deactivate"}
+              {deleteBill.isPending ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

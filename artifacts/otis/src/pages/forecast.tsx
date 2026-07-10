@@ -730,7 +730,13 @@ export default function Forecast() {
                                 ) : (
                                   <span
                                     className={`font-mono text-sm ${tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-foreground"}`}
-                                    title={tx.isActual ? "Locked — already paid" : "Double-click to edit"}
+                                    title={
+                                      tx.isVariable
+                                        ? "This is an estimate — your actual bill may vary"
+                                        : tx.isActual
+                                        ? "Locked — already paid"
+                                        : "Double-click to edit"
+                                    }
                                   >
                                     {tx.isVariable && <span className="text-muted-foreground mr-0.5">~</span>}
                                     {tx.transactionType === "income" ? "+" : "−"}
