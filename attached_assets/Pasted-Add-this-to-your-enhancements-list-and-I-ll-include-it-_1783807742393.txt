@@ -1,0 +1,31 @@
+Add this to your enhancements list and I'll include it in the next fix prompt:
+
+Enhancement: Actual Balance Sync
+"Add an 'Actual Balance Sync' feature to the Forecast page. This allows users to reconcile their forecasted running balance against their real bank account balance at any point.
+Here's how it works:
+1. Sync Button — Add a small "Sync Balance 🔄" button in the Forecast controls bar, next to the Add Entry button
+2. When clicked — Open a simple modal with:
+
+"What is your actual checking account balance today?" — number input
+"As of date" — date picker (defaults to today)
+A helper note: "Check your bank app or online banking for your current balance"
+Cancel and Sync buttons
+
+3. What happens when synced:
+
+Calculate the variance: Actual Balance - Forecasted Balance for that date
+If variance is $0 — show: "You're perfectly on track! No adjustment needed." ✅
+If variance is positive — show: "Your actual balance is $X higher than forecasted. This could be from untracked income or lower spending than expected."
+If variance is negative — show: "Your actual balance is $X lower than forecasted. This could be from untracked expenses or bills paid early."
+Insert a one-time adjustment row in forecasted_transactions on that date labeled: "Balance Adjustment (Synced [date])" with the variance amount (positive or negative)
+Running balance recalculates forward from that point using the actual balance as the new baseline
+
+4. Sync history — Show a small "Last synced: [date], variance was [amount]" note below the Sync button so users can see when they last reconciled
+5. Database — Add a balance_syncs table:
+balance_syncs (
+  id, user_id, sync_date, 
+  forecasted_balance, actual_balance, 
+  variance, created_at
+)
+6. Visual indicator — Balance Adjustment rows in the ledger should show in a distinct color (blue) with a 🔄 icon so users can clearly distinguish them from bills and income rows
+This feature turns Otis from a pure forecasting tool into a living, self-correcting financial ledger that stays accurate even when real life doesn't match the plan

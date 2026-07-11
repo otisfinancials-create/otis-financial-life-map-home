@@ -56,6 +56,10 @@ A personal finance web app for high-earning households. Combines cash flow forec
 - **Loans** — placeholder (coming soon)
 - **Otis AI** — AI assistant persona placeholder (Claude integration coming soon)
 
+## Enhancements backlog (planned, not yet built)
+
+- **Actual Balance Sync** (Forecast page) — reconcile forecasted running balance against the real bank balance. Spec: `attached_assets/Pasted-Add-this-to-your-enhancements-list-and-I-ll-include-it-_1783807742393.txt`. Summary: "Sync Balance" button in the Forecast controls bar opens a modal (actual balance + as-of date, defaults today); computes variance = actual − forecasted for that date; shows on-track/higher/lower message; inserts a one-time "Balance Adjustment (Synced [date])" row into `forecasted_transactions` so the running balance rebaselines forward; new `balance_syncs` table (id, user_id, sync_date, forecasted_balance, actual_balance, variance, created_at); "Last synced" note below the button; adjustment rows styled distinctly in blue with a sync icon (use a lucide icon, not the emoji from the spec, per no-emoji preference).
+
 ## User preferences
 
 - Light mode as default
