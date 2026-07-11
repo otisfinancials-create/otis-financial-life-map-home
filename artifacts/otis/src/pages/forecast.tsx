@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef, useEffect, Fragment } from "react";
 import { format, addMonths, subDays } from "date-fns";
 import {
-  ExternalLink, Plus, Trash2, Check, RefreshCw, Search,
-  ChevronDown, ChevronRight, Zap, GripVertical,
+  ExternalLink, Plus, Trash2, Check, RefreshCw, RefreshCcw, Search,
+  ChevronDown, ChevronRight, Zap, GripVertical, Scale,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -17,9 +17,13 @@ import {
   useGetUserSettings,
   useSaveUserSettings,
   useListBills,
+  useSyncBalance,
+  useListBalanceSyncs,
   getListForecastQueryKey,
   getGetMonthlyForecastQueryKey,
   getGetUserSettingsQueryKey,
+  getListBalanceSyncsQueryKey,
+  type BalanceSync,
 } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
@@ -72,6 +76,7 @@ const CAT_STYLES: Record<string, string> = {
   Transportation:"bg-yellow-100 text-yellow-700",
   salary:        "bg-emerald-100 text-emerald-700",
   Other:         "bg-gray-100 text-gray-600",
+  Adjustment:    "bg-sky-100 text-sky-700",
   pets:              "bg-teal-100 text-teal-700",
   vacations:         "bg-teal-100 text-teal-700",
   home_improvements: "bg-teal-100 text-teal-700",
@@ -99,6 +104,7 @@ type TxRow = {
   sourceBillId?: number | null;
   sourcePayId?: number | null;
   sourceLifeEventId?: number | null;
+  sourceBalanceSyncId?: number | null;
   isActual: boolean;
   isCommitted: boolean;
   createdAt: string;
@@ -144,6 +150,11 @@ export default function Forecast() {
   });
   const [selectedTx, setSelectedTx] = useState<TxRow | null>(null);
 
+  // balance sync
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncForm, setSyncForm] = useState({ actualBalance: "", syncDate: todayStr });
+  const [syncResult, setSyncResult] = useState<BalanceSync | null>(null);
+
   // drag-to-move (change date) + drag-to-reorder (within a date)
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<{ id: number; pos: "before" | "after" } | null>(null);
@@ -172,6 +183,8 @@ export default function Forecast() {
   const { data: monthlyData = [], isLoading: loadingMonthly } = useGetMonthlyForecast();
   const { data: userSettings, isLoading: loadingSettings } = useGetUserSettings();
   const { data: bills = [] } = useListBills();
+  const { data: balanceSyncs = [] } = useListBalanceSyncs();
+  const lastSync = balanceSyncs[0] ?? null;
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const regenerate = useRegenerateForecast();
@@ -180,6 +193,7 @@ export default function Forecast() {
   const createTx   = useCreateForecastedTransaction();
   const reorderTx  = useReorderForecast();
   const saveSettings = useSaveUserSettings();
+  const syncBalance = useSyncBalance();
 
   // ── Bills lookup (for companyUrl + isVariable) ────────────────────────────
   const billsMap = useMemo(() => {
@@ -215,8 +229,10 @@ export default function Forecast() {
     // Anchor the balance so that the balance at the start of today equals the
     // user's starting balance. Past (lookback) rows are back-filled by removing
     // their net effect from the anchor, so today/future balances stay unchanged.
+    // Balance-sync adjustments are excluded from the back-fill: they represent a
+    // real-world reconciliation, so they rebaseline the balance forward.
     const pastNet = sorted
-      .filter((t) => t.transactionDate < todayStr)
+      .filter((t) => t.transactionDate < todayStr && t.sourceBalanceSyncId == null)
       .reduce((sum, t) => sum + (t.transactionType === "income" ? t.amount : -t.amount), 0);
     let running = startingBalance - pastNet;
     return sorted.map((t) => {
@@ -444,6 +460,25 @@ export default function Forecast() {
     });
   };
 
+  const handleSyncBalance = () => {
+    const actual = parseFloat(syncForm.actualBalance);
+    if (isNaN(actual) || !syncForm.syncDate) return;
+    syncBalance.mutate({ data: { actualBalance: actual, syncDate: syncForm.syncDate } }, {
+      onSuccess: (result) => {
+        invalidate();
+        queryClient.invalidateQueries({ queryKey: getListBalanceSyncsQueryKey() });
+        setSyncResult(result);
+      },
+      onError: () => toast({ title: "Failed to sync balance", variant: "destructive" }),
+    });
+  };
+
+  const openSyncModal = () => {
+    setSyncResult(null);
+    setSyncForm({ actualBalance: "", syncDate: todayStr });
+    setShowSyncModal(true);
+  };
+
   const toggleMonth = (label: string) => {
     setExpandedMonths((prev) => {
       const next = new Set(prev);
@@ -510,6 +545,9 @@ export default function Forecast() {
 
         <div className="flex-1" />
 
+        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={openSyncModal}>
+          <Scale className="h-3.5 w-3.5 mr-1" /> Sync Balance
+        </Button>
         <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowManualModal(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Add Entry
         </Button>
@@ -539,6 +577,20 @@ export default function Forecast() {
               Balance seeded from{" "}
               <span className="text-foreground font-mono font-medium"><FormatCurrency amount={startingBalance} /></span>
               {" "}as of {userSettings?.balanceAsOfDate ?? "—"}.
+              {lastSync && (
+                <span className="ml-2 inline-flex items-center gap-1 text-sky-700">
+                  <RefreshCcw className="h-3 w-3" />
+                  Last synced {format(new Date(lastSync.syncDate + "T00:00:00"), "MMM d, yyyy")}
+                  {lastSync.variance !== 0 && (
+                    <>
+                      {" — variance "}
+                      <span className="font-mono">
+                        {lastSync.variance > 0 ? "+" : "−"}<FormatCurrency amount={Math.abs(lastSync.variance)} />
+                      </span>
+                    </>
+                  )}
+                </span>
+              )}
             </span>
             <button className="underline underline-offset-2 hover:text-foreground"
               onClick={() => { setBalanceInput(String(startingBalance)); setShowBalanceModal(true); }}>
@@ -611,7 +663,8 @@ export default function Forecast() {
                         {/* Transaction rows */}
                         {group.rows.map((tx, idx) => {
                           const isNeg     = tx.runningBalance < 0;
-                          const isManual  = !tx.sourceBillId && !tx.sourcePayId;
+                          const isAdjustment = tx.sourceBalanceSyncId != null;
+                          const isManual  = !tx.sourceBillId && !tx.sourcePayId && !isAdjustment;
                           const isEditing = editingId === tx.id;
                           const isToday   = tx.transactionDate === todayStr;
                           const isPast    = tx.transactionDate < todayStr;
@@ -642,6 +695,8 @@ export default function Forecast() {
                                 draggingId !== null && draggingId !== tx.id && draggedRow?.transactionDate !== tx.transactionDate ? "hover:border-primary hover:border-2" : "",
                                 isNeg
                                   ? "bg-red-500/[0.06] hover:bg-red-500/[0.12]"
+                                  : isAdjustment
+                                  ? "bg-sky-500/[0.06] hover:bg-sky-500/[0.12]"
                                   : "hover:bg-muted/40",
                               ].join(" ")}
                             >
@@ -691,6 +746,12 @@ export default function Forecast() {
                                 {isManual && (
                                   <Badge className="shrink-0 text-[9px] px-1.5 h-4 bg-muted text-muted-foreground border-0 rounded-full leading-none">Manual</Badge>
                                 )}
+                                {isAdjustment && (
+                                  <Badge className="shrink-0 flex items-center gap-1 text-[9px] px-1.5 h-4 bg-sky-100 text-sky-700 border-0 rounded-full leading-none">
+                                    <RefreshCcw className="h-2.5 w-2.5" />
+                                    Synced
+                                  </Badge>
+                                )}
                               </div>
 
                               {/* Category */}
@@ -702,8 +763,8 @@ export default function Forecast() {
 
                               {/* Type */}
                               <div className="px-4 py-2.5 flex items-center">
-                                <span className={`text-[11px] font-medium ${tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-zinc-400"}`}>
-                                  {tx.transactionType === "income" ? "Income" : tx.sourceLifeEventId != null ? "Life Event" : "Bill"}
+                                <span className={`text-[11px] font-medium ${isAdjustment ? "text-sky-600" : tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-zinc-400"}`}>
+                                  {isAdjustment ? "Adjustment" : tx.transactionType === "income" ? "Income" : tx.sourceLifeEventId != null ? "Life Event" : "Bill"}
                                 </span>
                               </div>
 
@@ -729,7 +790,7 @@ export default function Forecast() {
                                   />
                                 ) : (
                                   <span
-                                    className={`font-mono text-sm ${tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-foreground"}`}
+                                    className={`font-mono text-sm ${isAdjustment ? "text-sky-600" : tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-foreground"}`}
                                     title={
                                       tx.isVariable
                                         ? "This is an estimate — your actual bill may vary"
@@ -963,6 +1024,111 @@ export default function Forecast() {
       </Dialog>
 
       {/* ══════════════════════════════════════════════════════════════════════
+          SYNC BALANCE MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
+      <Dialog open={showSyncModal} onOpenChange={(open) => { setShowSyncModal(open); if (!open) setSyncResult(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Sync Balance</DialogTitle>
+          </DialogHeader>
+
+          {!syncResult ? (
+            <>
+              <div className="space-y-3 py-1">
+                <p className="text-sm text-muted-foreground">
+                  Check your bank app and enter your real account balance. Otis will compare it against the forecast and rebaseline the running balance going forward.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Actual balance</label>
+                    <div className="relative mt-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                      <Input
+                        value={syncForm.actualBalance}
+                        onChange={(e) => setSyncForm((f) => ({ ...f, actualBalance: e.target.value }))}
+                        className="pl-7 font-mono"
+                        placeholder="0.00"
+                        type="number"
+                        step="0.01"
+                        onKeyDown={(e) => { if (e.key === "Enter") handleSyncBalance(); }}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">As of date</label>
+                    <Input
+                      type="date"
+                      value={syncForm.syncDate}
+                      max={todayStr}
+                      onChange={(e) => setSyncForm((f) => ({ ...f, syncDate: e.target.value }))}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                {lastSync && (
+                  <p className="text-xs text-muted-foreground">
+                    Last synced {format(new Date(lastSync.syncDate + "T00:00:00"), "MMM d, yyyy")}
+                    {lastSync.variance !== 0 && (
+                      <> — variance was {lastSync.variance > 0 ? "+" : "−"}<FormatCurrency amount={Math.abs(lastSync.variance)} /></>
+                    )}
+                  </p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowSyncModal(false)}>Cancel</Button>
+                <Button onClick={handleSyncBalance} disabled={syncBalance.isPending || syncForm.actualBalance === ""}>
+                  {syncBalance.isPending ? "Syncing…" : "Sync Balance"}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <div className="space-y-3 py-1">
+                {syncResult.variance === 0 ? (
+                  <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <Check className="h-4 w-4 mt-0.5 text-emerald-600 shrink-0" />
+                    <p className="text-sm text-emerald-800">
+                      You're right on track. Your actual balance matches the forecast exactly.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
+                    <RefreshCcw className="h-4 w-4 mt-0.5 text-sky-600 shrink-0" />
+                    <p className="text-sm text-sky-800">
+                      Your actual balance is{" "}
+                      <span className="font-mono font-semibold"><FormatCurrency amount={Math.abs(syncResult.variance)} /></span>{" "}
+                      {syncResult.variance > 0 ? "higher" : "lower"} than forecasted. A balance adjustment was added on{" "}
+                      {format(new Date(syncResult.syncDate + "T00:00:00"), "MMM d, yyyy")} so your projections now start from your real balance.
+                    </p>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-md border border-border px-3 py-2">
+                    <div className="text-[11px] text-muted-foreground">Forecasted</div>
+                    <div className="font-mono font-semibold">
+                      {syncResult.forecastedBalance < 0 && "−"}
+                      <FormatCurrency amount={Math.abs(syncResult.forecastedBalance)} />
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border px-3 py-2">
+                    <div className="text-[11px] text-muted-foreground">Actual</div>
+                    <div className="font-mono font-semibold">
+                      {syncResult.actualBalance < 0 && "−"}
+                      <FormatCurrency amount={Math.abs(syncResult.actualBalance)} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => { setShowSyncModal(false); setSyncResult(null); }}>Done</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ══════════════════════════════════════════════════════════════════════
           ADD MANUAL ENTRY MODAL
       ══════════════════════════════════════════════════════════════════════ */}
       <Dialog open={showManualModal} onOpenChange={setShowManualModal}>
@@ -1102,7 +1268,13 @@ export default function Forecast() {
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Type</div>
-                  <div className="text-sm">{selectedTx.transactionType === "income" ? "Income" : "Bill"}</div>
+                  <div className="text-sm">
+                    {selectedTx.sourceBalanceSyncId != null
+                      ? <span className="text-sky-600">Adjustment</span>
+                      : selectedTx.transactionType === "income" ? "Income"
+                      : selectedTx.sourceLifeEventId != null ? "Life Event"
+                      : "Bill"}
+                  </div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Running Balance</div>
@@ -1146,7 +1318,7 @@ export default function Forecast() {
                     Mark as Paid
                   </Button>
                 )}
-                {!selectedTx.sourceBillId && !selectedTx.sourcePayId && (
+                {!selectedTx.sourceBillId && !selectedTx.sourcePayId && selectedTx.sourceBalanceSyncId == null && (
                   <Button className="w-full" variant="destructive" onClick={() => handleDelete(selectedTx)}>
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Entry

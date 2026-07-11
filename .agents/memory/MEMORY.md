@@ -9,3 +9,4 @@
 - [Static HTML artifact](static-html-artifact.md) — to serve a plain HTML page, use react-vite but strip src/ + trim deps/tsconfig or typecheck fails; use relative asset hrefs under the mount path.
 - [Loans amortization parity](loans-amortization-parity.md) — amortization engine duplicated on server (routes/loans.ts) and client (components/loans/amortization.ts); change both in lockstep.
 - [Codegen transient reload errors](codegen-transient-errors.md) — Orval codegen briefly deletes generated files; ignore Vite/Metro reload errors in that window, restart Expo to clear Metro's cached failure.
+- [Forecast balance anchoring](forecast-balance-anchoring.md) — sync-adjustment rows must skip the past back-fill and survive regenerate/delete, or rebaselining silently breaks.

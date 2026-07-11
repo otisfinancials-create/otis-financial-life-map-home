@@ -7,3 +7,4 @@ export * from "./forecasted_transactions";
 export * from "./life_events";
 export * from "./scenarios";
 export * from "./user_settings";
+export * from "./balance_syncs";

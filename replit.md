@@ -51,14 +51,14 @@ A personal finance web app for high-earning households. Combines cash flow forec
 - **Dashboard** — net worth, monthly cash flow chart, upcoming bills, account summary
 - **Bills** — full CRUD for recurring bills with categories, frequency, due day, active/inactive
 - **Accounts** — financial accounts grouped by type (checking, savings, investment, retirement, loan)
-- **Forecast** — 12-month cash flow projection by month, per-transaction ledger
+- **Forecast** — 12-month cash flow projection by month, per-transaction ledger. Includes **Actual Balance Sync**: "Sync Balance" button opens a modal (actual balance + as-of date, restricted to the last 7 days); server computes variance vs the ledger's displayed forecasted balance and, if nonzero, inserts a one-time "Balance Adjustment (Synced [date])" row (`sourceBalanceSyncId` set) that rebaselines the running balance forward. Sync history lives in `balance_syncs`; latest sync shown as a "Last synced" note. Adjustment rows are sky-blue, labeled "Adjustment", cannot be deleted (guarded in UI and API), and survive forecast regeneration.
 - **Life Events** — full CRUD for major milestones (Pets, Vacations, Home Improvements, Education, Celebrations, Vehicle, Medical, Custom) with timing (one-time / spread-over-months / recurring), priority (Must Do / Planning To / Just Dreaming), and notes. Costs flow into the forecast as `forecasted_transactions` marked with `sourceLifeEventId` (shown in teal). Dashboard has an "Upcoming Life Events" widget and life-event costs are stacked as a distinct teal series on the Cash Flow Trend chart.
 - **Loans** — placeholder (coming soon)
 - **Otis AI** — AI assistant persona placeholder (Claude integration coming soon)
 
 ## Enhancements backlog (planned, not yet built)
 
-- **Actual Balance Sync** (Forecast page) — reconcile forecasted running balance against the real bank balance. Spec: `attached_assets/Pasted-Add-this-to-your-enhancements-list-and-I-ll-include-it-_1783807742393.txt`. Summary: "Sync Balance" button in the Forecast controls bar opens a modal (actual balance + as-of date, defaults today); computes variance = actual − forecasted for that date; shows on-track/higher/lower message; inserts a one-time "Balance Adjustment (Synced [date])" row into `forecasted_transactions` so the running balance rebaselines forward; new `balance_syncs` table (id, user_id, sync_date, forecasted_balance, actual_balance, variance, created_at); "Last synced" note below the button; adjustment rows styled distinctly in blue with a sync icon (use a lucide icon, not the emoji from the spec, per no-emoji preference).
+- (empty)
 
 ## User preferences
 

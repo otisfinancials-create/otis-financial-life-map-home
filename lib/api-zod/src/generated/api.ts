@@ -845,6 +845,7 @@ export const ListForecastResponseItem = zod.object({
   "sourceBillId": zod.number().nullish(),
   "sourcePayId": zod.number().nullish(),
   "sourceLifeEventId": zod.number().nullish(),
+  "sourceBalanceSyncId": zod.number().nullish(),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
   "sortOrder": zod.number(),
@@ -878,6 +879,7 @@ export const CreateForecastedTransactionResponse = zod.object({
   "sourceBillId": zod.number().nullish(),
   "sourcePayId": zod.number().nullish(),
   "sourceLifeEventId": zod.number().nullish(),
+  "sourceBalanceSyncId": zod.number().nullish(),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
   "sortOrder": zod.number(),
@@ -907,6 +909,38 @@ export const RegenerateForecastResponse = zod.object({
   "created": zod.number(),
   "message": zod.string()
 })
+
+
+/**
+ * @summary Reconcile the forecasted running balance against the actual bank balance
+ */
+export const SyncBalanceBody = zod.object({
+  "actualBalance": zod.number(),
+  "syncDate": zod.string()
+})
+
+export const SyncBalanceResponse = zod.object({
+  "id": zod.number(),
+  "syncDate": zod.string(),
+  "forecastedBalance": zod.number(),
+  "actualBalance": zod.number(),
+  "variance": zod.number(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary List balance sync history (most recent first)
+ */
+export const ListBalanceSyncsResponseItem = zod.object({
+  "id": zod.number(),
+  "syncDate": zod.string(),
+  "forecastedBalance": zod.number(),
+  "actualBalance": zod.number(),
+  "variance": zod.number(),
+  "createdAt": zod.string()
+})
+export const ListBalanceSyncsResponse = zod.array(ListBalanceSyncsResponseItem)
 
 
 /**
@@ -948,6 +982,7 @@ export const UpdateForecastedTransactionResponse = zod.object({
   "sourceBillId": zod.number().nullish(),
   "sourcePayId": zod.number().nullish(),
   "sourceLifeEventId": zod.number().nullish(),
+  "sourceBalanceSyncId": zod.number().nullish(),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
   "sortOrder": zod.number(),

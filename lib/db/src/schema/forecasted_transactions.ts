@@ -13,6 +13,7 @@ export const forecastedTransactionsTable = pgTable("forecasted_transactions", {
   sourceBillId: integer("source_bill_id"),
   sourcePayId: integer("source_pay_id"),
   sourceLifeEventId: integer("source_life_event_id"),
+  sourceBalanceSyncId: integer("source_balance_sync_id"),
   isActual: boolean("is_actual").notNull().default(false),
   isCommitted: boolean("is_committed").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),

@@ -431,10 +431,26 @@ export interface ForecastedTransaction {
   sourcePayId?: number | null;
   /** @nullable */
   sourceLifeEventId?: number | null;
+  /** @nullable */
+  sourceBalanceSyncId?: number | null;
   isActual: boolean;
   isCommitted: boolean;
   sortOrder: number;
   createdAt: string;
+}
+
+export interface BalanceSync {
+  id: number;
+  syncDate: string;
+  forecastedBalance: number;
+  actualBalance: number;
+  variance: number;
+  createdAt: string;
+}
+
+export interface SyncBalanceInput {
+  actualBalance: number;
+  syncDate: string;
 }
 
 export interface ForecastedTransactionInput {

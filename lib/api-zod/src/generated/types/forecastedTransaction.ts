@@ -19,6 +19,8 @@ export interface ForecastedTransaction {
   sourcePayId?: number | null;
   /** @nullable */
   sourceLifeEventId?: number | null;
+  /** @nullable */
+  sourceBalanceSyncId?: number | null;
   isActual: boolean;
   isCommitted: boolean;
   sortOrder: number;

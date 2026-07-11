@@ -28,6 +28,7 @@ import type {
   AssetInput,
   AssetUpdate,
   AssetsSummary,
+  BalanceSync,
   Bill,
   BillInput,
   BillUpdate,
@@ -61,6 +62,7 @@ import type {
   SavedScenario,
   SavedScenarioInput,
   ScenarioResult,
+  SyncBalanceInput,
   UpcomingBill,
   UserSettings,
   UserSettingsInput
@@ -3045,6 +3047,153 @@ export const useRegenerateForecast = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getRegenerateForecastMutationOptions(options));
     }
+
+export const getSyncBalanceUrl = () => {
+
+
+
+
+  return `/api/forecast/sync-balance`
+}
+
+/**
+ * @summary Reconcile the forecasted running balance against the actual bank balance
+ */
+export const syncBalance = async (syncBalanceInput: SyncBalanceInput, options?: RequestInit): Promise<BalanceSync> => {
+
+  return customFetch<BalanceSync>(getSyncBalanceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(syncBalanceInput)
+  }
+);}
+
+
+
+
+export const getSyncBalanceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncBalance>>, TError,{data: BodyType<SyncBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncBalance>>, TError,{data: BodyType<SyncBalanceInput>}, TContext> => {
+
+const mutationKey = ['syncBalance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncBalance>>, {data: BodyType<SyncBalanceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  syncBalance(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncBalanceMutationResult = NonNullable<Awaited<ReturnType<typeof syncBalance>>>
+    export type SyncBalanceMutationBody = BodyType<SyncBalanceInput>
+    export type SyncBalanceMutationError = ErrorType<void>
+
+    /**
+ * @summary Reconcile the forecasted running balance against the actual bank balance
+ */
+export const useSyncBalance = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncBalance>>, TError,{data: BodyType<SyncBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncBalance>>,
+        TError,
+        {data: BodyType<SyncBalanceInput>},
+        TContext
+      > => {
+      return useMutation(getSyncBalanceMutationOptions(options));
+    }
+
+export const getListBalanceSyncsUrl = () => {
+
+
+
+
+  return `/api/forecast/balance-syncs`
+}
+
+/**
+ * @summary List balance sync history (most recent first)
+ */
+export const listBalanceSyncs = async ( options?: RequestInit): Promise<BalanceSync[]> => {
+
+  return customFetch<BalanceSync[]>(getListBalanceSyncsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBalanceSyncsQueryKey = () => {
+    return [
+    `/api/forecast/balance-syncs`
+    ] as const;
+    }
+
+
+export const getListBalanceSyncsQueryOptions = <TData = Awaited<ReturnType<typeof listBalanceSyncs>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBalanceSyncs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBalanceSyncsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBalanceSyncs>>> = ({ signal }) => listBalanceSyncs({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBalanceSyncs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBalanceSyncsQueryResult = NonNullable<Awaited<ReturnType<typeof listBalanceSyncs>>>
+export type ListBalanceSyncsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List balance sync history (most recent first)
+ */
+
+export function useListBalanceSyncs<TData = Awaited<ReturnType<typeof listBalanceSyncs>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBalanceSyncs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBalanceSyncsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getReorderForecastUrl = () => {
 
