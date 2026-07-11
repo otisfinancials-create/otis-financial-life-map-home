@@ -2,7 +2,8 @@ import { useState, useMemo, useRef, useEffect, Fragment } from "react";
 import { format, addMonths, subDays } from "date-fns";
 import {
   ExternalLink, Plus, Trash2, Check, RefreshCw, RefreshCcw, Search,
-  ChevronDown, ChevronRight, Zap, GripVertical, Scale,
+  ChevronRight, Zap, GripVertical, Scale, Download,
+  X, RotateCcw, FileSpreadsheet, FileText, ClipboardCopy,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -15,7 +16,6 @@ import {
   useCreateForecastedTransaction,
   useReorderForecast,
   useGetUserSettings,
-  useSaveUserSettings,
   useListBills,
   useSyncBalance,
   useListBalanceSyncs,
@@ -52,6 +52,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import {
   BarChart,
@@ -77,6 +85,7 @@ const CAT_STYLES: Record<string, string> = {
   salary:        "bg-emerald-100 text-emerald-700",
   Other:         "bg-gray-100 text-gray-600",
   Adjustment:    "bg-sky-100 text-sky-700",
+  "Balance Update": "bg-sky-100 text-sky-700",
   pets:              "bg-teal-100 text-teal-700",
   vacations:         "bg-teal-100 text-teal-700",
   home_improvements: "bg-teal-100 text-teal-700",
@@ -91,6 +100,31 @@ const MANUAL_CATEGORIES = [
   "Housing","Subscriptions","Utilities","Insurance",
   "Health","Food","Taxes","Transportation","Other",
 ];
+
+// ─── Validation ──────────────────────────────────────────────────────────────
+
+const DESC_MAX = 100;
+// Numeric only: up to 9 digits before the decimal, up to 2 decimal places.
+const AMOUNT_RE = /^\d{1,9}(\.\d{1,2})?$/;
+
+function validateAmount(v: string): string | null {
+  if (!v.trim()) return "Amount is required";
+  if (!AMOUNT_RE.test(v.trim())) return "Enter a valid amount (up to 9 digits, max 2 decimal places)";
+  return null;
+}
+
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p className="text-xs text-destructive mt-1">{msg}</p>;
+}
+
+function CharCount({ value, max }: { value: string; max: number }) {
+  return (
+    <span className={`text-[10px] font-mono ${value.length > max ? "text-destructive" : "text-muted-foreground"}`}>
+      {value.length}/{max}
+    </span>
+  );
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -107,6 +141,10 @@ type TxRow = {
   sourceBalanceSyncId?: number | null;
   isActual: boolean;
   isCommitted: boolean;
+  status?: string | null;
+  notes?: string | null;
+  forecastedAmount?: number | null;
+  sortOrder: number;
   createdAt: string;
   runningBalance: number;
   isVariable: boolean;
@@ -141,18 +179,25 @@ export default function Forecast() {
   const editRef = useRef<HTMLInputElement>(null);
 
   // modals
-  const [showBalanceModal, setShowBalanceModal] = useState(false);
-  const [balanceInput, setBalanceInput] = useState("");
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualForm, setManualForm] = useState({
     description: "", amount: "",
     transactionDate: todayStr, category: "Other", transactionType: "expense",
   });
+  const [manualErrors, setManualErrors] = useState<Record<string, string>>({});
   const [selectedTx, setSelectedTx] = useState<TxRow | null>(null);
+  const [editForm, setEditForm] = useState({
+    transactionDate: "", description: "", category: "Other",
+    transactionType: "expense", amount: "", notes: "", isActual: false,
+  });
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [futurePaidDate, setFuturePaidDate] = useState<string | null>(null);
+  const [recurringPrompt, setRecurringPrompt] = useState<{ id: number; data: Record<string, unknown> } | null>(null);
 
-  // balance sync
+  // balance update ("Update Current Balance")
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [syncForm, setSyncForm] = useState({ actualBalance: "", syncDate: todayStr });
+  const [syncErrors, setSyncErrors] = useState<Record<string, string>>({});
   const [syncResult, setSyncResult] = useState<BalanceSync | null>(null);
 
   // drag-to-move (change date) + drag-to-reorder (within a date)
@@ -166,9 +211,10 @@ export default function Forecast() {
   const queryClient = useQueryClient();
 
   // ── Date window ──────────────────────────────────────────────────────────
-  // Rolling lookback: include the 7 days before today so recently-due
-  // transactions (paid / overdue) show alongside the future forecast.
-  const startDate = format(subDays(today, 7), "yyyy-MM-dd");
+  // Rolling lookback: include the 30 days before today so recently-due
+  // transactions (paid / missed / overdue) show alongside the future forecast.
+  // Anything older is archived — still stored in history, no longer shown.
+  const startDate = format(subDays(today, 30), "yyyy-MM-dd");
   const endDate   = format(addMonths(today, months), "yyyy-MM-dd");
 
   // ── Queries ──────────────────────────────────────────────────────────────
@@ -192,7 +238,6 @@ export default function Forecast() {
   const deleteTx   = useDeleteForecastedTransaction();
   const createTx   = useCreateForecastedTransaction();
   const reorderTx  = useReorderForecast();
-  const saveSettings = useSaveUserSettings();
   const syncBalance = useSyncBalance();
 
   // ── Bills lookup (for companyUrl + isVariable) ────────────────────────────
@@ -219,6 +264,14 @@ export default function Forecast() {
   const startingBalance: number = userSettings?.startingBalance ?? 0;
 
   // ── Running balance computation ───────────────────────────────────────────
+  // Balance Update rows (sourceBalanceSyncId set) are OVERRIDES: the balance
+  // shown at that row IS the entered value, and all later rows calculate
+  // forward from it. Missed rows never affect the balance.
+  //   - With overrides: anchor on the latest override dated ≤ today; roll
+  //     forward from it (later overrides re-anchor) and back-fill earlier rows
+  //     (earlier overrides re-anchor going backward too).
+  //   - Without overrides: anchor so the balance at the start of today equals
+  //     the user's starting balance, back-filling the lookback rows.
   const txsWithBalance = useMemo((): TxRow[] => {
     const sorted = [...rawTxs].sort(
       (a, b) =>
@@ -226,22 +279,49 @@ export default function Forecast() {
         a.sortOrder - b.sortOrder ||
         a.id - b.id,
     );
-    // Anchor the balance so that the balance at the start of today equals the
-    // user's starting balance. Past (lookback) rows are back-filled by removing
-    // their net effect from the anchor, so today/future balances stay unchanged.
-    // Balance-sync adjustments are excluded from the back-fill: they represent a
-    // real-world reconciliation, so they rebaseline the balance forward.
-    const pastNet = sorted
-      .filter((t) => t.transactionDate < todayStr && t.sourceBalanceSyncId == null)
-      .reduce((sum, t) => sum + (t.transactionType === "income" ? t.amount : -t.amount), 0);
-    let running = startingBalance - pastNet;
-    return sorted.map((t) => {
-      const signed = t.transactionType === "income" ? t.amount : -t.amount;
-      running += signed;
+    const isOverride = (t: typeof sorted[number]) => t.sourceBalanceSyncId != null;
+    const signed = (t: typeof sorted[number]) =>
+      t.status === "missed" ? 0 : t.transactionType === "income" ? t.amount : -t.amount;
+
+    const balances = new Array<number>(sorted.length).fill(0);
+    let anchorIdx = -1;
+    for (let i = 0; i < sorted.length; i++) {
+      if (isOverride(sorted[i]) && sorted[i].transactionDate <= todayStr) anchorIdx = i;
+    }
+
+    if (anchorIdx >= 0) {
+      // Forward from the anchor override.
+      let run = sorted[anchorIdx].amount;
+      balances[anchorIdx] = run;
+      for (let i = anchorIdx + 1; i < sorted.length; i++) {
+        run = isOverride(sorted[i]) ? sorted[i].amount : run + signed(sorted[i]);
+        balances[i] = run;
+      }
+      // Back-fill earlier rows; earlier overrides re-anchor the value.
+      let back = sorted[anchorIdx].amount;
+      for (let i = anchorIdx - 1; i >= 0; i--) {
+        const next = sorted[i + 1];
+        back -= isOverride(next) ? 0 : signed(next);
+        if (isOverride(sorted[i])) back = sorted[i].amount;
+        balances[i] = back;
+      }
+    } else {
+      const pastNet = sorted
+        .filter((t) => t.transactionDate < todayStr)
+        .reduce((sum, t) => sum + signed(t), 0);
+      let run = startingBalance - pastNet;
+      for (let i = 0; i < sorted.length; i++) {
+        // A future-dated override still re-anchors the running balance.
+        run = isOverride(sorted[i]) ? sorted[i].amount : run + signed(sorted[i]);
+        balances[i] = run;
+      }
+    }
+
+    return sorted.map((t, i) => {
       const bill = t.sourceBillId ? billsMap[t.sourceBillId] : undefined;
       return {
         ...t,
-        runningBalance: running,
+        runningBalance: balances[i],
         isVariable: bill?.isVariable ?? false,
         companyUrl: bill?.companyUrl ?? null,
       };
@@ -263,14 +343,18 @@ export default function Forecast() {
     [draggingId, txsWithBalance],
   );
 
-  // ── Current-balance marker (last paid/actual row) ─────────────────────────
+  // ── Current-balance marker ────────────────────────────────────────────────
+  // Only rows dated today or earlier qualify — marking a future row as paid
+  // must never move the Current Balance label (TC-F12). The most recent
+  // balance-update override wins over paid rows if it is later.
   const currentBalanceTxId = useMemo(() => {
     let id: number | null = null;
     for (const t of filtered) {
-      if (t.isActual) id = t.id;
+      if (t.transactionDate > todayStr) break;
+      if (t.isActual || t.sourceBalanceSyncId != null) id = t.id;
     }
     return id;
-  }, [filtered]);
+  }, [filtered, todayStr]);
 
   // ── Past / future boundary (for the TODAY divider) ────────────────────────
   const hasPastRows = useMemo(
@@ -292,8 +376,12 @@ export default function Forecast() {
         map[key] = { key, label: format(d, "MMMM yyyy"), rows: [], income: 0, expenses: 0, endBalance: 0 };
       }
       map[key].rows.push(t);
-      if (t.transactionType === "income") map[key].income += t.amount;
-      else map[key].expenses += t.amount;
+      // Balance updates are balance values (not cash flows) and missed rows
+      // never happened — neither counts toward monthly income/expense totals.
+      if (t.sourceBalanceSyncId == null && t.status !== "missed") {
+        if (t.transactionType === "income") map[key].income += t.amount;
+        else map[key].expenses += t.amount;
+      }
     }
     for (const g of Object.values(map)) {
       g.endBalance = g.rows.at(-1)?.runningBalance ?? 0;
@@ -307,14 +395,10 @@ export default function Forecast() {
     return Array.from(s).sort();
   }, [txsWithBalance]);
 
-  // ── Summary rows (monthly + cumulative end balance) ───────────────────────
-  const summaryRows = useMemo(() => {
-    let bal = startingBalance;
-    return monthlyData.slice(0, months).map((m) => {
-      bal += m.netCashFlow;
-      return { ...m, endBalance: bal };
-    });
-  }, [monthlyData, months, startingBalance]);
+  // ── Summary rows ──────────────────────────────────────────────────────────
+  // Derived directly from the ledger month groups so Income / Expenses / Net /
+  // End Balance always match exactly what the Ledger view shows (TC-F18).
+  const summaryRows = groups;
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -331,8 +415,31 @@ export default function Forecast() {
   };
 
   const handleMarkPaid = (tx: TxRow) => {
-    updateTx.mutate({ id: tx.id, data: { isActual: true } }, {
-      onSuccess: () => { invalidate(); toast({ title: "Marked as paid" }); setSelectedTx(null); },
+    // TC-F12: future rows cannot be marked as paid — explain instead.
+    if (tx.transactionDate > todayStr) {
+      setFuturePaidDate(tx.transactionDate);
+      return;
+    }
+    updateTx.mutate({ id: tx.id, data: { isActual: true, status: null } }, {
+      onSuccess: () => {
+        invalidate();
+        toast({ title: tx.transactionType === "income" ? "Confirmed received" : "Marked as paid" });
+        setSelectedTx(null);
+      },
+      onError: () => toast({ title: "Failed", variant: "destructive" }),
+    });
+  };
+
+  const handleMarkMissed = (tx: TxRow) => {
+    updateTx.mutate({ id: tx.id, data: { status: "missed", isActual: false } }, {
+      onSuccess: () => { invalidate(); toast({ title: "Marked as missed", description: "This row no longer affects the running balance." }); setSelectedTx(null); },
+      onError: () => toast({ title: "Failed", variant: "destructive" }),
+    });
+  };
+
+  const handleUnmarkMissed = (tx: TxRow) => {
+    updateTx.mutate({ id: tx.id, data: { status: null } }, {
+      onSuccess: () => { invalidate(); toast({ title: "Restored", description: "The row counts toward the running balance again." }); },
       onError: () => toast({ title: "Failed", variant: "destructive" }),
     });
   };
@@ -345,7 +452,7 @@ export default function Forecast() {
   };
 
   const startEdit = (tx: TxRow, e: React.MouseEvent) => {
-    if (tx.isActual) return;
+    if (tx.isActual || tx.sourceBalanceSyncId != null) return;
     e.stopPropagation();
     setEditingId(tx.id);
     setEditValue(String(tx.amount));
@@ -354,12 +461,20 @@ export default function Forecast() {
 
   const commitEdit = () => {
     if (editingId === null) return;
-    const val = parseFloat(editValue);
-    if (!isNaN(val) && val >= 0) {
-      updateTx.mutate({ id: editingId, data: { amount: val } }, {
+    const err = validateAmount(editValue);
+    if (!err) {
+      const prev = txsWithBalance.find((t) => t.id === editingId);
+      const val = parseFloat(editValue);
+      const data: { amount: number; forecastedAmount?: number } = { amount: val };
+      // First time the amount deviates from plan, remember the planned value
+      // so the variance indicator can show "vs planned".
+      if (prev && prev.forecastedAmount == null && val !== prev.amount) data.forecastedAmount = prev.amount;
+      updateTx.mutate({ id: editingId, data }, {
         onSuccess: () => invalidate(),
         onError: () => toast({ title: "Failed to save", variant: "destructive" }),
       });
+    } else if (editValue.trim() !== "") {
+      toast({ title: "Invalid amount", description: err, variant: "destructive" });
     }
     setEditingId(null);
   };
@@ -397,8 +512,15 @@ export default function Forecast() {
 
     // Same date → reorder the dragged row to its new position within that day.
     if (dragged.transactionDate === target.transactionDate) {
+      // Balance Update rows are pinned first (sortOrder -1) — never move them
+      // or allow drops relative to them.
+      if (dragged.sourceBalanceSyncId != null || target.sourceBalanceSyncId != null) return;
       const remaining = txsWithBalance
-        .filter((t) => t.transactionDate === target.transactionDate && t.id !== draggedId);
+        .filter((t) =>
+          t.transactionDate === target.transactionDate &&
+          t.id !== draggedId &&
+          t.sourceBalanceSyncId == null,
+        );
       const targetIdx = remaining.findIndex((t) => t.id === target.id);
       if (targetIdx === -1) return;
       const pos = currentDragOver?.id === target.id ? currentDragOver.pos : "before";
@@ -424,21 +546,17 @@ export default function Forecast() {
     });
   };
 
-  const handleSaveBalance = () => {
-    const val = parseFloat(balanceInput);
-    if (isNaN(val)) return;
-    saveSettings.mutate({ data: { startingBalance: val, balanceAsOfDate: todayStr } }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetUserSettingsQueryKey() });
-        setShowBalanceModal(false);
-        toast({ title: "Starting balance saved" });
-      },
-    });
-  };
-
   const handleAddManual = () => {
+    const errs: Record<string, string> = {};
+    if (!manualForm.description.trim()) errs.description = "Description is required";
+    else if (manualForm.description.length > DESC_MAX) errs.description = `Maximum ${DESC_MAX} characters`;
+    const amtErr = validateAmount(manualForm.amount);
+    if (amtErr) errs.amount = amtErr;
+    else if (parseFloat(manualForm.amount) <= 0) errs.amount = "Amount must be greater than zero";
+    if (!manualForm.transactionDate) errs.transactionDate = "Date is required";
+    setManualErrors(errs);
+    if (Object.keys(errs).length > 0) return;
     const amount = parseFloat(manualForm.amount);
-    if (!manualForm.description || isNaN(amount) || amount <= 0) return;
     createTx.mutate({
       data: {
         description: manualForm.description,
@@ -454,6 +572,7 @@ export default function Forecast() {
         invalidate();
         setShowManualModal(false);
         setManualForm({ description: "", amount: "", transactionDate: todayStr, category: "Other", transactionType: "expense" });
+        setManualErrors({});
         toast({ title: "Entry added" });
       },
       onError: () => toast({ title: "Failed to add entry", variant: "destructive" }),
@@ -461,22 +580,165 @@ export default function Forecast() {
   };
 
   const handleSyncBalance = () => {
-    const actual = parseFloat(syncForm.actualBalance);
-    if (isNaN(actual) || !syncForm.syncDate) return;
-    syncBalance.mutate({ data: { actualBalance: actual, syncDate: syncForm.syncDate } }, {
+    const errs: Record<string, string> = {};
+    const amtErr = validateAmount(syncForm.actualBalance);
+    if (amtErr) errs.actualBalance = amtErr;
+    if (!syncForm.syncDate) errs.syncDate = "Date is required";
+    else if (syncForm.syncDate > todayStr) errs.syncDate = "Use today or a past date";
+    else if (syncForm.syncDate < startDate) errs.syncDate = "Must be within the last 30 days";
+    setSyncErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    syncBalance.mutate({ data: { actualBalance: parseFloat(syncForm.actualBalance), syncDate: syncForm.syncDate } }, {
       onSuccess: (result) => {
         invalidate();
         queryClient.invalidateQueries({ queryKey: getListBalanceSyncsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetUserSettingsQueryKey() });
         setSyncResult(result);
       },
-      onError: () => toast({ title: "Failed to sync balance", variant: "destructive" }),
+      onError: () => toast({ title: "Failed to update balance", variant: "destructive" }),
     });
   };
 
   const openSyncModal = () => {
     setSyncResult(null);
-    setSyncForm({ actualBalance: "", syncDate: todayStr });
+    setSyncErrors({});
+    // Pre-populate with the current starting balance so it can be adjusted.
+    setSyncForm({ actualBalance: startingBalance !== 0 ? String(startingBalance) : "", syncDate: todayStr });
     setShowSyncModal(true);
+  };
+
+  // ── Full row edit (opens on row click) ────────────────────────────────────
+  const openTx = (tx: TxRow) => {
+    setSelectedTx(tx);
+    setEditErrors({});
+    setEditForm({
+      transactionDate: tx.transactionDate,
+      description: tx.description,
+      category: tx.category,
+      transactionType: tx.transactionType,
+      amount: String(tx.amount),
+      notes: tx.notes ?? "",
+      isActual: tx.isActual,
+    });
+  };
+
+  const saveTxEdit = (id: number, data: Record<string, unknown>) => {
+    updateTx.mutate({ id, data }, {
+      onSuccess: () => {
+        invalidate();
+        setSelectedTx(null);
+        setRecurringPrompt(null);
+        toast({ title: "Transaction updated" });
+      },
+      onError: () => toast({ title: "Failed to update", variant: "destructive" }),
+    });
+  };
+
+  const handleSaveEdit = () => {
+    if (!selectedTx) return;
+    const errs: Record<string, string> = {};
+    if (!editForm.description.trim()) errs.description = "Description is required";
+    else if (editForm.description.length > DESC_MAX) errs.description = `Maximum ${DESC_MAX} characters`;
+    const amtErr = validateAmount(editForm.amount);
+    if (amtErr) errs.amount = amtErr;
+    if (!editForm.transactionDate) errs.transactionDate = "Date is required";
+    setEditErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    // TC-F12: cannot flip a future-dated row to Paid.
+    if (editForm.isActual && !selectedTx.isActual && editForm.transactionDate > todayStr) {
+      setFuturePaidDate(editForm.transactionDate);
+      return;
+    }
+    const amount = parseFloat(editForm.amount);
+    const data: Record<string, unknown> = {
+      transactionDate: editForm.transactionDate,
+      description: editForm.description.trim(),
+      category: editForm.category,
+      transactionType: editForm.transactionType,
+      amount,
+      notes: editForm.notes.trim() === "" ? null : editForm.notes.trim(),
+      isActual: editForm.isActual,
+    };
+    if (editForm.isActual) data.status = null;
+    if (selectedTx.forecastedAmount == null && amount !== selectedTx.amount) {
+      data.forecastedAmount = selectedTx.amount;
+    }
+    // Recurring bill/paycheck rows: ask whether to apply shared changes to
+    // all future occurrences too.
+    const isRecurring = selectedTx.sourceBillId != null || selectedTx.sourcePayId != null;
+    const changedShared =
+      amount !== selectedTx.amount ||
+      editForm.description.trim() !== selectedTx.description ||
+      editForm.category !== selectedTx.category;
+    if (isRecurring && changedShared) {
+      setRecurringPrompt({ id: selectedTx.id, data });
+      return;
+    }
+    saveTxEdit(selectedTx.id, data);
+  };
+
+  // ── Export ────────────────────────────────────────────────────────────────
+  const typeLabel = (t: TxRow) =>
+    t.sourceBalanceSyncId != null ? "Balance Update"
+    : t.transactionType === "income" ? "Income"
+    : t.sourceLifeEventId != null ? "Life Event"
+    : t.sourceBillId != null ? "Bill"
+    : "Manual Entry";
+
+  // Respects the active time range, category filter, and search.
+  const exportRows = () => filtered.map((t) => ({
+    Date: t.transactionDate,
+    Description: t.description,
+    Category: t.category,
+    Type: typeLabel(t),
+    Amount: t.sourceBalanceSyncId != null ? t.amount : t.transactionType === "income" ? t.amount : -t.amount,
+    "Running Balance": Math.round(t.runningBalance * 100) / 100,
+  }));
+
+  const EXPORT_HEADERS = ["Date", "Description", "Category", "Type", "Amount", "Running Balance"] as const;
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCsv = () => {
+    const esc = (v: string | number) =>
+      typeof v === "number" ? String(v) : /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const lines = [
+      EXPORT_HEADERS.join(","),
+      ...exportRows().map((r) => EXPORT_HEADERS.map((h) => esc(r[h])).join(",")),
+    ];
+    downloadBlob(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }), `forecast-${todayStr}.csv`);
+    toast({ title: "CSV downloaded" });
+  };
+
+  const handleExportXlsx = async () => {
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.json_to_sheet(exportRows(), { header: [...EXPORT_HEADERS] });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Forecast");
+    XLSX.writeFile(wb, `forecast-${todayStr}.xlsx`);
+    toast({ title: "Excel file downloaded" });
+  };
+
+  const handleCopyTsv = async () => {
+    const lines = [
+      EXPORT_HEADERS.join("\t"),
+      ...exportRows().map((r) => EXPORT_HEADERS.map((h) => String(r[h])).join("\t")),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      toast({ title: "Copied to clipboard", description: "Paste directly into Google Sheets or Excel." });
+    } catch {
+      toast({ title: "Could not access the clipboard", variant: "destructive" });
+    }
   };
 
   const toggleMonth = (label: string) => {
@@ -546,11 +808,29 @@ export default function Forecast() {
         <div className="flex-1" />
 
         <Button size="sm" variant="outline" className="h-8 text-xs" onClick={openSyncModal}>
-          <Scale className="h-3.5 w-3.5 mr-1" /> Sync Balance
+          <Scale className="h-3.5 w-3.5 mr-1" /> Update Current Balance
         </Button>
         <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowManualModal(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Add Entry
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="h-8 text-xs">
+              <Download className="h-3.5 w-3.5 mr-1" /> Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={handleExportCsv}>
+              <FileText className="h-3.5 w-3.5 mr-2" /> Download as CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportXlsx}>
+              <FileSpreadsheet className="h-3.5 w-3.5 mr-2" /> Download as Excel (.xlsx)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleCopyTsv}>
+              <ClipboardCopy className="h-3.5 w-3.5 mr-2" /> Copy to Clipboard
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleRegenerate} disabled={regenerate.isPending}>
           <RefreshCw className={`h-3.5 w-3.5 mr-1 ${regenerate.isPending ? "animate-spin" : ""}`} />
           Regenerate
@@ -566,8 +846,8 @@ export default function Forecast() {
               Running balance starts from <span className="text-foreground font-mono font-semibold">$0.00</span>. Add your current balance for accurate projections.
             </span>
             <Button size="sm" variant="outline" className="h-7 text-xs ml-4 shrink-0"
-              onClick={() => { setBalanceInput(""); setShowBalanceModal(true); }}>
-              Set Starting Balance
+              onClick={openSyncModal}>
+              Update Current Balance
             </Button>
           </div>
         )}
@@ -593,8 +873,8 @@ export default function Forecast() {
               )}
             </span>
             <button className="underline underline-offset-2 hover:text-foreground"
-              onClick={() => { setBalanceInput(String(startingBalance)); setShowBalanceModal(true); }}>
-              Edit
+              onClick={openSyncModal}>
+              Update Current Balance
             </button>
           </div>
         )}
@@ -664,12 +944,16 @@ export default function Forecast() {
                         {group.rows.map((tx, idx) => {
                           const isNeg     = tx.runningBalance < 0;
                           const isAdjustment = tx.sourceBalanceSyncId != null;
+                          const isMissed  = tx.status === "missed";
                           const isManual  = !tx.sourceBillId && !tx.sourcePayId && !isAdjustment;
                           const isEditing = editingId === tx.id;
                           const isToday   = tx.transactionDate === todayStr;
                           const isPast    = tx.transactionDate < todayStr;
-                          const isOverdue = isPast && !tx.isActual;
+                          const isOverdue = isPast && !tx.isActual && !isMissed && !isAdjustment;
                           const isCurrentBalance = tx.id === currentBalanceTxId;
+                          const variance = tx.isActual && tx.forecastedAmount != null && tx.forecastedAmount !== tx.amount
+                            ? tx.amount - tx.forecastedAmount
+                            : null;
 
                           return (
                             <Fragment key={tx.id}>
@@ -681,12 +965,12 @@ export default function Forecast() {
                               </div>
                             )}
                             <div
-                              draggable={!isEditing}
-                              onDragStart={(e) => handleRowDragStart(tx, e)}
+                              draggable={!isEditing && !isAdjustment}
+                              onDragStart={(e) => { if (isAdjustment) { e.preventDefault(); return; } handleRowDragStart(tx, e); }}
                               onDragOver={(e) => handleRowDragOver(tx, e)}
                               onDrop={(e) => handleRowDrop(tx, e)}
                               onDragEnd={() => { setDraggingId(null); setDragOver(null); }}
-                              onClick={() => { if (!isEditing && !suppressClickRef.current) setSelectedTx(tx); }}
+                              onClick={() => { if (!isEditing && !suppressClickRef.current) openTx(tx); }}
                               className={[
                                 "relative grid grid-cols-[110px_1fr_130px_72px_136px_230px] border-b border-border/60 last:border-0 group cursor-pointer transition-colors select-none",
                                 idx % 2 === 1 ? "bg-muted/20" : "",
@@ -743,13 +1027,19 @@ export default function Forecast() {
                                     Overdue
                                   </Badge>
                                 )}
-                                {isManual && (
+                                {isMissed && (
+                                  <Badge className="shrink-0 flex items-center gap-1 text-[9px] px-1.5 h-4 bg-orange-100 text-orange-700 border-0 rounded-full leading-none">
+                                    <X className="h-2.5 w-2.5" />
+                                    Missed
+                                  </Badge>
+                                )}
+                                {isManual && !isAdjustment && (
                                   <Badge className="shrink-0 text-[9px] px-1.5 h-4 bg-muted text-muted-foreground border-0 rounded-full leading-none">Manual</Badge>
                                 )}
                                 {isAdjustment && (
                                   <Badge className="shrink-0 flex items-center gap-1 text-[9px] px-1.5 h-4 bg-sky-100 text-sky-700 border-0 rounded-full leading-none">
                                     <RefreshCcw className="h-2.5 w-2.5" />
-                                    Synced
+                                    Balance Update
                                   </Badge>
                                 )}
                               </div>
@@ -764,7 +1054,7 @@ export default function Forecast() {
                               {/* Type */}
                               <div className="px-4 py-2.5 flex items-center">
                                 <span className={`text-[11px] font-medium ${isAdjustment ? "text-sky-600" : tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-zinc-400"}`}>
-                                  {isAdjustment ? "Adjustment" : tx.transactionType === "income" ? "Income" : tx.sourceLifeEventId != null ? "Life Event" : "Bill"}
+                                  {isAdjustment ? "Balance Update" : tx.transactionType === "income" ? "Income" : tx.sourceLifeEventId != null ? "Life Event" : "Bill"}
                                 </span>
                               </div>
 
@@ -789,20 +1079,29 @@ export default function Forecast() {
                                     autoFocus
                                   />
                                 ) : (
-                                  <span
-                                    className={`font-mono text-sm ${isAdjustment ? "text-sky-600" : tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-foreground"}`}
-                                    title={
-                                      tx.isVariable
-                                        ? "This is an estimate — your actual bill may vary"
-                                        : tx.isActual
-                                        ? "Locked — already paid"
-                                        : "Double-click to edit"
-                                    }
-                                  >
-                                    {tx.isVariable && <span className="text-muted-foreground mr-0.5">~</span>}
-                                    {tx.transactionType === "income" ? "+" : "−"}
-                                    <FormatCurrency amount={tx.amount} />
-                                  </span>
+                                  <div className="flex flex-col items-end">
+                                    <span
+                                      className={`font-mono text-sm ${isMissed ? "line-through text-muted-foreground" : isAdjustment ? "text-sky-600" : tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-foreground"}`}
+                                      title={
+                                        isAdjustment
+                                          ? "Balance update — the running balance is set to this value here"
+                                          : tx.isVariable
+                                          ? "This is an estimate — your actual bill may vary"
+                                          : tx.isActual
+                                          ? "Locked — already paid"
+                                          : "Double-click to edit"
+                                      }
+                                    >
+                                      {tx.isVariable && !isAdjustment && <span className="text-muted-foreground mr-0.5">~</span>}
+                                      {!isAdjustment && (tx.transactionType === "income" ? "+" : "−")}
+                                      <FormatCurrency amount={tx.amount} />
+                                    </span>
+                                    {variance !== null && (
+                                      <span className="text-[10px] font-mono text-muted-foreground">
+                                        {variance > 0 ? "+" : "−"}<FormatCurrency amount={Math.abs(variance)} /> vs planned
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
 
@@ -822,13 +1121,40 @@ export default function Forecast() {
                                   className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  {!tx.isActual && tx.transactionType === "expense" && (
+                                  {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "expense" && (
                                     <button
                                       title="Mark as paid"
                                       onClick={() => handleMarkPaid(tx)}
                                       className="text-muted-foreground/60 hover:text-emerald-400 transition-colors"
                                     >
                                       <Check className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                  {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "expense" && tx.transactionDate <= todayStr && (
+                                    <button
+                                      title="Mark as missed"
+                                      onClick={() => handleMarkMissed(tx)}
+                                      className="text-muted-foreground/60 hover:text-orange-500 transition-colors"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                  {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "income" && tx.transactionDate <= todayStr && (
+                                    <button
+                                      title="Confirm received"
+                                      onClick={() => handleMarkPaid(tx)}
+                                      className="text-muted-foreground/60 hover:text-emerald-400 transition-colors"
+                                    >
+                                      <Check className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                  {isMissed && (
+                                    <button
+                                      title="Undo missed"
+                                      onClick={() => handleUnmarkMissed(tx)}
+                                      className="text-muted-foreground/60 hover:text-foreground transition-colors"
+                                    >
+                                      <RotateCcw className="h-3.5 w-3.5" />
                                     </button>
                                   )}
                                   {isManual && (
@@ -909,51 +1235,45 @@ export default function Forecast() {
                 <div className="px-4 py-2.5 text-right">End Balance</div>
               </div>
 
-              {summaryRows.map((m) => {
-                const expanded = expandedMonths.has(m.label);
-                const monthGroup = groups.find((g) => g.label === m.label);
-                const net = m.netCashFlow;
+              {summaryRows.map((g) => {
+                const expanded = expandedMonths.has(g.key);
+                const net = g.income - g.expenses;
                 return (
-                  <div key={m.label} className="border-b border-border last:border-0">
+                  <div key={g.key} className="border-b border-border last:border-0">
                     {/* Summary row */}
                     <div
                       className="grid grid-cols-[1fr_130px_130px_130px_148px] cursor-pointer hover:bg-muted/30 transition-colors"
-                      onClick={() => toggleMonth(m.label)}
+                      onClick={() => toggleMonth(g.key)}
                     >
                       <div className="px-4 py-3 flex items-center gap-2">
-                        {expanded
-                          ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                          : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                        }
-                        <span className="font-medium text-sm">{m.label}</span>
-                        {monthGroup && (
-                          <span className="text-[10px] text-muted-foreground">
-                            {monthGroup.rows.length} items
-                          </span>
-                        )}
+                        <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
+                        <span className="font-medium text-sm">{g.label}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {g.rows.length} items
+                        </span>
                       </div>
                       <div className="px-4 py-3 text-right font-mono text-sm text-emerald-400">
-                        {m.totalIncome > 0 ? <FormatCurrency amount={m.totalIncome} /> : <span className="text-muted-foreground/30">—</span>}
+                        {g.income > 0 ? <FormatCurrency amount={g.income} /> : <span className="text-muted-foreground/30">—</span>}
                       </div>
                       <div className="px-4 py-3 text-right font-mono text-sm text-muted-foreground">
-                        {m.totalExpenses > 0 ? <FormatCurrency amount={m.totalExpenses} /> : <span className="text-muted-foreground/30">—</span>}
+                        {g.expenses > 0 ? <FormatCurrency amount={g.expenses} /> : <span className="text-muted-foreground/30">—</span>}
                       </div>
                       <div className={`px-4 py-3 text-right font-mono text-sm font-semibold ${net >= 0 ? "text-emerald-400" : "text-destructive"}`}>
                         {net >= 0 ? "+" : ""}<FormatCurrency amount={net} />
                       </div>
-                      <div className={`px-4 py-3 text-right font-mono text-sm font-bold ${m.endBalance < 0 ? "text-destructive" : "text-foreground"}`}>
-                        <FormatCurrency amount={m.endBalance} />
+                      <div className={`px-4 py-3 text-right font-mono text-sm font-bold ${g.endBalance < 0 ? "text-destructive" : "text-foreground"}`}>
+                        <FormatCurrency amount={g.endBalance} />
                       </div>
                     </div>
 
                     {/* Expanded sub-rows */}
-                    {expanded && monthGroup && (
+                    {expanded && (
                       <div className="border-t border-border/40 bg-background/40">
-                        {monthGroup.rows.map((tx) => (
+                        {g.rows.map((tx) => (
                           <div
                             key={tx.id}
                             className="grid grid-cols-[1fr_130px_130px_130px_148px] border-b border-border/30 last:border-0 hover:bg-muted/20 cursor-pointer"
-                            onClick={() => setSelectedTx(tx)}
+                            onClick={() => openTx(tx)}
                           >
                             <div className="px-4 py-2 pl-10 flex items-center gap-3 min-w-0">
                               <span className="font-mono text-[11px] text-muted-foreground shrink-0">
@@ -989,58 +1309,23 @@ export default function Forecast() {
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          STARTING BALANCE MODAL
-      ══════════════════════════════════════════════════════════════════════ */}
-      <Dialog open={showBalanceModal} onOpenChange={setShowBalanceModal}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Set Starting Balance</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-1">
-            <p className="text-sm text-muted-foreground">
-              Enter your current checking account balance. This seeds the running balance column so projections are accurate.
-            </p>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
-              <Input
-                value={balanceInput}
-                onChange={(e) => setBalanceInput(e.target.value)}
-                className="pl-7 font-mono"
-                placeholder="0.00"
-                type="number"
-                step="0.01"
-                onKeyDown={(e) => { if (e.key === "Enter") handleSaveBalance(); }}
-                autoFocus
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBalanceModal(false)}>Cancel</Button>
-            <Button onClick={handleSaveBalance} disabled={saveSettings.isPending}>
-              {saveSettings.isPending ? "Saving…" : "Save Balance"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          SYNC BALANCE MODAL
+          UPDATE CURRENT BALANCE MODAL
       ══════════════════════════════════════════════════════════════════════ */}
       <Dialog open={showSyncModal} onOpenChange={(open) => { setShowSyncModal(open); if (!open) setSyncResult(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Sync Balance</DialogTitle>
+            <DialogTitle>Update Current Balance</DialogTitle>
           </DialogHeader>
 
           {!syncResult ? (
             <>
               <div className="space-y-3 py-1">
                 <p className="text-sm text-muted-foreground">
-                  Check your bank app and enter your real account balance. Otis will compare it against the forecast and rebaseline the running balance going forward.
+                  Check your bank app and enter your real account balance. A Balance Update row is added on that date and every later row recalculates from it.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Actual balance</label>
+                    <label className="text-xs font-medium text-muted-foreground">Current balance</label>
                     <div className="relative mt-1">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
                       <Input
@@ -1048,12 +1333,12 @@ export default function Forecast() {
                         onChange={(e) => setSyncForm((f) => ({ ...f, actualBalance: e.target.value }))}
                         className="pl-7 font-mono"
                         placeholder="0.00"
-                        type="number"
-                        step="0.01"
+                        inputMode="decimal"
                         onKeyDown={(e) => { if (e.key === "Enter") handleSyncBalance(); }}
                         autoFocus
                       />
                     </div>
+                    <FieldError msg={syncErrors.actualBalance} />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">As of date</label>
@@ -1064,11 +1349,12 @@ export default function Forecast() {
                       onChange={(e) => setSyncForm((f) => ({ ...f, syncDate: e.target.value }))}
                       className="mt-1"
                     />
+                    <FieldError msg={syncErrors.syncDate} />
                   </div>
                 </div>
                 {lastSync && (
                   <p className="text-xs text-muted-foreground">
-                    Last synced {format(new Date(lastSync.syncDate + "T00:00:00"), "MMM d, yyyy")}
+                    Last updated {format(new Date(lastSync.syncDate + "T00:00:00"), "MMM d, yyyy")}
                     {lastSync.variance !== 0 && (
                       <> — variance was {lastSync.variance > 0 ? "+" : "−"}<FormatCurrency amount={Math.abs(lastSync.variance)} /></>
                     )}
@@ -1077,8 +1363,8 @@ export default function Forecast() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowSyncModal(false)}>Cancel</Button>
-                <Button onClick={handleSyncBalance} disabled={syncBalance.isPending || syncForm.actualBalance === ""}>
-                  {syncBalance.isPending ? "Syncing…" : "Sync Balance"}
+                <Button onClick={handleSyncBalance} disabled={syncBalance.isPending}>
+                  {syncBalance.isPending ? "Saving…" : "Update Balance"}
                 </Button>
               </DialogFooter>
             </>
@@ -1098,7 +1384,7 @@ export default function Forecast() {
                     <p className="text-sm text-sky-800">
                       Your actual balance is{" "}
                       <span className="font-mono font-semibold"><FormatCurrency amount={Math.abs(syncResult.variance)} /></span>{" "}
-                      {syncResult.variance > 0 ? "higher" : "lower"} than forecasted. A balance adjustment was added on{" "}
+                      {syncResult.variance > 0 ? "higher" : "lower"} than forecasted. A Balance Update row was added on{" "}
                       {format(new Date(syncResult.syncDate + "T00:00:00"), "MMM d, yyyy")} so your projections now start from your real balance.
                     </p>
                   </div>
@@ -1138,14 +1424,19 @@ export default function Forecast() {
           </DialogHeader>
           <div className="space-y-3 py-1">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Description</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted-foreground">Description</label>
+                <CharCount value={manualForm.description} max={DESC_MAX} />
+              </div>
               <Input
                 value={manualForm.description}
+                maxLength={DESC_MAX}
                 onChange={(e) => setManualForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder="e.g., Vacation trip deposit"
                 className="mt-1"
                 autoFocus
               />
+              <FieldError msg={manualErrors.description} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1156,12 +1447,11 @@ export default function Forecast() {
                     value={manualForm.amount}
                     onChange={(e) => setManualForm((f) => ({ ...f, amount: e.target.value }))}
                     placeholder="0.00"
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    inputMode="decimal"
                     className="pl-7 font-mono"
                   />
                 </div>
+                <FieldError msg={manualErrors.amount} />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Date</label>
@@ -1171,6 +1461,7 @@ export default function Forecast() {
                   onChange={(e) => setManualForm((f) => ({ ...f, transactionDate: e.target.value }))}
                   className="mt-1"
                 />
+                <FieldError msg={manualErrors.transactionDate} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1240,14 +1531,16 @@ export default function Forecast() {
       </Dialog>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TRANSACTION DETAIL SHEET
+          TRANSACTION EDIT SHEET
       ══════════════════════════════════════════════════════════════════════ */}
       <Sheet open={!!selectedTx} onOpenChange={(open) => { if (!open) setSelectedTx(null); }}>
         <SheetContent className="w-80 sm:w-[380px] flex flex-col gap-0">
           <SheetHeader className="border-b border-border pb-4">
-            <SheetTitle className="text-base">{selectedTx?.description}</SheetTitle>
+            <SheetTitle className="text-base">
+              {selectedTx?.sourceBalanceSyncId != null ? "Balance Update" : "Edit Transaction"}
+            </SheetTitle>
           </SheetHeader>
-          {selectedTx && (
+          {selectedTx && selectedTx.sourceBalanceSyncId != null && (
             <div className="flex-1 overflow-y-auto py-4 space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
@@ -1255,30 +1548,116 @@ export default function Forecast() {
                   <div className="font-mono">{format(new Date(selectedTx.transactionDate + "T00:00:00"), "MMMM d, yyyy")}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Amount</div>
-                  <div className={`font-mono font-semibold text-base ${selectedTx.transactionType === "income" ? "text-emerald-400" : "text-foreground"}`}>
-                    {selectedTx.transactionType === "income" ? "+" : "−"}<FormatCurrency amount={selectedTx.amount} />
+                  <div className="text-xs text-muted-foreground mb-1">Balance set to</div>
+                  <div className="font-mono font-semibold text-base text-sky-600">
+                    <FormatCurrency amount={selectedTx.amount} />
                   </div>
                 </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                This row sets the running balance to the value above; every later row calculates forward from it.
+                It cannot be edited or deleted. To change it, use "Update Current Balance" again for the same date.
+              </p>
+            </div>
+          )}
+          {selectedTx && selectedTx.sourceBalanceSyncId == null && (
+            <div className="flex-1 overflow-y-auto py-4 space-y-4">
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground">Description</label>
+                  <CharCount value={editForm.description} max={DESC_MAX} />
+                </div>
+                <Input
+                  value={editForm.description}
+                  maxLength={DESC_MAX}
+                  onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                  className="mt-1"
+                />
+                <FieldError msg={editErrors.description} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Category</div>
-                  <span className={`text-xs px-2.5 py-1 rounded-full ${catStyle(selectedTx.category)}`}>
-                    {selectedTx.category}
-                  </span>
+                  <label className="text-xs font-medium text-muted-foreground">Date</label>
+                  <Input
+                    type="date"
+                    value={editForm.transactionDate}
+                    onChange={(e) => setEditForm((f) => ({ ...f, transactionDate: e.target.value }))}
+                    className="mt-1"
+                  />
+                  <FieldError msg={editErrors.transactionDate} />
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Type</div>
-                  <div className="text-sm">
-                    {selectedTx.sourceBalanceSyncId != null
-                      ? <span className="text-sky-600">Adjustment</span>
-                      : selectedTx.transactionType === "income" ? "Income"
-                      : selectedTx.sourceLifeEventId != null ? "Life Event"
-                      : "Bill"}
+                  <label className="text-xs font-medium text-muted-foreground">Amount</label>
+                  <div className="relative mt-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                    <Input
+                      value={editForm.amount}
+                      inputMode="decimal"
+                      onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
+                      className="pl-7 font-mono"
+                    />
+                  </div>
+                  <FieldError msg={editErrors.amount} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Category</label>
+                  <Select value={editForm.category} onValueChange={(v) => setEditForm((f) => ({ ...f, category: v }))}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {!MANUAL_CATEGORIES.includes(editForm.category) && editForm.category !== "salary" && (
+                        <SelectItem value={editForm.category}>{editForm.category}</SelectItem>
+                      )}
+                      <SelectItem value="salary">Salary</SelectItem>
+                      {MANUAL_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Type</label>
+                  <Select value={editForm.transactionType} onValueChange={(v) => setEditForm((f) => ({ ...f, transactionType: v }))}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="expense">
+                        {selectedTx.sourceLifeEventId != null ? "Life Event (expense)" : selectedTx.sourceBillId != null ? "Bill (expense)" : "Expense"}
+                      </SelectItem>
+                      <SelectItem value="income">Income</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Notes</label>
+                <Textarea
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="Optional notes…"
+                  className="mt-1 min-h-[72px] text-sm"
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-md border border-border px-3 py-2.5">
+                <div>
+                  <div className="text-sm font-medium">
+                    {editForm.transactionType === "income" ? "Confirmed received" : "Paid"}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {editForm.transactionDate > todayStr
+                      ? "Only available for today or past dates"
+                      : "Locks the amount as the actual value"}
                   </div>
                 </div>
+                <Switch
+                  checked={editForm.isActual}
+                  disabled={editForm.transactionDate > todayStr}
+                  onCheckedChange={(checked) => setEditForm((f) => ({ ...f, isActual: checked }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-sm pt-1">
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Running Balance</div>
-                  <div className={`font-mono font-bold text-base ${selectedTx.runningBalance < 0 ? "text-destructive" : "text-foreground"}`}>
+                  <div className={`font-mono font-bold ${selectedTx.runningBalance < 0 ? "text-destructive" : "text-foreground"}`}>
                     {selectedTx.runningBalance < 0 && "−"}
                     <FormatCurrency amount={Math.abs(selectedTx.runningBalance)} />
                   </div>
@@ -1286,7 +1665,9 @@ export default function Forecast() {
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Status</div>
                   <div className="text-sm">
-                    {selectedTx.isActual
+                    {selectedTx.status === "missed"
+                      ? <span className="text-orange-600">Missed</span>
+                      : selectedTx.isActual
                       ? <span className="text-primary">Paid</span>
                       : selectedTx.isCommitted
                       ? <span className="text-amber-400">Committed</span>
@@ -1297,28 +1678,22 @@ export default function Forecast() {
               </div>
 
               {selectedTx.companyUrl && (
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Website</div>
-                  <a
-                    href={selectedTx.companyUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-sm text-primary hover:underline"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    {selectedTx.companyUrl}
-                  </a>
-                </div>
+                <a
+                  href={selectedTx.companyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  {selectedTx.companyUrl}
+                </a>
               )}
 
               <div className="space-y-2 pt-2">
-                {!selectedTx.isActual && selectedTx.transactionType === "expense" && (
-                  <Button className="w-full" variant="outline" onClick={() => handleMarkPaid(selectedTx)}>
-                    <Check className="h-4 w-4 mr-2 text-emerald-400" />
-                    Mark as Paid
-                  </Button>
-                )}
-                {!selectedTx.sourceBillId && !selectedTx.sourcePayId && selectedTx.sourceBalanceSyncId == null && (
+                <Button className="w-full" onClick={handleSaveEdit} disabled={updateTx.isPending}>
+                  {updateTx.isPending ? "Saving…" : "Save Changes"}
+                </Button>
+                {!selectedTx.sourceBillId && !selectedTx.sourcePayId && (
                   <Button className="w-full" variant="destructive" onClick={() => handleDelete(selectedTx)}>
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Entry
@@ -1329,6 +1704,58 @@ export default function Forecast() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          FUTURE ROW "MARK AS PAID" BLOCKED DIALOG (TC-F12)
+      ══════════════════════════════════════════════════════════════════════ */}
+      <Dialog open={!!futurePaidDate} onOpenChange={(open) => { if (!open) setFuturePaidDate(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Scheduled for a future date</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This transaction is scheduled for{" "}
+            <span className="text-foreground font-medium">
+              {futurePaidDate && format(new Date(futurePaidDate + "T00:00:00"), "MMMM d, yyyy")}
+            </span>
+            . To mark it as paid, please update the date to today or an earlier date first.
+            You can edit the row directly or drag and drop it to a new date.
+          </p>
+          <DialogFooter>
+            <Button onClick={() => setFuturePaidDate(null)}>Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          RECURRING EDIT SCOPE DIALOG
+      ══════════════════════════════════════════════════════════════════════ */}
+      <Dialog open={!!recurringPrompt} onOpenChange={(open) => { if (!open) setRecurringPrompt(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Apply to future occurrences?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This is a recurring {selectedTx?.sourcePayId != null ? "paycheck" : "bill"}. Update just this
+            occurrence, or all future occurrences as well?
+          </p>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              disabled={updateTx.isPending}
+              onClick={() => { if (recurringPrompt) saveTxEdit(recurringPrompt.id, { ...recurringPrompt.data, applyToFuture: false }); }}
+            >
+              Just this one
+            </Button>
+            <Button
+              disabled={updateTx.isPending}
+              onClick={() => { if (recurringPrompt) saveTxEdit(recurringPrompt.id, { ...recurringPrompt.data, applyToFuture: true }); }}
+            >
+              All future occurrences
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

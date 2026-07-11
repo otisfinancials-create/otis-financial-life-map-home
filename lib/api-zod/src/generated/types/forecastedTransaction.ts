@@ -23,6 +23,18 @@ export interface ForecastedTransaction {
   sourceBalanceSyncId?: number | null;
   isActual: boolean;
   isCommitted: boolean;
+  /**
+     * 'missed' = past bill marked as not paid (excluded from running balance)
+     * @nullable
+     */
+  status?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /**
+     * Original planned amount, kept when the user confirms a different actual amount
+     * @nullable
+     */
+  forecastedAmount?: number | null;
   sortOrder: number;
   createdAt: string;
 }

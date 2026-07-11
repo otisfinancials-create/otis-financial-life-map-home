@@ -16,6 +16,11 @@ export const forecastedTransactionsTable = pgTable("forecasted_transactions", {
   sourceBalanceSyncId: integer("source_balance_sync_id"),
   isActual: boolean("is_actual").notNull().default(false),
   isCommitted: boolean("is_committed").notNull().default(false),
+  // 'missed' = past bill the user marked as not paid; excluded from running balance.
+  status: text("status"),
+  notes: text("notes"),
+  // Original planned amount, kept when the user confirms a different actual amount.
+  forecastedAmount: numeric("forecasted_amount", { precision: 12, scale: 2 }),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

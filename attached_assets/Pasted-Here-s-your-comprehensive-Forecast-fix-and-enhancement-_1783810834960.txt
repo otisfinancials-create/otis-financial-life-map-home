@@ -1,0 +1,118 @@
+Here's your comprehensive Forecast fix and enhancement prompt:
+
+"Please fix the following bugs and implement the following enhancements in the Forecast / Cash Flow Ledger section. Address every item completely before finishing.
+### BUGS TO FIX
+1. TC-F12 — Marking future rows as Paid (FAIL)
+Currently any row anywhere in the forecast can be marked as Paid and it incorrectly sets that as the current balance. Fix this with the following logic:
+
+If a user tries to mark a FUTURE dated row as Paid (date > today), show a popup message: "This transaction is scheduled for [date]. To mark it as paid, please update the date to today or an earlier date first. You can edit the row directly or drag and drop it to a new date."
+Past and present rows (date ≤ today) can be marked as Paid normally
+When a row is marked Paid, it should NOT change the current balance label — it only sets is_actual = true and shows a Paid badge
+The "Current Balance" label should only appear on the most recent actual transaction row, not on any Paid row regardless of date
+
+2. TC-F14 — Add Manual Entry validation (FAIL)
+Fix the Add Manual Entry form with the following:
+
+Description field: maximum 100 characters with character count shown (e.g. "45/100")
+Amount field: numeric only, maximum 9 digits before decimal, maximum 2 decimal places. Reject any non-numeric input
+Description, Amount, and Date are all required fields
+If any required field is blank on submit, show inline validation errors below each field — consistent with the error styling used throughout the rest of the application (red text below the field, no popups)
+Do not clear the form on failed validation — preserve what the user entered
+
+3. TC-F16 & TC-F17 — Starting balance cannot be updated after being set once (FAIL)
+Currently once a starting balance is set it cannot be changed. Fix this so:
+
+The "Update Current Balance" button (formerly "Set Starting Balance" — see Enhancement #6 below) is always visible and clickable regardless of whether a balance has been previously set
+Clicking it opens the modal pre-populated with the current starting balance value
+User can change it and save — the new value becomes the starting balance
+Running balance recalculates immediately from the new starting balance forward
+Test specifically: set balance to $1, verify first $500 bill shows running balance of -$499 with red row highlight. Then set balance to $0, verify running balance starts at $0
+
+4. TC-F18 — Monthly Summary end balance does not match ledger (FAIL)
+The End Balance shown in the Monthly Summary view does not match the actual running balance at the end of that month in the Ledger view. Fix the calculation so:
+
+Monthly Summary End Balance = the running balance of the last transaction row of that calendar month in the Ledger view
+Monthly Summary Total Income = Σ(all positive transaction amounts for that month)
+Monthly Summary Total Bills = Σ(all negative transaction amounts for that month, shown as positive)
+Monthly Summary Net = Total Income - Total Bills
+All four values must exactly match what you would calculate by manually summing the individual Ledger rows for that month
+
+5. Monthly Summary expandable rows not working (FAIL)
+When clicking the down arrow / expand button on any month row in Monthly Summary view, nothing happens — the detail rows do not appear. Fix this accordion behavior so:
+
+Clicking the expand arrow on any month row shows all individual transactions for that month below it
+Clicking again collapses it
+The expanded rows use the same row styling as the main Ledger view (date, description, category, type, amount, balance)
+Multiple months can be expanded simultaneously
+The expand/collapse arrow rotates 90° when expanded to indicate state
+
+6. Sync Balance / Current Balance ordering (FAIL)
+When a user adds a balance sync/update on the same day as other transactions, the sync row is appearing after those transactions instead of taking priority. Fix this so:
+
+An "Update Current Balance" row always appears as the FIRST row for its date — before any bills or income rows on the same day
+The "Update Current Balance" entry overrides the running balance at that point — meaning the balance shown after this row IS the entered value, regardless of what the calculation would have produced
+All subsequent rows calculate their running balance forward from the updated balance value
+
+---
+### ENHANCEMENTS TO IMPLEMENT
+7. Rename "Set Starting Balance" / "Sync Balance" to "Update Current Balance"
+Rename all instances of "Set Starting Balance", "Sync Balance", or similar labels throughout the Forecast page to "Update Current Balance". This includes:
+
+The button in the controls bar
+The modal title
+The row label in the forecast ledger: "Balance Update — [date]" instead of "Balance Adjustment" or "Sync"
+Any tooltip or helper text
+
+8. Extend rolling history from 7 days to 30 days
+Extend the lookback window in the forecast from 7 days to 30 days. For all rows in the past 30 days:
+
+Show in muted/slightly grayed styling to distinguish from future rows
+TODAY divider line remains between past and future
+Past bill rows show two action options:
+
+"✓ Mark Paid" — marks is_actual = true, shows Paid badge, records actual amount
+"✗ Mark Missed" — marks as missed with an orange "Missed" badge, does not update running balance
+
+
+Past income rows show:
+
+"✓ Confirm Received" — confirms paycheck landed, allows editing actual amount if it differed
+A small variance indicator if actual amount differs from forecasted: e.g. "+$50 vs planned" in subtle gray text
+
+
+Bills marked Missed and income not yet confirmed after 30 days get archived — they no longer show in the active forecast but are stored in history
+
+9. Field limits on all Forecast forms
+Apply these field limits consistently across ALL forms in the Forecast section (Add Manual Entry, Update Current Balance, any row edit popup):
+
+Description / label fields: maximum 100 characters, show character count
+Amount fields: numeric only, maximum 9 digits before decimal, 2 decimal places maximum
+These limits should match the styling and behavior of field limits applied elsewhere in the app
+
+10. Download / Export feature
+Add an "Export 📥" button to the Forecast controls bar, next to the Add Entry button. When clicked, show a small dropdown with three options:
+
+"Download as CSV" — exports all currently visible forecast rows (respecting active time range and category filter) as a .csv file with columns: Date, Description, Category, Type, Amount, Running Balance
+"Download as Excel (.xlsx)" — same data as above in .xlsx format
+"Copy to Clipboard" — copies the data as tab-separated values that can be pasted directly into Google Sheets
+The export should respect whatever time range and filters are currently active. Include a header row. Format amounts as numbers (not strings) so they are immediately usable in spreadsheet calculations.
+
+11. Full row editing in popup
+When a user clicks/selects any row in the Forecast ledger, open an edit popup (modal or side drawer) with ALL fields editable:
+
+Date — date picker (with the future-date-paid validation from Bug Fix #1 if applicable)
+Description — text field (100 char limit)
+Category — dropdown matching existing categories
+Type — dropdown: Bill, Income, Life Event, Manual Entry, Balance Update
+Amount — numeric field (9 digits, 2 decimal places)
+Notes — optional text area
+Paid / Confirmed toggle — only enabled for past or present dates
+On save: update the forecasted_transactions record and recalculate the running balance for all subsequent rows. Show a success message. For recurring bill rows, ask: "Update just this occurrence or all future occurrences of this bill?" — two buttons: "Just this one" and "All future occurrences"
+
+---
+### AFTER ALL CHANGES:
+1. Re-seed and regenerate the forecast for user_id=1 to pick up all fixes
+2. Verify the running balance is mathematically correct for 10 consecutive rows after changes
+3. Verify Monthly Summary totals match Ledger totals for at least 2 months
+4. Verify the export downloads a valid .csv and .xlsx file
+5. Push all changes to GitHub when complete

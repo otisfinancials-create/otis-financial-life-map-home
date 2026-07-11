@@ -1664,6 +1664,14 @@ components:
           type: boolean
         isCommitted:
           type: boolean
+        status:
+          type: ["string", "null"]
+          description: "'missed' = past bill marked as not paid (excluded from running balance)"
+        notes:
+          type: ["string", "null"]
+        forecastedAmount:
+          type: ["number", "null"]
+          description: Original planned amount, kept when the user confirms a different actual amount
         sortOrder:
           type: integer
         createdAt:
@@ -1735,6 +1743,15 @@ components:
           type: boolean
         isCommitted:
           type: boolean
+        status:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        forecastedAmount:
+          type: ["number", "null"]
+        applyToFuture:
+          type: boolean
+          description: For recurring bill/paycheck rows — also apply description/category/amount changes to future occurrences
 
     ReorderForecastInput:
       type: object

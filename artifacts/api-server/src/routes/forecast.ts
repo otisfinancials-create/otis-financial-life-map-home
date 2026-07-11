@@ -89,6 +89,9 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
   }
 
   for (const row of rows) {
+    // Balance-update override rows are balance values, not cash flows; missed
+    // rows never happened — both are excluded from monthly totals.
+    if (row.sourceBalanceSyncId != null || row.status === "missed") continue;
     const d = new Date(row.transactionDate);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     if (!monthlyMap[key]) continue;
@@ -123,13 +126,17 @@ router.post("/forecast/regenerate", async (req, res): Promise<void> => {
 // bills, pay schedules, and life events. Returns the number of rows created.
 // Exported so one-off scripts can re-seed forecasts for existing users.
 export async function regenerateForecastForUser(userId: string): Promise<number> {
-  // Delete existing non-actual forecasted transactions for this user.
-  // Balance-sync adjustment rows are preserved: they represent a real-world
-  // reconciliation, not a projection, so a rebuild must not wipe them out.
+  // Delete existing non-actual forecasted transactions for this user, from
+  // today forward only. Preserved rows:
+  //   - Balance-update rows (real-world reconciliations, not projections)
+  //   - Past rows (paid, missed, or still pending) — they are the 30-day
+  //     rolling history and must survive a rebuild.
+  const regenTodayStr = toLocalIso(new Date());
   await db.delete(forecastedTransactionsTable).where(
     and(
       eq(forecastedTransactionsTable.isActual, false),
       isNull(forecastedTransactionsTable.sourceBalanceSyncId),
+      gte(forecastedTransactionsTable.transactionDate, regenTodayStr),
       eq(forecastedTransactionsTable.userId, userId),
     )
   );
@@ -256,10 +263,11 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
   return toInsert.length;
 }
 
-// Reconciles the forecasted running balance against the user's real bank
-// balance. Records the sync in balance_syncs and, when there is a variance,
-// inserts a one-time "Balance Adjustment" row so the running balance
-// rebaselines to the actual balance from the sync date forward.
+// "Update Current Balance": reconciles the forecast against the user's real
+// bank balance. Records the update in balance_syncs and inserts (or replaces)
+// a "Balance Update — [date]" override row that is always the FIRST row for
+// its date. The override row's amount IS the entered balance — the ledger sets
+// the running balance to this value at that row and calculates forward from it.
 router.post("/forecast/sync-balance", async (req, res): Promise<void> => {
   const parsed = SyncBalanceBody.safeParse(req.body);
   if (!parsed.success) {
@@ -274,22 +282,25 @@ router.post("/forecast/sync-balance", async (req, res): Promise<void> => {
   }
   const now = new Date();
   const todayStr = toLocalIso(now);
-  const windowStart = toLocalIso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7));
+  const windowStart = toLocalIso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30));
   if (syncDate > todayStr) {
-    res.status(400).json({ error: "Cannot sync a future date — use today or a past date" });
+    res.status(400).json({ error: "Cannot update the balance for a future date — use today or a past date" });
     return;
   }
   if (syncDate < windowStart) {
-    res.status(400).json({ error: "Sync date must be within the last 7 days" });
+    res.status(400).json({ error: "Balance update date must be within the last 30 days" });
     return;
   }
 
-  // Forecasted balance exactly as shown in the ledger. The ledger anchors the
-  // running balance so that today opens at the starting balance, back-filling
-  // the 7-day lookback rows — except balance-sync adjustments, which persist
-  // through the anchor so they rebaseline the balance forward.
-  //   syncDate = today → starting + pastAdj + net(today)
-  //   syncDate < today → starting − netNonAdj(syncDate+1..yesterday) + adj(windowStart..syncDate)
+  // Forecasted balance = the displayed running balance at the START of
+  // syncDate (before any of that day's rows), mirroring the ledger math:
+  //   - If a balance-update row exists before syncDate, roll forward from the
+  //     latest one (its amount is the balance at that row).
+  //   - Else if one exists on/after syncDate (≤ today), roll backward from the
+  //     earliest such row.
+  //   - Else anchor on user_settings.startingBalance = balance at start of
+  //     today, back-filling any lookback rows between syncDate and today.
+  // Missed rows (status = 'missed') never affect the balance.
   const [settings] = await db
     .select()
     .from(userSettingsTable)
@@ -302,36 +313,44 @@ router.post("/forecast/sync-balance", async (req, res): Promise<void> => {
       amount: forecastedTransactionsTable.amount,
       transactionType: forecastedTransactionsTable.transactionType,
       sourceBalanceSyncId: forecastedTransactionsTable.sourceBalanceSyncId,
+      status: forecastedTransactionsTable.status,
     })
     .from(forecastedTransactionsTable)
     .where(and(
       eq(forecastedTransactionsTable.userId, req.userId),
       gte(forecastedTransactionsTable.transactionDate, windowStart),
-      lte(forecastedTransactionsTable.transactionDate, syncDate >= todayStr ? syncDate : todayStr),
+      lte(forecastedTransactionsTable.transactionDate, todayStr),
     ));
 
   const signed = (r: typeof rows[number]) => {
     const amt = parseFloat(String(r.amount));
     return r.transactionType === "income" ? amt : -amt;
   };
+  // Overrides on syncDate itself are being replaced by this update, so ignore them.
+  const overrides = rows
+    .filter((r) => r.sourceBalanceSyncId != null && r.transactionDate !== syncDate)
+    .sort((a, b) => a.transactionDate.localeCompare(b.transactionDate));
+  const flows = rows.filter((r) => r.sourceBalanceSyncId == null && r.status !== "missed");
 
-  let net = 0;
-  for (const r of rows) {
-    const d = r.transactionDate;
-    const isAdj = r.sourceBalanceSyncId != null;
-    if (syncDate >= todayStr) {
-      // Past adjustments carry through the anchor; then all rows today..syncDate.
-      if (d < todayStr) { if (isAdj) net += signed(r); }
-      else if (d <= syncDate) net += signed(r);
-    } else {
-      // Back-filled view: remove non-adjustment net between syncDate and today,
-      // keep adjustments dated on or before syncDate.
-      if (d > syncDate && d < todayStr && !isAdj) net -= signed(r);
-      else if (d <= syncDate && isAdj) net += signed(r);
-    }
+  const before = overrides.filter((o) => o.transactionDate < syncDate).at(-1);
+  const after = overrides.find((o) => o.transactionDate >= syncDate);
+
+  let bal: number;
+  if (before) {
+    bal = parseFloat(String(before.amount)) + flows
+      .filter((r) => r.transactionDate >= before.transactionDate && r.transactionDate < syncDate)
+      .reduce((s, r) => s + signed(r), 0);
+  } else if (after) {
+    bal = parseFloat(String(after.amount)) - flows
+      .filter((r) => r.transactionDate >= syncDate && r.transactionDate < after.transactionDate)
+      .reduce((s, r) => s + signed(r), 0);
+  } else {
+    bal = startingBalance - flows
+      .filter((r) => r.transactionDate >= syncDate && r.transactionDate < todayStr)
+      .reduce((s, r) => s + signed(r), 0);
   }
 
-  const forecastedBalance = Math.round((startingBalance + net) * 100) / 100;
+  const forecastedBalance = Math.round(bal * 100) / 100;
   const variance = Math.round((actualBalance - forecastedBalance) * 100) / 100;
 
   const sync = await db.transaction(async (tx) => {
@@ -343,23 +362,42 @@ router.post("/forecast/sync-balance", async (req, res): Promise<void> => {
       variance: String(variance),
     }).returning();
 
-    if (variance !== 0) {
-      await tx.insert(forecastedTransactionsTable).values({
+    // Replace any existing balance-update row on this date, then insert the
+    // new override row first-of-day (sortOrder -1 sorts before everything else).
+    await tx.delete(forecastedTransactionsTable).where(and(
+      eq(forecastedTransactionsTable.userId, req.userId),
+      eq(forecastedTransactionsTable.transactionDate, syncDate),
+      gt(forecastedTransactionsTable.sourceBalanceSyncId, 0),
+    ));
+    await tx.insert(forecastedTransactionsTable).values({
+      userId: req.userId,
+      transactionDate: syncDate,
+      description: `Balance Update — ${syncDate}`,
+      amount: String(actualBalance),
+      transactionType: "income",
+      category: "Balance Update",
+      sourceBalanceSyncId: syncRow.id,
+      isActual: false,
+      isCommitted: true,
+      sortOrder: -1,
+    });
+
+    // Updating today's balance also becomes the new starting balance so the
+    // banner and settings stay coherent with the ledger.
+    if (syncDate === todayStr) {
+      await tx.insert(userSettingsTable).values({
         userId: req.userId,
-        transactionDate: syncDate,
-        description: `Balance Adjustment (Synced ${syncDate})`,
-        amount: String(Math.abs(variance)),
-        transactionType: variance > 0 ? "income" : "expense",
-        category: "Adjustment",
-        sourceBalanceSyncId: syncRow.id,
-        isActual: false,
-        isCommitted: true,
+        startingBalance: String(actualBalance),
+        balanceAsOfDate: todayStr,
+      }).onConflictDoUpdate({
+        target: userSettingsTable.userId,
+        set: { startingBalance: String(actualBalance), balanceAsOfDate: todayStr },
       });
     }
     return syncRow;
   });
 
-  req.log.info({ syncDate, variance }, "Balance synced");
+  req.log.info({ syncDate, variance }, "Balance updated");
   res.status(201).json(SyncBalanceResponse.parse(serializeSync(sync)));
 });
 
@@ -400,7 +438,11 @@ router.post("/forecast/reorder", async (req, res): Promise<void> => {
   }
 
   const owned = await db
-    .select({ id: forecastedTransactionsTable.id, transactionDate: forecastedTransactionsTable.transactionDate })
+    .select({
+      id: forecastedTransactionsTable.id,
+      transactionDate: forecastedTransactionsTable.transactionDate,
+      sourceBalanceSyncId: forecastedTransactionsTable.sourceBalanceSyncId,
+    })
     .from(forecastedTransactionsTable)
     .where(and(
       eq(forecastedTransactionsTable.userId, req.userId),
@@ -409,6 +451,10 @@ router.post("/forecast/reorder", async (req, res): Promise<void> => {
   const ownedIds = new Set(owned.map((r) => r.id));
   if (ownedIds.size !== ids.length || ids.some((id) => !ownedIds.has(id))) {
     res.status(404).json({ error: "One or more transactions not found" });
+    return;
+  }
+  if (owned.some((r) => r.sourceBalanceSyncId != null)) {
+    res.status(400).json({ error: "Balance Update rows cannot be reordered" });
     return;
   }
   if (new Set(owned.map((r) => r.transactionDate)).size > 1) {
@@ -442,19 +488,69 @@ router.patch("/forecast/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { amount: rawTxAmount, ...restTxData } = parsed.data;
-  const [tx] = await db
-    .update(forecastedTransactionsTable)
-    .set({
-      ...restTxData,
-      ...(rawTxAmount !== undefined && { amount: String(rawTxAmount) }),
-    })
-    .where(and(eq(forecastedTransactionsTable.id, params.data.id), eq(forecastedTransactionsTable.userId, req.userId)))
-    .returning();
-  if (!tx) {
+  const [existing] = await db
+    .select()
+    .from(forecastedTransactionsTable)
+    .where(and(eq(forecastedTransactionsTable.id, params.data.id), eq(forecastedTransactionsTable.userId, req.userId)));
+  if (!existing) {
     res.status(404).json({ error: "Forecasted transaction not found" });
     return;
   }
+
+  if (existing.sourceBalanceSyncId != null) {
+    res.status(400).json({ error: "Balance update rows cannot be edited — run Update Current Balance again to correct them" });
+    return;
+  }
+
+  const { amount: rawTxAmount, forecastedAmount: rawForecastedAmount, applyToFuture, ...restTxData } = parsed.data;
+
+  // Future-dated rows cannot be marked as paid (TC-F12).
+  const todayStr = toLocalIso(new Date());
+  const effectiveDate = restTxData.transactionDate ?? existing.transactionDate;
+  if (restTxData.isActual === true && effectiveDate > todayStr) {
+    res.status(400).json({
+      error: `This transaction is scheduled for ${effectiveDate}. To mark it as paid, please update the date to today or an earlier date first.`,
+    });
+    return;
+  }
+
+  const set = {
+    ...restTxData,
+    ...(rawTxAmount !== undefined && { amount: String(rawTxAmount) }),
+    ...(rawForecastedAmount !== undefined && { forecastedAmount: rawForecastedAmount === null ? null : String(rawForecastedAmount) }),
+  };
+
+  const tx = await db.transaction(async (trx) => {
+    const [updated] = await trx
+      .update(forecastedTransactionsTable)
+      .set(set)
+      .where(and(eq(forecastedTransactionsTable.id, params.data.id), eq(forecastedTransactionsTable.userId, req.userId)))
+      .returning();
+
+    // Recurring rows: optionally apply description/category/amount to all
+    // future, not-yet-paid occurrences of the same bill or paycheck.
+    if (applyToFuture && (existing.sourceBillId != null || existing.sourcePayId != null)) {
+      const futureSet: Partial<typeof forecastedTransactionsTable.$inferInsert> = {};
+      if (restTxData.description !== undefined) futureSet.description = restTxData.description;
+      if (restTxData.category !== undefined) futureSet.category = restTxData.category;
+      if (rawTxAmount !== undefined) futureSet.amount = String(rawTxAmount);
+      if (Object.keys(futureSet).length > 0) {
+        await trx
+          .update(forecastedTransactionsTable)
+          .set(futureSet)
+          .where(and(
+            eq(forecastedTransactionsTable.userId, req.userId),
+            eq(forecastedTransactionsTable.isActual, false),
+            gt(forecastedTransactionsTable.transactionDate, existing.transactionDate),
+            existing.sourceBillId != null
+              ? eq(forecastedTransactionsTable.sourceBillId, existing.sourceBillId)
+              : eq(forecastedTransactionsTable.sourcePayId, existing.sourcePayId!),
+          ));
+      }
+    }
+    return updated;
+  });
+
   res.json(UpdateForecastedTransactionResponse.parse(serialize(tx)));
 });
 
@@ -473,7 +569,7 @@ router.delete("/forecast/:id", async (req, res): Promise<void> => {
     return;
   }
   if (existing.sourceBalanceSyncId != null) {
-    res.status(400).json({ error: "Balance adjustment rows cannot be deleted — they keep the running balance in sync with your bank" });
+    res.status(400).json({ error: "Balance update rows cannot be deleted — they keep the running balance in sync with your bank" });
     return;
   }
   await db
@@ -621,6 +717,7 @@ function serialize(tx: typeof forecastedTransactionsTable.$inferSelect) {
   return {
     ...tx,
     amount: parseFloat(String(tx.amount)),
+    forecastedAmount: tx.forecastedAmount == null ? null : parseFloat(String(tx.forecastedAmount)),
     createdAt: tx.createdAt.toISOString(),
   };
 }

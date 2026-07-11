@@ -435,6 +435,18 @@ export interface ForecastedTransaction {
   sourceBalanceSyncId?: number | null;
   isActual: boolean;
   isCommitted: boolean;
+  /**
+     * 'missed' = past bill marked as not paid (excluded from running balance)
+     * @nullable
+     */
+  status?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /**
+     * Original planned amount, kept when the user confirms a different actual amount
+     * @nullable
+     */
+  forecastedAmount?: number | null;
   sortOrder: number;
   createdAt: string;
 }
@@ -473,6 +485,14 @@ export interface ForecastedTransactionUpdate {
   category?: string;
   isActual?: boolean;
   isCommitted?: boolean;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  forecastedAmount?: number | null;
+  /** For recurring bill/paycheck rows — also apply description/category/amount changes to future occurrences */
+  applyToFuture?: boolean;
 }
 
 export interface ReorderForecastInput {

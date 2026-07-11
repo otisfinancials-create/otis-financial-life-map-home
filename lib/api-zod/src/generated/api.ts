@@ -848,6 +848,9 @@ export const ListForecastResponseItem = zod.object({
   "sourceBalanceSyncId": zod.number().nullish(),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
+  "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
+  "notes": zod.string().nullish(),
+  "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
 })
@@ -882,6 +885,9 @@ export const CreateForecastedTransactionResponse = zod.object({
   "sourceBalanceSyncId": zod.number().nullish(),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
+  "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
+  "notes": zod.string().nullish(),
+  "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
 })
@@ -969,7 +975,11 @@ export const UpdateForecastedTransactionBody = zod.object({
   "transactionType": zod.string().optional(),
   "category": zod.string().optional(),
   "isActual": zod.boolean().optional(),
-  "isCommitted": zod.boolean().optional()
+  "isCommitted": zod.boolean().optional(),
+  "status": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "forecastedAmount": zod.number().nullish(),
+  "applyToFuture": zod.boolean().optional().describe('For recurring bill\/paycheck rows — also apply description\/category\/amount changes to future occurrences')
 })
 
 export const UpdateForecastedTransactionResponse = zod.object({
@@ -985,6 +995,9 @@ export const UpdateForecastedTransactionResponse = zod.object({
   "sourceBalanceSyncId": zod.number().nullish(),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
+  "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
+  "notes": zod.string().nullish(),
+  "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
 })

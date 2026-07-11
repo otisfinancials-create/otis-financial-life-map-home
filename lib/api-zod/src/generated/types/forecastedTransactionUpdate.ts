@@ -14,4 +14,12 @@ export interface ForecastedTransactionUpdate {
   category?: string;
   isActual?: boolean;
   isCommitted?: boolean;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  forecastedAmount?: number | null;
+  /** For recurring bill/paycheck rows — also apply description/category/amount changes to future occurrences */
+  applyToFuture?: boolean;
 }
