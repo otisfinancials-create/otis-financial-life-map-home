@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import type { Bill } from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { FormatCurrency } from "@/components/ui/format-currency";
-import { CATEGORY_COLORS, FALLBACK_COLORS } from "@/lib/category-colors";
+import { categoryMeta } from "@/utils/categoryIcons";
 import { monthlyFactor } from "@/lib/bill-math";
 
 type Slice = {
@@ -41,14 +41,13 @@ export function BillsAnalytics({ bills }: { bills: Bill[] }) {
       byCategory[bill.category] = (byCategory[bill.category] ?? 0) + monthly;
     }
     const total = Object.values(byCategory).reduce((s, v) => s + v, 0);
-    let fallbackIdx = 0;
     const result: Slice[] = Object.entries(byCategory)
       .sort((a, b) => b[1] - a[1])
       .map(([name, value]) => ({
         name,
         value,
         pct: total > 0 ? (value / total) * 100 : 0,
-        color: CATEGORY_COLORS[name] ?? FALLBACK_COLORS[fallbackIdx++ % FALLBACK_COLORS.length],
+        color: categoryMeta(name).color,
       }));
     return { slices: result, totalMonthly: total };
   }, [bills]);

@@ -31,11 +31,11 @@ import { LifeEventDialog } from "@/components/life-events/life-event-dialog";
 import {
   LIFE_EVENT_CATEGORIES,
   categoryLabel,
-  categoryIcon,
   PRIORITY_MAP,
   TIMING_LABELS,
   FREQUENCY_LABELS,
 } from "@/components/life-events/constants";
+import { ICON_STROKE } from "@/utils/categoryIcons";
 
 const cardChrome = "rounded-xl border border-border bg-card shadow-sm";
 
@@ -195,13 +195,16 @@ export default function LifeEvents() {
       ) : (
         <div className="space-y-8">
           {grouped.map(({ cat, items }) => {
-            const Icon = categoryIcon(cat.value);
+            const Icon = cat.icon;
             const catTotal = items.filter((e) => e.isActive).reduce((s, e) => s + e.amount, 0);
             return (
               <div key={cat.value}>
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-100 text-teal-700">
-                    <Icon className="h-4 w-4" />
+                  <span
+                    className="flex h-7 w-7 items-center justify-center rounded-md"
+                    style={{ backgroundColor: cat.bg, color: cat.color }}
+                  >
+                    <Icon className="h-4 w-4" strokeWidth={ICON_STROKE} />
                   </span>
                   <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                     {cat.label}

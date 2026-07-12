@@ -394,12 +394,12 @@ async function seed() {
     socialSecurityMonthly: "2200",
     retirementDurationYears: 25,
   };
-  const existingSettings = await db.select().from(userSettingsTable).where(eq(userSettingsTable.userId, 1)).limit(1);
+  const existingSettings = await db.select().from(userSettingsTable).where(eq(userSettingsTable.userId, userId)).limit(1);
   if (existingSettings.length > 0) {
-    await db.update(userSettingsTable).set(retirementValues).where(eq(userSettingsTable.userId, 1));
+    await db.update(userSettingsTable).set(retirementValues).where(eq(userSettingsTable.userId, userId));
   } else {
     await db.insert(userSettingsTable).values({
-      userId: 1,
+      userId,
       balanceAsOfDate: toLocalIso(today),
       ...retirementValues,
     });

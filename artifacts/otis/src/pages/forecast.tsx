@@ -2,13 +2,13 @@ import { useState, useMemo, useRef, useEffect, Fragment, type ReactNode } from "
 import { format, addMonths, subDays } from "date-fns";
 import { useLocation } from "wouter";
 import {
-  ExternalLink, Plus, Trash2, Check, RefreshCw, RefreshCcw, Search,
-  ChevronRight, Zap, GripVertical, Download,
+  ExternalLink, Plus, Trash2, Check, RefreshCw, Search,
+  ChevronRight, Zap, PawPrint, GripVertical, Download,
   X, RotateCcw, FileSpreadsheet, FileText, ClipboardCopy,
-  Briefcase, Home, Shield, Tv, Car, Plane, UtensilsCrossed, HeartPulse,
-  Landmark, Pencil, PawPrint, Hammer, GraduationCap, PartyPopper,
-  TriangleAlert, type LucideIcon,
+  TriangleAlert,
 } from "lucide-react";
+
+import { categoryMeta, categoryDisplayLabel, ICON_STROKE } from "@/utils/categoryIcons";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -75,33 +75,10 @@ import {
 } from "recharts";
 
 // ─── Category color / icon system ────────────────────────────────────────────
-// Spec: 3px left-border accent + light-fill badge + icon per category.
-
-type CatMeta = { color: string; bg: string; text: string; icon: LucideIcon; label?: string };
-
-const CAT_META: Record<string, CatMeta> = {
-  salary:        { color: "#2D9B6F", bg: "#E1F5EE", text: "#085041", icon: Briefcase, label: "Salary" },
-  Housing:       { color: "#185FA5", bg: "#E6F1FB", text: "#0C447C", icon: Home },
-  Insurance:     { color: "#D85A30", bg: "#FAECE7", text: "#712B13", icon: Shield },
-  Subscriptions: { color: "#534AB7", bg: "#EEEDFE", text: "#3C3489", icon: Tv },
-  Transportation:{ color: "#BA7517", bg: "#FAEEDA", text: "#633806", icon: Car },
-  Utilities:     { color: "#0F6E56", bg: "#E1F5EE", text: "#085041", icon: Zap },
-  Food:          { color: "#D85A30", bg: "#FAECE7", text: "#712B13", icon: UtensilsCrossed },
-  Health:        { color: "#993556", bg: "#FBEAF0", text: "#72243E", icon: HeartPulse },
-  Taxes:         { color: "#E24B4A", bg: "#FCEBEB", text: "#791F1F", icon: Landmark },
-  Other:         { color: "#888780", bg: "#F1EFE8", text: "#444441", icon: Pencil },
-  Adjustment:        { color: "#185FA5", bg: "#E6F1FB", text: "#0C447C", icon: RefreshCcw, label: "Balance Update" },
-  "Balance Update":  { color: "#185FA5", bg: "#E6F1FB", text: "#0C447C", icon: RefreshCcw },
-  pets:              { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: PawPrint, label: "Pets" },
-  vacations:         { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: Plane, label: "Vacations" },
-  home_improvements: { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: Hammer, label: "Home Improvements" },
-  education:         { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: GraduationCap, label: "Education" },
-  celebrations:      { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: PartyPopper, label: "Celebrations" },
-  vehicle:           { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: Car, label: "Vehicle" },
-  medical:           { color: "#993556", bg: "#FBEAF0", text: "#72243E", icon: HeartPulse, label: "Medical" },
-};
-const catMeta = (c: string): CatMeta => CAT_META[c] ?? CAT_META.Other;
-const catLabel = (c: string) => catMeta(c).label ?? c;
+// Shared app-wide system: see src/utils/categoryIcons.ts (single source of
+// truth for icons, accent colors, and badge colors).
+const catMeta = categoryMeta;
+const catLabel = categoryDisplayLabel;
 
 // Shared column definition (Part A): every row — header, month headers, data
 // rows — uses this exact grid so columns align perfectly.
@@ -1004,7 +981,7 @@ export default function Forecast() {
           <Plus className="h-3.5 w-3.5 mr-1" /> Add Entry
         </Button>
         <Button size="sm" variant="outline" className="h-8 text-xs" onClick={openSyncModal}>
-          <RefreshCcw className="h-3.5 w-3.5 mr-1" /> Update Current Balance
+          <RefreshCw className="h-3.5 w-3.5 mr-1" /> Update Current Balance
         </Button>
         <Button
           size="sm"
@@ -1041,7 +1018,7 @@ export default function Forecast() {
               {" "}as of {userSettings?.balanceAsOfDate ?? "—"}.
               {lastSync && (
                 <span className="ml-2 inline-flex items-center gap-1 text-sky-700">
-                  <RefreshCcw className="h-3 w-3" />
+                  <RefreshCw className="h-3 w-3" />
                   Last synced {format(new Date(lastSync.syncDate + "T00:00:00"), "MMM d, yyyy")}
                   {lastSync.variance !== 0 && (
                     <>
@@ -1189,7 +1166,7 @@ export default function Forecast() {
 
                               {/* Category icon (Part D) — 16px, vertically centered */}
                               <div className="py-[11px] flex items-center justify-center">
-                                <CatIcon className="h-4 w-4 shrink-0" style={{ color: meta.color }} />
+                                <CatIcon className="h-4 w-4 shrink-0" strokeWidth={ICON_STROKE} style={{ color: meta.color }} />
                               </div>
 
                               {/* Description + status badges (Part F) */}
@@ -1235,7 +1212,7 @@ export default function Forecast() {
                                 )}
                                 {isAdjustment && (
                                   <StatusPill bg="#E6F1FB" text="#0C447C">
-                                    <RefreshCcw className="h-2.5 w-2.5" />
+                                    <RefreshCw className="h-2.5 w-2.5" />
                                     Balance update
                                   </StatusPill>
                                 )}
@@ -1673,7 +1650,7 @@ export default function Forecast() {
                   </div>
                 ) : (
                   <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
-                    <RefreshCcw className="h-4 w-4 mt-0.5 text-sky-600 shrink-0" />
+                    <RefreshCw className="h-4 w-4 mt-0.5 text-sky-600 shrink-0" />
                     <p className="text-sm text-sky-800">
                       Your actual balance is{" "}
                       <span className="font-mono font-semibold"><FormatCurrency amount={Math.abs(syncResult.variance)} /></span>{" "}

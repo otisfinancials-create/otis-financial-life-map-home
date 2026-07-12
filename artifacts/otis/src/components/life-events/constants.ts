@@ -1,30 +1,34 @@
-import {
-  PawPrint,
-  Plane,
-  Home,
-  GraduationCap,
-  PartyPopper,
-  Car,
-  HeartPulse,
-  Sparkles,
-  type LucideIcon,
-} from "lucide-react";
+import { type LucideIcon } from "lucide-react";
+
+import { categoryMeta, type CategoryMeta } from "@/utils/categoryIcons";
 
 export interface LifeEventCategory {
   value: string;
   label: string;
   icon: LucideIcon;
+  /** Accent color for the icon (shared category color system). */
+  color: string;
+  /** Light-fill badge background. */
+  bg: string;
+  /** Dark badge text from the same color family. */
+  text: string;
+}
+
+// Icons + colors come from the shared category system (src/utils/categoryIcons.ts).
+function fromShared(value: string, label: string): LifeEventCategory {
+  const meta: CategoryMeta = categoryMeta(value);
+  return { value, label, icon: meta.icon, color: meta.color, bg: meta.bg, text: meta.text };
 }
 
 export const LIFE_EVENT_CATEGORIES: LifeEventCategory[] = [
-  { value: "pets", label: "Pets", icon: PawPrint },
-  { value: "vacations", label: "Vacations", icon: Plane },
-  { value: "home_improvements", label: "Home Improvements", icon: Home },
-  { value: "education", label: "Education", icon: GraduationCap },
-  { value: "celebrations", label: "Celebrations", icon: PartyPopper },
-  { value: "vehicle", label: "Vehicle", icon: Car },
-  { value: "medical", label: "Medical", icon: HeartPulse },
-  { value: "custom", label: "Custom", icon: Sparkles },
+  fromShared("pets", "Pets"),
+  fromShared("vacations", "Vacations"),
+  fromShared("home_improvements", "Home Improvements"),
+  fromShared("education", "Education"),
+  fromShared("celebrations", "Celebrations"),
+  fromShared("vehicle", "Vehicle"),
+  fromShared("medical", "Medical"),
+  fromShared("custom", "Custom"),
 ];
 
 export const CATEGORY_MAP: Record<string, LifeEventCategory> = Object.fromEntries(
@@ -36,8 +40,8 @@ export function categoryLabel(value: string, customCategory?: string | null): st
   return CATEGORY_MAP[value]?.label ?? value;
 }
 
-export function categoryIcon(value: string): LucideIcon {
-  return CATEGORY_MAP[value]?.icon ?? Sparkles;
+export function lifeEventCategoryMeta(value: string): LifeEventCategory {
+  return CATEGORY_MAP[value] ?? CATEGORY_MAP.custom!;
 }
 
 export const TIMING_TYPES = [

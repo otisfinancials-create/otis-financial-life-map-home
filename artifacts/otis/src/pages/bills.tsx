@@ -40,6 +40,7 @@ import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BillDialog } from "@/components/bills/bill-dialog";
 import { BillsAnalytics } from "@/components/bills/bills-analytics";
+import { categoryMeta, ICON_STROKE } from "@/utils/categoryIcons";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -239,9 +240,26 @@ export default function Bills() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="font-normal border-border bg-background">
-                        {bill.category}
-                      </Badge>
+                      {(() => {
+                        const meta = categoryMeta(bill.category);
+                        const CatIcon = meta.icon;
+                        return (
+                          <div className="flex items-center gap-2">
+                            <CatIcon
+                              className="h-4 w-4 shrink-0"
+                              strokeWidth={ICON_STROKE}
+                              style={{ color: meta.color }}
+                            />
+                            <Badge
+                              variant="outline"
+                              className="font-normal border-transparent"
+                              style={{ backgroundColor: meta.bg, color: meta.text }}
+                            >
+                              {bill.category}
+                            </Badge>
+                          </div>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="font-mono">
                       <FormatCurrency amount={bill.amount} />

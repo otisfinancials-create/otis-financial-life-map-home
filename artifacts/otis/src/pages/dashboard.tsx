@@ -35,6 +35,7 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
+import { categoryMeta, accountTypeMeta, ICON_STROKE } from "@/utils/categoryIcons";
 import { format, startOfMonth, addDays, differenceInCalendarDays } from "date-fns";
 import { Link, useLocation } from "wouter";
 import type { ReactNode } from "react";
@@ -613,7 +614,21 @@ export default function Dashboard() {
                         title={`${bill.category} — due in ${bill.daysUntilDue}d`}
                       />
                       <div className="flex flex-col min-w-0 flex-1">
-                        <span className="text-sm font-medium truncate">{bill.billName}</span>
+                        <span className="text-sm font-medium truncate flex items-center gap-1.5">
+                          {(() => {
+                            const meta = categoryMeta(bill.category);
+                            const CatIcon = meta.icon;
+                            return (
+                              <CatIcon
+                                className="h-4 w-4 shrink-0"
+                                strokeWidth={ICON_STROKE}
+                                style={{ color: meta.color }}
+                                aria-label={bill.category}
+                              />
+                            );
+                          })()}
+                          <span className="truncate">{bill.billName}</span>
+                        </span>
                         <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                           {bill.daysUntilDue === 0 ? (
                             <span className="text-destructive font-medium">Due today</span>
@@ -736,10 +751,20 @@ export default function Dashboard() {
                 </div>
               ) : Object.keys(accountsByType).length > 0 ? (
                 <div className="space-y-3.5">
-                  {Object.entries(accountsByType).map(([type, total]) => (
+                  {Object.entries(accountsByType).map(([type, total]) => {
+                    const typeMeta = accountTypeMeta(type);
+                    const TypeIcon = typeMeta?.icon;
+                    return (
                     <div key={type}>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm text-muted-foreground">
+                        <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                          {TypeIcon && (
+                            <TypeIcon
+                              className="h-4 w-4 shrink-0"
+                              strokeWidth={ICON_STROKE}
+                              style={{ color: typeMeta.color }}
+                            />
+                          )}
                           {typeLabel(type)}
                         </span>
                         <span
@@ -761,7 +786,8 @@ export default function Dashboard() {
                         />
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-4">No accounts yet.</p>
