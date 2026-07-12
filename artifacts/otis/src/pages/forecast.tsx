@@ -1,9 +1,13 @@
-import { useState, useMemo, useRef, useEffect, Fragment } from "react";
+import { useState, useMemo, useRef, useEffect, Fragment, type ReactNode } from "react";
 import { format, addMonths, subDays } from "date-fns";
+import { useLocation } from "wouter";
 import {
   ExternalLink, Plus, Trash2, Check, RefreshCw, RefreshCcw, Search,
-  ChevronRight, Zap, GripVertical, Scale, Download,
+  ChevronRight, Zap, GripVertical, Download,
   X, RotateCcw, FileSpreadsheet, FileText, ClipboardCopy,
+  Briefcase, Home, Shield, Tv, Car, Plane, UtensilsCrossed, HeartPulse,
+  Landmark, CircleEllipsis, PawPrint, Hammer, GraduationCap, PartyPopper,
+  TriangleAlert, type LucideIcon,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -28,7 +32,6 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -71,30 +74,38 @@ import {
   CartesianGrid,
 } from "recharts";
 
-// ─── Category styles ─────────────────────────────────────────────────────────
+// ─── Category color / icon system ────────────────────────────────────────────
+// Spec: 3px left-border accent + light-fill badge + icon per category.
 
-const CAT_STYLES: Record<string, string> = {
-  Housing:       "bg-blue-100 text-blue-700",
-  Subscriptions: "bg-purple-100 text-purple-700",
-  Utilities:     "bg-cyan-100 text-cyan-700",
-  Insurance:     "bg-orange-100 text-orange-700",
-  Health:        "bg-green-100 text-green-700",
-  Food:          "bg-amber-100 text-amber-800",
-  Taxes:         "bg-red-100 text-red-700",
-  Transportation:"bg-yellow-100 text-yellow-700",
-  salary:        "bg-emerald-100 text-emerald-700",
-  Other:         "bg-gray-100 text-gray-600",
-  Adjustment:    "bg-sky-100 text-sky-700",
-  "Balance Update": "bg-sky-100 text-sky-700",
-  pets:              "bg-teal-100 text-teal-700",
-  vacations:         "bg-teal-100 text-teal-700",
-  home_improvements: "bg-teal-100 text-teal-700",
-  education:         "bg-teal-100 text-teal-700",
-  celebrations:      "bg-teal-100 text-teal-700",
-  vehicle:           "bg-teal-100 text-teal-700",
-  medical:           "bg-teal-100 text-teal-700",
+type CatMeta = { color: string; bg: string; text: string; icon: LucideIcon; label?: string };
+
+const CAT_META: Record<string, CatMeta> = {
+  salary:        { color: "#2D9B6F", bg: "#E1F5EE", text: "#085041", icon: Briefcase, label: "Salary" },
+  Housing:       { color: "#185FA5", bg: "#E4EFFA", text: "#0C447C", icon: Home },
+  Insurance:     { color: "#D85A30", bg: "#FBEAE3", text: "#7A2E12", icon: Shield },
+  Subscriptions: { color: "#534AB7", bg: "#EEEDFE", text: "#3C3489", icon: Tv },
+  Transportation:{ color: "#BA7517", bg: "#FAF0DD", text: "#6B4308", icon: Car },
+  Utilities:     { color: "#0F6E56", bg: "#E0F2ED", text: "#0A4A3A", icon: Zap },
+  Food:          { color: "#D85A30", bg: "#FBEAE3", text: "#7A2E12", icon: UtensilsCrossed },
+  Health:        { color: "#993556", bg: "#F8E7ED", text: "#6E2540", icon: HeartPulse },
+  Taxes:         { color: "#E24B4A", bg: "#FCEBEB", text: "#791F1F", icon: Landmark },
+  Other:         { color: "#888780", bg: "#F1F1EF", text: "#55544F", icon: CircleEllipsis },
+  Adjustment:        { color: "#3987CE", bg: "#E6F1FB", text: "#0C447C", icon: RefreshCcw, label: "Balance Update" },
+  "Balance Update":  { color: "#3987CE", bg: "#E6F1FB", text: "#0C447C", icon: RefreshCcw },
+  pets:              { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: PawPrint, label: "Pets" },
+  vacations:         { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: Plane, label: "Vacations" },
+  home_improvements: { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: Hammer, label: "Home Improvements" },
+  education:         { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: GraduationCap, label: "Education" },
+  celebrations:      { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: PartyPopper, label: "Celebrations" },
+  vehicle:           { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: Car, label: "Vehicle" },
+  medical:           { color: "#993556", bg: "#F8E7ED", text: "#6E2540", icon: HeartPulse, label: "Medical" },
 };
-const catStyle = (c: string) => CAT_STYLES[c] ?? "bg-gray-100 text-gray-600";
+const catMeta = (c: string): CatMeta => CAT_META[c] ?? CAT_META.Other;
+const catLabel = (c: string) => catMeta(c).label ?? c;
+
+// Shared column definition (Part A): every row — header, month headers, data
+// rows — uses this exact grid so columns align perfectly.
+const LEDGER_GRID = "grid grid-cols-[3px_80px_32px_1fr_100px_120px_120px_110px]";
 
 const MANUAL_CATEGORIES = [
   "Housing","Subscriptions","Utilities","Insurance",
@@ -125,6 +136,21 @@ function CharCount({ value, max }: { value: string; max: number }) {
     </span>
   );
 }
+
+// Small status pill used inside the description cell (Part F).
+function StatusPill({ bg, text, children }: { bg: string; text: string; children: ReactNode }) {
+  return (
+    <span
+      className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap"
+      style={{ backgroundColor: bg, color: text }}
+    >
+      {children}
+    </span>
+  );
+}
+
+// Running-balance color: red when negative, green when healthy, dark neutral otherwise.
+const balanceColor = (n: number) => (n < 0 ? "#A32D2D" : n >= 1000 ? "#0F6E56" : "#1D1F23");
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -209,6 +235,7 @@ export default function Forecast() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
 
   // ── Date window ──────────────────────────────────────────────────────────
   // Rolling lookback: include the 30 days before today so recently-due
@@ -399,6 +426,115 @@ export default function Forecast() {
   // Derived directly from the ledger month groups so Income / Expenses / Net /
   // End Balance always match exactly what the Ledger view shows (TC-F18).
   const summaryRows = groups;
+
+  // ── Categories visible in the current view (legend, Part L) ──────────────
+  const visibleCategories = useMemo(
+    () => Array.from(new Set(filtered.map((t) => t.category))).sort((a, b) => catLabel(a).localeCompare(catLabel(b))),
+    [filtered],
+  );
+
+  // ── Balance as of today (TODAY divider + footer) ─────────────────────────
+  // Computed from the FULL in-range ledger (not the filtered view) so that
+  // search/category filters never change the displayed current balance.
+  const currentBalanceValue = useMemo(() => {
+    let val = startingBalance;
+    for (const t of txsWithBalance) {
+      if (t.transactionDate > todayStr) break;
+      val = t.runningBalance;
+    }
+    return val;
+  }, [txsWithBalance, startingBalance, todayStr]);
+
+  // ── Period totals (sticky footer, Part M) ────────────────────────────────
+  // Footer tracks the selected time range only — search/category filters do
+  // not change these numbers. Mirrors the month-group exclusion rules:
+  // balance updates and missed rows never count toward income/expenses.
+  const periodTotals = useMemo(() => {
+    let income = 0;
+    let expenses = 0;
+    const monthKeys = new Set<string>();
+    for (const t of txsWithBalance) {
+      monthKeys.add(t.transactionDate.slice(0, 7));
+      if (t.sourceBalanceSyncId == null && t.status !== "missed") {
+        if (t.transactionType === "income") income += t.amount;
+        else expenses += t.amount;
+      }
+    }
+    const n = Math.max(monthKeys.size, 1);
+    return { net: income - expenses, monthlyIncome: income / n, monthlyBills: expenses / n };
+  }, [txsWithBalance]);
+
+  // ── Otis insight rows (Part I) — derived, presentation-only ──────────────
+  type Insight = { key: string; body: ReactNode; prompt: string };
+  const insightsByMonth = useMemo(() => {
+    const out: Record<string, Insight[]> = {};
+    const money = (n: number) =>
+      new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Math.abs(n));
+    const strong = (s: string, k: string) => <b key={k} style={{ color: "#085041" }}>{s}</b>;
+    for (const g of groups) {
+      const list: Insight[] = [];
+
+      // 1. Running balance goes negative this month.
+      const firstNeg = g.rows.find((t) => t.runningBalance < 0);
+      if (firstNeg) {
+        const d = format(new Date(firstNeg.transactionDate + "T00:00:00"), "MMMM d");
+        list.push({
+          key: `${g.key}-neg`,
+          body: (
+            <>Heads up — your projected balance dips to {strong(`−${money(firstNeg.runningBalance)}`, "a")} on{" "}
+            {strong(d, "b")}. Moving a bill or shifting some savings could cover the gap.</>
+          ),
+          prompt: `My cash flow forecast shows my balance going negative (−${money(firstNeg.runningBalance)}) on ${d}. What are my options to avoid that?`,
+        });
+      }
+
+      // 2. Three or more large bills (≥ $500) landing in the same 7-day window.
+      const large = g.rows.filter(
+        (t) => t.transactionType === "expense" && t.sourceBalanceSyncId == null && t.status !== "missed" && t.amount >= 500,
+      );
+      let cluster: TxRow[] | null = null;
+      for (const anchor of large) {
+        const end = new Date(anchor.transactionDate + "T00:00:00");
+        end.setDate(end.getDate() + 6);
+        const endStr = format(end, "yyyy-MM-dd");
+        const win = large.filter((t) => t.transactionDate >= anchor.transactionDate && t.transactionDate <= endStr);
+        if (win.length >= 3 && (!cluster || win.length > cluster.length)) cluster = win;
+      }
+      if (cluster) {
+        const total = cluster.reduce((s, t) => s + t.amount, 0);
+        const from = format(new Date(cluster[0].transactionDate + "T00:00:00"), "MMM d");
+        const to = format(new Date(cluster[cluster.length - 1].transactionDate + "T00:00:00"), "MMM d");
+        list.push({
+          key: `${g.key}-cluster`,
+          body: (
+            <>{strong(`${cluster.length} large bills`, "a")} totaling {strong(money(total), "b")} land between {from} and{" "}
+            {to}. That's a heavy week — spacing them out could ease the squeeze.</>
+          ),
+          prompt: `I have ${cluster.length} large bills totaling ${money(total)} due between ${from} and ${to}. How should I manage that week?`,
+        });
+      }
+
+      // 3. Life-event spending materially impacts this month's cash flow.
+      const lifeTotal = g.rows
+        .filter((t) => t.sourceLifeEventId != null && t.transactionType === "expense" && t.status !== "missed")
+        .reduce((s, t) => s + t.amount, 0);
+      if (lifeTotal >= 1000) {
+        list.push({
+          key: `${g.key}-life`,
+          body: (
+            <>Life event spending adds {strong(money(lifeTotal), "a")} to {g.label}&apos;s outflows — a noticeable dent
+            in this month&apos;s cash flow.</>
+          ),
+          prompt: `Life events add ${money(lifeTotal)} of spending in ${g.label}. How will this impact my cash flow, and should I adjust anything?`,
+        });
+      }
+
+      if (list.length) out[g.key] = list;
+    }
+    return out;
+  }, [groups]);
+
+  const askOtis = (prompt: string) => navigate(`/otis?prompt=${encodeURIComponent(prompt)}`);
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -757,26 +893,28 @@ export default function Forecast() {
       {/* ── Controls Bar ─────────────────────────────────────────────────────── */}
       <div className="sticky top-[57px] z-20 bg-background/95 backdrop-blur-sm border-b border-border px-6 py-3 flex items-center gap-2 flex-wrap">
 
-        {/* Time range */}
-        <div className="flex border border-border rounded-md overflow-hidden bg-card text-xs">
+        {/* Time range pill group (active: navy) */}
+        <div className="flex items-center gap-1.5">
           {([1, 3, 6, 12] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMonths(m)}
-              className={`px-3 py-1.5 font-medium border-r border-border last:border-0 transition-colors ${months === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+              className={`rounded-[20px] px-[13px] py-[5px] text-xs font-medium transition-colors duration-100 ${months === m ? "text-white" : "bg-white border border-[#E3E7ED] text-gray-500 hover:text-gray-800 hover:border-gray-300"}`}
+              style={months === m ? { backgroundColor: "#0D2B45" } : undefined}
             >
               {m}mo
             </button>
           ))}
         </div>
 
-        {/* View toggle */}
-        <div className="flex border border-border rounded-md overflow-hidden bg-card text-xs">
-          {(["ledger", "summary"] as const).map((v, i) => (
+        {/* View toggle pill group (active: teal) */}
+        <div className="flex items-center gap-1.5 ml-1">
+          {(["ledger", "summary"] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`px-3 py-1.5 font-medium transition-colors ${i === 0 ? "border-r border-border" : ""} ${view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+              className={`rounded-[20px] px-[13px] py-[5px] text-xs font-medium transition-colors duration-100 ${view === v ? "text-white" : "bg-white border border-[#E3E7ED] text-gray-500 hover:text-gray-800 hover:border-gray-300"}`}
+              style={view === v ? { backgroundColor: "#2D9B6F" } : undefined}
             >
               {v === "ledger" ? "Ledger" : "Monthly Summary"}
             </button>
@@ -790,29 +928,23 @@ export default function Forecast() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            {categories.map((c) => <SelectItem key={c} value={c}>{catLabel(c)}</SelectItem>)}
           </SelectContent>
         </Select>
+
+        <div className="flex-1" />
 
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
-            placeholder="Search..."
+            placeholder="Search transactions…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-8 text-xs pl-8 w-44 bg-card border-border"
+            className="h-8 text-xs pl-8 w-48 bg-card border-border"
           />
         </div>
 
-        <div className="flex-1" />
-
-        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={openSyncModal}>
-          <Scale className="h-3.5 w-3.5 mr-1" /> Update Current Balance
-        </Button>
-        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowManualModal(true)}>
-          <Plus className="h-3.5 w-3.5 mr-1" /> Add Entry
-        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="sm" variant="outline" className="h-8 text-xs">
@@ -831,6 +963,16 @@ export default function Forecast() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          size="sm"
+          className="h-8 text-xs text-white bg-[#2D9B6F] hover:bg-[#268a62]"
+          onClick={() => setShowManualModal(true)}
+        >
+          <Plus className="h-3.5 w-3.5 mr-1" /> Add Entry
+        </Button>
+        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={openSyncModal}>
+          <RefreshCcw className="h-3.5 w-3.5 mr-1" /> Update Current Balance
+        </Button>
         <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleRegenerate} disabled={regenerate.isPending}>
           <RefreshCw className={`h-3.5 w-3.5 mr-1 ${regenerate.isPending ? "animate-spin" : ""}`} />
           Regenerate
@@ -898,44 +1040,48 @@ export default function Forecast() {
                 <p className="text-sm mt-1">Try a longer time range or regenerate the forecast.</p>
               </div>
             ) : (
-              <div className="border border-border rounded-lg overflow-hidden">
+              <div className="bg-white border border-[#E8ECF0] rounded-[14px] overflow-hidden">
                 {/* Scrollable ledger with its own sticky context */}
-                <div className="overflow-y-auto max-h-[calc(100vh-280px)]">
+                <div className="overflow-y-auto max-h-[calc(100vh-330px)]">
 
-                  {/* Column headers */}
-                  <div className="sticky top-0 z-10 grid grid-cols-[110px_1fr_130px_72px_136px_230px] bg-muted/60 border-b border-border text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    <div className="px-4 py-2.5">Date</div>
-                    <div className="px-4 py-2.5">Description</div>
-                    <div className="px-4 py-2.5">Category</div>
-                    <div className="px-4 py-2.5">Type</div>
-                    <div className="px-4 py-2.5 text-right">Amount</div>
-                    <div className="px-4 py-2.5 text-right">Balance</div>
+                  {/* Column headers (Part N) — same grid as every row */}
+                  <div className={`sticky top-0 z-10 ${LEDGER_GRID} bg-[#F5F7FA] border-b border-[#EEF1F5] text-[11px] font-semibold text-[#AAB0BB] uppercase tracking-[0.05em]`}>
+                    <div />
+                    <div className="px-1 py-2.5">Date</div>
+                    <div />
+                    <div className="px-2 py-2.5">Description</div>
+                    <div className="px-2 py-2.5 text-right">Amount</div>
+                    <div className="px-2 py-2.5 text-right">Category</div>
+                    <div className="px-2 py-2.5 text-right">Balance</div>
+                    <div className="px-3 py-2.5 text-right">Actions</div>
                   </div>
 
                   {/* Month groups */}
                   {groups.map((group) => {
                     const net = group.income - group.expenses;
+                    const monthInsights = insightsByMonth[group.key] ?? [];
                     return (
                       <div key={group.key}>
-                        {/* Month group header (sticky within scroll container) */}
-                        <div className="sticky top-[37px] z-[9] grid grid-cols-[110px_1fr_130px_72px_136px_230px] bg-card/90 backdrop-blur-sm border-b border-t border-border">
-                          <div className="col-span-4 px-4 py-2 flex items-center gap-3">
-                            <span className="text-[11px] font-bold text-foreground tracking-wide">── {group.label} ──</span>
-                            <span className={`text-[11px] font-mono font-medium ${net >= 0 ? "text-emerald-400" : "text-destructive"}`}>
-                              Net: {net >= 0 ? "+" : ""}<FormatCurrency amount={net} />
-                            </span>
-                            <span className="text-[10px] text-muted-foreground font-mono">
+                        {/* Month group header (Part G) — same grid, sticky within scroll */}
+                        <div className={`sticky top-[37px] z-[9] ${LEDGER_GRID} bg-[#F8F9FB] border-y border-[#EEF1F5]`}>
+                          <div />
+                          <div className="col-span-3 px-1 py-2 flex items-center gap-2.5">
+                            <span className="text-xs font-semibold" style={{ color: "#0D2B45" }}>{group.label}</span>
+                            <span className="text-[10px] text-muted-foreground">
                               {group.rows.length} transaction{group.rows.length !== 1 ? "s" : ""}
                             </span>
                           </div>
-                          <div className="px-4 py-2 text-right">
-                            <span className="text-[11px] font-mono text-muted-foreground">
-                              −<FormatCurrency amount={group.expenses} />
+                          <div className="col-span-4 px-3 py-2 flex items-center justify-end gap-2 whitespace-nowrap">
+                            <span className="text-[11px] text-muted-foreground font-mono tabular-nums">
+                              In <FormatCurrency amount={group.income} /> · Out <FormatCurrency amount={group.expenses} />
                             </span>
-                          </div>
-                          <div className="px-4 py-2 text-right">
-                            <span className={`text-[11px] font-mono font-bold ${group.endBalance < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                              <FormatCurrency amount={group.endBalance} />
+                            <span
+                              className="text-[11px] font-semibold px-2 py-0.5 rounded-full font-mono tabular-nums"
+                              style={net >= 0
+                                ? { backgroundColor: "#E1F5EE", color: "#085041" }
+                                : { backgroundColor: "#FCEBEB", color: "#791F1F" }}
+                            >
+                              {net >= 0 ? "+" : "−"}<FormatCurrency amount={Math.abs(net)} />
                             </span>
                           </div>
                         </div>
@@ -947,10 +1093,12 @@ export default function Forecast() {
                           const isMissed  = tx.status === "missed";
                           const isManual  = !tx.sourceBillId && !tx.sourcePayId && !isAdjustment;
                           const isEditing = editingId === tx.id;
-                          const isToday   = tx.transactionDate === todayStr;
                           const isPast    = tx.transactionDate < todayStr;
                           const isOverdue = isPast && !tx.isActual && !isMissed && !isAdjustment;
                           const isCurrentBalance = tx.id === currentBalanceTxId;
+                          const isLifeEvent = tx.sourceLifeEventId != null;
+                          const meta = catMeta(tx.category);
+                          const CatIcon = meta.icon;
                           const variance = tx.isActual && tx.forecastedAmount != null && tx.forecastedAmount !== tx.amount
                             ? tx.amount - tx.forecastedAmount
                             : null;
@@ -958,10 +1106,17 @@ export default function Forecast() {
                           return (
                             <Fragment key={tx.id}>
                             {hasPastRows && tx.id === firstFutureTxId && (
-                              <div className="flex items-center gap-3 px-4 py-1.5 bg-primary/[0.06] border-y border-primary/25 select-none">
-                                <div className="h-px flex-1 bg-primary/25" />
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Today</span>
-                                <div className="h-px flex-1 bg-primary/25" />
+                              <div
+                                className="flex items-center justify-between gap-3 px-4 py-1.5 select-none"
+                                style={{ backgroundColor: "#EDFAF4", borderTop: "2px solid #2D9B6F", borderBottom: "2px solid #2D9B6F" }}
+                              >
+                                <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: "#2D9B6F" }}>
+                                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#2D9B6F" }} />
+                                  Today — {format(today, "MMMM d, yyyy")}
+                                </span>
+                                <span className="text-xs font-semibold font-mono tabular-nums whitespace-nowrap" style={{ color: "#0F6E56" }}>
+                                  Current balance {currentBalanceValue < 0 && "−"}<FormatCurrency amount={Math.abs(currentBalanceValue)} />
+                                </span>
                               </div>
                             )}
                             <div
@@ -972,37 +1127,47 @@ export default function Forecast() {
                               onDragEnd={() => { setDraggingId(null); setDragOver(null); }}
                               onClick={() => { if (!isEditing && !suppressClickRef.current) openTx(tx); }}
                               className={[
-                                "relative grid grid-cols-[110px_1fr_130px_72px_136px_230px] border-b border-border/60 last:border-0 group cursor-pointer transition-colors select-none",
-                                idx % 2 === 1 ? "bg-muted/20" : "",
-                                isPast ? "opacity-60" : "",
+                                `relative ${LEDGER_GRID} border-b border-[#F2F4F7] last:border-0 group cursor-pointer transition-colors duration-100 select-none`,
+                                isPast ? "opacity-75" : "",
                                 draggingId === tx.id ? "opacity-40" : "",
                                 draggingId !== null && draggingId !== tx.id && draggedRow?.transactionDate !== tx.transactionDate ? "hover:border-primary hover:border-2" : "",
                                 isNeg
-                                  ? "bg-red-500/[0.06] hover:bg-red-500/[0.12]"
+                                  ? "bg-[#FFF5F5] hover:bg-[#FFECEC]"
                                   : isAdjustment
-                                  ? "bg-sky-500/[0.06] hover:bg-sky-500/[0.12]"
-                                  : "hover:bg-muted/40",
+                                  ? "bg-[#F3F9FE] hover:bg-[#E9F3FC]"
+                                  : idx % 2 === 1
+                                  ? "bg-[#FAFBFC] hover:bg-[#F8FAFE]"
+                                  : "bg-white hover:bg-[#F8FAFE]",
                               ].join(" ")}
                             >
+                              {/* Category color bar (Part C) — first grid cell */}
+                              <div style={{ backgroundColor: meta.color }} />
                               {dragOver?.id === tx.id && (
                                 <div
                                   className={`absolute left-0 right-0 h-0.5 bg-primary z-20 pointer-events-none ${dragOver.pos === "before" ? "-top-px" : "-bottom-px"}`}
                                 />
                               )}
                               {/* Date */}
-                              <div className="px-4 py-2.5 flex items-center gap-1.5">
+                              <div className="px-1 py-2.5 flex items-center gap-0.5 min-w-0">
                                 <GripVertical
                                   aria-label="Drag to move this transaction to another date"
-                                  className="h-3.5 w-3.5 shrink-0 -ml-2 text-muted-foreground/25 group-hover:text-muted-foreground/70 cursor-grab"
+                                  className="h-3 w-3 shrink-0 text-muted-foreground/25 group-hover:text-muted-foreground/70 cursor-grab"
                                 />
-                                <span className="font-mono text-[11px] text-muted-foreground whitespace-nowrap">
-                                  {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d, yyyy")}
+                                <span className="font-mono tabular-nums text-[11px] text-muted-foreground whitespace-nowrap">
+                                  {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d")}
                                 </span>
                               </div>
 
-                              {/* Description */}
-                              <div className="px-4 py-2.5 flex items-center gap-1.5 min-w-0">
-                                <span className="font-medium text-sm truncate min-w-0">{tx.description}</span>
+                              {/* Category icon (Part D) */}
+                              <div className="py-2.5 flex items-center justify-center">
+                                <CatIcon className="h-3.5 w-3.5 shrink-0" style={{ color: meta.color }} />
+                              </div>
+
+                              {/* Description + status badges (Part F) */}
+                              <div className="px-2 py-2.5 flex items-center gap-1.5 min-w-0">
+                                <span className={`font-medium text-sm truncate min-w-0 ${isMissed ? "line-through text-muted-foreground" : ""}`}>
+                                  {tx.description}
+                                </span>
                                 {tx.companyUrl && (
                                   <a
                                     href={tx.companyUrl}
@@ -1015,52 +1180,44 @@ export default function Forecast() {
                                     <ExternalLink className="h-3 w-3" />
                                   </a>
                                 )}
-                                {isToday && (
-                                  <Badge className="shrink-0 text-[9px] font-bold px-1.5 h-4 bg-primary/20 text-primary border-0 rounded-full leading-none">TODAY</Badge>
-                                )}
                                 {tx.isActual && (
-                                  <Badge className="shrink-0 text-[9px] px-1.5 h-4 bg-primary/20 text-primary border-0 rounded-full leading-none">Paid</Badge>
+                                  <StatusPill bg="#E1F5EE" text="#085041">
+                                    <Check className="h-2.5 w-2.5" />
+                                    {tx.transactionType === "income" ? "Confirmed" : "Paid"}
+                                  </StatusPill>
                                 )}
                                 {isOverdue && (
-                                  <Badge className="shrink-0 flex items-center gap-1 text-[9px] px-1.5 h-4 bg-orange-100 text-orange-700 border-0 rounded-full leading-none">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                                  <StatusPill bg="#FFF3E0" text="#9A3412">
+                                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#F97316" }} />
                                     Overdue
-                                  </Badge>
+                                  </StatusPill>
                                 )}
                                 {isMissed && (
-                                  <Badge className="shrink-0 flex items-center gap-1 text-[9px] px-1.5 h-4 bg-orange-100 text-orange-700 border-0 rounded-full leading-none">
-                                    <X className="h-2.5 w-2.5" />
+                                  <StatusPill bg="#FFF3E0" text="#633806">
+                                    <TriangleAlert className="h-2.5 w-2.5" />
                                     Missed
-                                  </Badge>
+                                  </StatusPill>
                                 )}
-                                {isManual && !isAdjustment && (
-                                  <Badge className="shrink-0 text-[9px] px-1.5 h-4 bg-muted text-muted-foreground border-0 rounded-full leading-none">Manual</Badge>
+                                {tx.isVariable && !tx.isActual && !isAdjustment && !isMissed && (
+                                  <StatusPill bg="#EEEDFE" text="#3C3489">~ estimated</StatusPill>
+                                )}
+                                {isLifeEvent && (
+                                  <StatusPill bg="#E1F5EE" text="#0F6E56">Life event</StatusPill>
                                 )}
                                 {isAdjustment && (
-                                  <Badge className="shrink-0 flex items-center gap-1 text-[9px] px-1.5 h-4 bg-sky-100 text-sky-700 border-0 rounded-full leading-none">
+                                  <StatusPill bg="#E6F1FB" text="#0C447C">
                                     <RefreshCcw className="h-2.5 w-2.5" />
-                                    Balance Update
-                                  </Badge>
+                                    Balance update
+                                  </StatusPill>
+                                )}
+                                {isManual && !isLifeEvent && (
+                                  <StatusPill bg="#F1F1EF" text="#55544F">Manual</StatusPill>
                                 )}
                               </div>
 
-                              {/* Category */}
-                              <div className="px-4 py-2.5 flex items-center">
-                                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${catStyle(tx.category)}`}>
-                                  {tx.category}
-                                </span>
-                              </div>
-
-                              {/* Type */}
-                              <div className="px-4 py-2.5 flex items-center">
-                                <span className={`text-[11px] font-medium ${isAdjustment ? "text-sky-600" : tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-zinc-400"}`}>
-                                  {isAdjustment ? "Balance Update" : tx.transactionType === "income" ? "Income" : tx.sourceLifeEventId != null ? "Life Event" : "Bill"}
-                                </span>
-                              </div>
-
-                              {/* Amount (double-click to edit) */}
+                              {/* Amount (Part E, double-click to edit) */}
                               <div
-                                className="px-4 py-2.5 flex items-center justify-end"
+                                className="px-2 py-2.5 flex items-center justify-end"
                                 onClick={(e) => e.stopPropagation()}
                                 onDoubleClick={(e) => startEdit(tx, e)}
                               >
@@ -1081,7 +1238,10 @@ export default function Forecast() {
                                 ) : (
                                   <div className="flex flex-col items-end">
                                     <span
-                                      className={`font-mono text-sm ${isMissed ? "line-through text-muted-foreground" : isAdjustment ? "text-sky-600" : tx.transactionType === "income" ? "text-emerald-400" : tx.sourceLifeEventId != null ? "text-teal-600" : "text-foreground"}`}
+                                      className={`font-mono tabular-nums text-sm font-medium whitespace-nowrap ${isMissed ? "line-through text-muted-foreground" : ""}`}
+                                      style={isMissed ? undefined : {
+                                        color: isAdjustment ? "#0C447C" : tx.transactionType === "income" ? "#0F6E56" : "#A32D2D",
+                                      }}
                                       title={
                                         isAdjustment
                                           ? "Balance update — the running balance is set to this value here"
@@ -1097,7 +1257,7 @@ export default function Forecast() {
                                       <FormatCurrency amount={tx.amount} />
                                     </span>
                                     {variance !== null && (
-                                      <span className="text-[10px] font-mono text-muted-foreground">
+                                      <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
                                         {variance > 0 ? "+" : "−"}<FormatCurrency amount={Math.abs(variance)} /> vs planned
                                       </span>
                                     )}
@@ -1105,76 +1265,175 @@ export default function Forecast() {
                                 )}
                               </div>
 
-                              {/* Running Balance + row actions */}
-                              <div className="px-4 py-2.5 flex items-center justify-end gap-2">
-                                <span className={`font-mono text-sm font-bold ${isNeg ? "text-destructive" : "text-foreground"}`}>
+                              {/* Category badge */}
+                              <div className="px-2 py-2.5 flex items-center justify-end min-w-0">
+                                <span
+                                  className="text-[11px] font-medium px-2 py-0.5 rounded-full truncate"
+                                  style={{ backgroundColor: meta.bg, color: meta.text }}
+                                >
+                                  {catLabel(tx.category)}
+                                </span>
+                              </div>
+
+                              {/* Running balance */}
+                              <div className="px-2 py-2.5 flex items-center justify-end gap-1.5">
+                                <span
+                                  className="font-mono tabular-nums text-sm font-semibold whitespace-nowrap"
+                                  style={{ color: balanceColor(tx.runningBalance) }}
+                                >
                                   {isNeg && "−"}
                                   <FormatCurrency amount={Math.abs(tx.runningBalance)} />
                                 </span>
                                 {isCurrentBalance && (
-                                  <Badge className="shrink-0 text-[9px] px-1.5 h-4 bg-primary/20 text-primary border-0 rounded-full leading-none whitespace-nowrap">
-                                    Current Balance
-                                  </Badge>
+                                  <span
+                                    title="Current balance"
+                                    className="h-1.5 w-1.5 rounded-full shrink-0"
+                                    style={{ backgroundColor: "#2D9B6F" }}
+                                  />
                                 )}
-                                {/* Action buttons (reveal on hover) */}
-                                <div
-                                  className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "expense" && (
-                                    <button
-                                      title="Mark as paid"
-                                      onClick={() => handleMarkPaid(tx)}
-                                      className="text-muted-foreground/60 hover:text-emerald-400 transition-colors"
-                                    >
-                                      <Check className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                  {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "expense" && tx.transactionDate <= todayStr && (
-                                    <button
-                                      title="Mark as missed"
-                                      onClick={() => handleMarkMissed(tx)}
-                                      className="text-muted-foreground/60 hover:text-orange-500 transition-colors"
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                  {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "income" && tx.transactionDate <= todayStr && (
-                                    <button
-                                      title="Confirm received"
-                                      onClick={() => handleMarkPaid(tx)}
-                                      className="text-muted-foreground/60 hover:text-emerald-400 transition-colors"
-                                    >
-                                      <Check className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                  {isMissed && (
-                                    <button
-                                      title="Undo missed"
-                                      onClick={() => handleUnmarkMissed(tx)}
-                                      className="text-muted-foreground/60 hover:text-foreground transition-colors"
-                                    >
-                                      <RotateCcw className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                  {isManual && (
-                                    <button
-                                      title="Delete manual entry"
-                                      onClick={() => handleDelete(tx)}
-                                      className="text-muted-foreground/60 hover:text-destructive transition-colors"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                </div>
+                              </div>
+
+                              {/* Actions (Part K) */}
+                              <div
+                                className="px-3 py-2 flex items-center justify-end gap-1"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "expense" && (
+                                  <button
+                                    title="Mark as paid"
+                                    onClick={() => handleMarkPaid(tx)}
+                                    className="rounded-md border border-[#D6DBE3] bg-white px-2 py-[3px] text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors whitespace-nowrap"
+                                  >
+                                    Mark paid
+                                  </button>
+                                )}
+                                {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "income" && (
+                                  <button
+                                    title="Confirm received"
+                                    onClick={() => handleMarkPaid(tx)}
+                                    className="inline-flex items-center gap-1 rounded-md border bg-white px-2 py-[3px] text-[11px] font-medium transition-colors whitespace-nowrap hover:bg-[#E1F5EE]"
+                                    style={{ borderColor: "#2D9B6F", color: "#0F6E56" }}
+                                  >
+                                    Confirm <Check className="h-3 w-3" />
+                                  </button>
+                                )}
+                                {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "expense" && tx.transactionDate <= todayStr && (
+                                  <button
+                                    title="Mark as missed"
+                                    onClick={() => handleMarkMissed(tx)}
+                                    className="text-muted-foreground/60 hover:text-orange-500 transition-colors"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                                {isMissed && (
+                                  <button
+                                    title="Undo missed"
+                                    onClick={() => handleUnmarkMissed(tx)}
+                                    className="text-muted-foreground/60 hover:text-foreground transition-colors"
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                                {isManual && (
+                                  <button
+                                    title="Delete manual entry"
+                                    onClick={() => handleDelete(tx)}
+                                    className="text-muted-foreground/60 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
                               </div>
                             </div>
                             </Fragment>
                           );
                         })}
+
+                        {/* Otis insight rows (Part I) */}
+                        {monthInsights.map((ins) => (
+                          <div
+                            key={ins.key}
+                            className="flex items-start gap-3 px-4 py-3"
+                            style={{
+                              background: "linear-gradient(90deg, #EDFAF4 0%, #FFFFFF 100%)",
+                              borderTop: "1px solid #E1F5EE",
+                              borderBottom: "1px solid #E1F5EE",
+                            }}
+                          >
+                            <div
+                              className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center mt-0.5"
+                              style={{ backgroundColor: "#0D2B45" }}
+                            >
+                              <PawPrint className="h-3.5 w-3.5 text-white" />
+                            </div>
+                            <div className="text-[13px] leading-[1.6] min-w-0" style={{ color: "#444444" }}>
+                              {ins.body}{" "}
+                              <button
+                                onClick={() => askOtis(ins.prompt)}
+                                className="font-medium underline underline-offset-2 whitespace-nowrap hover:opacity-80 transition-opacity"
+                                style={{ color: "#2D9B6F" }}
+                              >
+                                Ask Otis about this →
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Category legend (Part L) */}
+                {visibleCategories.length > 0 && (
+                  <div
+                    className="flex items-center gap-x-4 gap-y-1.5 flex-wrap px-4 py-2 border-t"
+                    style={{ backgroundColor: "#FAFBFC", borderColor: "#EEF1F5" }}
+                  >
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Categories
+                    </span>
+                    {visibleCategories.map((c) => (
+                      <span key={c} className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                        <span className="h-2.5 w-2.5 rounded-[2px] shrink-0" style={{ backgroundColor: catMeta(c).color }} />
+                        {catLabel(c)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Totals footer (Part M) */}
+                <div
+                  className="grid grid-cols-4 divide-x divide-[#DDE2E8] border-t"
+                  style={{ backgroundColor: "#F8F9FB", borderColor: "#DDE2E8" }}
+                >
+                  <div className="px-4 py-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Monthly income</div>
+                    <div className="text-[15px] font-semibold font-mono tabular-nums" style={{ color: "#0F6E56" }}>
+                      <FormatCurrency amount={periodTotals.monthlyIncome} />
+                    </div>
+                  </div>
+                  <div className="px-4 py-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Monthly bills</div>
+                    <div className="text-[15px] font-semibold font-mono tabular-nums" style={{ color: "#A32D2D" }}>
+                      <FormatCurrency amount={periodTotals.monthlyBills} />
+                    </div>
+                  </div>
+                  <div className="px-4 py-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Net this period</div>
+                    <div
+                      className="text-[15px] font-semibold font-mono tabular-nums"
+                      style={{ color: periodTotals.net >= 0 ? "#0F6E56" : "#A32D2D" }}
+                    >
+                      {periodTotals.net >= 0 ? "+" : "−"}<FormatCurrency amount={Math.abs(periodTotals.net)} />
+                    </div>
+                  </div>
+                  <div className="px-4 py-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Current balance</div>
+                    <div className="text-[15px] font-semibold font-mono tabular-nums" style={{ color: "#0D2B45" }}>
+                      {currentBalanceValue < 0 && "−"}<FormatCurrency amount={Math.abs(currentBalanceValue)} />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1280,8 +1539,11 @@ export default function Forecast() {
                                 {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d")}
                               </span>
                               <span className="text-xs text-foreground truncate">{tx.description}</span>
-                              <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full ${catStyle(tx.category)}`}>
-                                {tx.category}
+                              <span
+                                className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full"
+                                style={{ backgroundColor: catMeta(tx.category).bg, color: catMeta(tx.category).text }}
+                              >
+                                {catLabel(tx.category)}
                               </span>
                             </div>
                             <div className={`px-4 py-2 text-right font-mono text-xs ${tx.transactionType === "income" ? "text-emerald-400" : "text-transparent select-none"}`}>

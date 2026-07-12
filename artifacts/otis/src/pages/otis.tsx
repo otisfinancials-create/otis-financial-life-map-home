@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -93,6 +93,19 @@ export default function Otis() {
   const handleCustomSubmit = useCallback((text: string) => {
     setDirective({ text, send: true });
     chatRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  // Pre-fill the chat when arriving via "Ask Otis about this" links (?prompt=…).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const prompt = params.get("prompt");
+    if (prompt) {
+      setDirective({ text: prompt, send: false });
+      params.delete("prompt");
+      const rest = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
+      setTimeout(() => chatRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    }
   }, []);
 
   const handleReopen = useCallback(
