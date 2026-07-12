@@ -8,6 +8,7 @@ import {
   type SavedScenario,
 } from "@workspace/api-client-react";
 import { OtisChat, type ChatDirective } from "@/components/otis/OtisChat";
+import { OtisAvatar, type OtisAvatarState } from "@/components/OtisAvatar";
 import { ScenarioForm } from "@/components/otis/ScenarioForm";
 import { ScenarioResults } from "@/components/otis/ScenarioResults";
 import { SavedScenarios } from "@/components/otis/SavedScenarios";
@@ -25,9 +26,42 @@ export default function Otis() {
   const [lastInputs, setLastInputs] = useState<Record<string, unknown>>({});
   const [directive, setDirective] = useState<ChatDirective | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const [avatarState, setAvatarState] = useState<OtisAvatarState>("idle");
+  const [avatarMessage, setAvatarMessage] = useState("");
 
   const chatRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const avatarTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearAvatarTimers = useCallback(() => {
+    avatarTimersRef.current.forEach(clearTimeout);
+    avatarTimersRef.current = [];
+  }, []);
+
+  const scheduleAvatar = useCallback((fn: () => void, ms: number) => {
+    avatarTimersRef.current.push(setTimeout(fn, ms));
+  }, []);
+
+  // Greeting on first load: brief pause, then Otis says hello, then back to idle.
+  useEffect(() => {
+    const timers = avatarTimersRef.current;
+    timers.push(
+      setTimeout(() => {
+        setAvatarState("talking");
+        setAvatarMessage("Hi! I know your complete financial picture. What's on your mind today?");
+        timers.push(
+          setTimeout(() => {
+            setAvatarState("idle");
+            setAvatarMessage("");
+          }, 4000),
+        );
+      }, 800),
+    );
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const runScenario = useRunOtisScenario();
   const createScenario = useCreateScenario({
@@ -36,31 +70,51 @@ export default function Otis() {
     },
   });
 
-  const selectType = useCallback((type: string) => {
-    setSelectedType(type);
-    setInitialInputs(undefined);
-    setResult(null);
-    setRunError(null);
-    setFormKey((k) => k + 1);
-    setTimeout(() => panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-  }, []);
+  const selectType = useCallback(
+    (type: string) => {
+      setSelectedType(type);
+      setInitialInputs(undefined);
+      setResult(null);
+      setRunError(null);
+      setFormKey((k) => k + 1);
+      // Card click: Otis perks up and thinks while the form opens.
+      clearAvatarTimers();
+      setAvatarState("thinking");
+      setAvatarMessage("");
+      scheduleAvatar(() => setAvatarState("listening"), 1800);
+      setTimeout(() => panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    },
+    [clearAvatarTimers, scheduleAvatar],
+  );
 
   const handleRun = useCallback(
     async (inputs: Record<string, unknown>) => {
       if (!selectedType || selectedType === "custom") return;
       setRunError(null);
       setLastInputs(inputs);
+      clearAvatarTimers();
+      setAvatarState("thinking");
+      setAvatarMessage("");
       try {
         const res = await runScenario.mutateAsync({
           data: { scenarioType: selectedType as never, inputs },
         });
-        setResult(res as ScenarioResultData);
+        const data = res as ScenarioResultData;
+        setResult(data);
+        setAvatarState("talking");
+        setAvatarMessage(`Here's what I found: ${fmtSigned(data.monthlyCashFlowImpact)}/month cash flow impact.`);
+        scheduleAvatar(() => {
+          setAvatarState("idle");
+          setAvatarMessage("");
+        }, 5000);
       } catch {
         setResult(null);
         setRunError("Otis couldn't run that scenario. Please check your inputs and try again.");
+        setAvatarState("idle");
+        setAvatarMessage("");
       }
     },
-    [selectedType, runScenario],
+    [selectedType, runScenario, clearAvatarTimers, scheduleAvatar],
   );
 
   const handleSave = useCallback(
@@ -130,8 +184,9 @@ export default function Otis() {
 
   return (
     <div className="space-y-8">
-      <div ref={chatRef}>
-        <h1 className="text-2xl font-semibold tracking-tight">
+      <div ref={chatRef} className="flex flex-col items-center pt-16 text-center">
+        <OtisAvatar state={avatarState} message={avatarMessage} size="lg" />
+        <h1 className="mt-6 text-2xl font-semibold tracking-tight">
           Hi {firstName}, what's on your financial mind today?
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -175,7 +230,16 @@ export default function Otis() {
           />
           {runScenario.isPending && (
             <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="animate-bounce">🐾</span> Otis is crunching your numbers…
+              <span className="inline-flex items-end gap-1">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="inline-block h-1.5 w-1.5 rounded-full bg-teal-600"
+                    style={{ animation: "otis-dot-bounce 1s ease-in-out infinite", animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </span>
+              Otis is crunching your numbers…
             </div>
           )}
           {runError && <div className="mt-5 text-sm text-destructive">{runError}</div>}

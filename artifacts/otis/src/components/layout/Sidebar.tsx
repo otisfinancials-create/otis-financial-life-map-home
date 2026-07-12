@@ -8,7 +8,6 @@ import {
   PiggyBank,
   Scale,
   CreditCard,
-  Sparkles,
   Banknote,
   LogOut
 } from "lucide-react";
@@ -91,11 +90,11 @@ export function Sidebar() {
                 : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
             )}
           >
-            <Sparkles
-              className={cn(
-                "mr-3 h-4 w-4 shrink-0",
-                location === "/otis" ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-foreground"
-              )}
+            <img
+              src={`${import.meta.env.BASE_URL}images/otis-avatar.png`}
+              alt=""
+              className="mr-3 h-7 w-7 shrink-0 rounded-full object-cover"
+              style={location === "/otis" ? { boxShadow: "0 0 0 2px #2D9B6F" } : undefined}
               aria-hidden="true"
             />
             Otis

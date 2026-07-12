@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OtisAvatar, type OtisAvatarState } from "@/components/OtisAvatar";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -19,31 +20,21 @@ interface OtisChatProps {
   onDirectiveConsumed: () => void;
 }
 
-function PawThinking() {
+function DotsThinking() {
   return (
     <div className="flex items-start gap-3">
-      <OtisAvatar />
-      <div className="rounded-2xl rounded-tl-sm bg-teal-600/10 px-4 py-2.5 text-sm">
-        <span className="inline-flex gap-1">
+      <OtisAvatar state="idle" size="sm" />
+      <div className="rounded-2xl rounded-tl-sm bg-teal-600/10 px-4 py-3 text-sm">
+        <span className="inline-flex items-end gap-1.5">
           {[0, 1, 2].map((i) => (
             <span
               key={i}
-              className="animate-bounce text-base"
-              style={{ animationDelay: `${i * 200}ms`, animationDuration: "1s" }}
-            >
-              🐾
-            </span>
+              className="inline-block h-2 w-2 rounded-full bg-teal-600"
+              style={{ animation: "otis-dot-bounce 1s ease-in-out infinite", animationDelay: `${i * 0.15}s` }}
+            />
           ))}
         </span>
       </div>
-    </div>
-  );
-}
-
-function OtisAvatar() {
-  return (
-    <div className="h-8 w-8 rounded-full bg-teal-600 text-white flex items-center justify-center shrink-0 text-sm font-semibold shadow-sm">
-      O
     </div>
   );
 }
@@ -53,7 +44,7 @@ function MessageBubble({ role, content, streaming }: ChatMessage) {
   return (
     <div className={`flex items-start gap-3 ${isOtis ? "" : "flex-row-reverse"}`}>
       {isOtis ? (
-        <OtisAvatar />
+        <OtisAvatar state="idle" size="sm" />
       ) : (
         <div className="h-8 w-8 rounded-full bg-secondary text-secondary-foreground border border-border flex items-center justify-center shrink-0 text-xs font-semibold">
           You
@@ -79,9 +70,22 @@ export function OtisChat({ directive, onDirectiveConsumed }: OtisChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [avatarState, setAvatarState] = useState<OtisAvatarState>("idle");
+  const [avatarMessage, setAvatarMessage] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isStreamingRef = useRef(false);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const talkingRef = useRef(false);
+
+  const clearIdleTimer = () => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => () => clearIdleTimer(), []);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -95,6 +99,10 @@ export function OtisChat({ directive, onDirectiveConsumed }: OtisChatProps) {
       isStreamingRef.current = true;
       setIsStreaming(true);
       setInput("");
+      clearIdleTimer();
+      talkingRef.current = false;
+      setAvatarState("thinking");
+      setAvatarMessage("");
 
       let history: ChatMessage[] = [];
       setMessages((prev) => {
@@ -138,6 +146,11 @@ export function OtisChat({ directive, onDirectiveConsumed }: OtisChatProps) {
               const parsed = JSON.parse(line.slice(6));
               if (parsed.content) {
                 assistantContent += parsed.content;
+                if (!talkingRef.current) {
+                  talkingRef.current = true;
+                  setAvatarState("talking");
+                }
+                setAvatarMessage(assistantContent.slice(0, 60));
                 updateLast(assistantContent, true);
               } else if (parsed.done) {
                 updateLast(assistantContent, false);
@@ -155,7 +168,7 @@ export function OtisChat({ directive, onDirectiveConsumed }: OtisChatProps) {
           const updated = [...prev];
           updated[updated.length - 1] = {
             role: "assistant",
-            content: "Something went wrong on my end. Please try again. 🐾",
+            content: "Something went wrong on my end. Please try again.",
             streaming: false,
           };
           return updated;
@@ -163,6 +176,13 @@ export function OtisChat({ directive, onDirectiveConsumed }: OtisChatProps) {
       } finally {
         isStreamingRef.current = false;
         setIsStreaming(false);
+        // Linger in the talking state briefly, then return to idle breathing.
+        clearIdleTimer();
+        idleTimerRef.current = setTimeout(() => {
+          setAvatarState("idle");
+          setAvatarMessage("");
+          talkingRef.current = false;
+        }, 5000);
         inputRef.current?.focus();
       }
     },
@@ -189,9 +209,9 @@ export function OtisChat({ directive, onDirectiveConsumed }: OtisChatProps) {
 
   return (
     <div className="rounded-xl border border-border bg-stone-50/80 shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
-        <div className="flex items-center gap-2">
-          <OtisAvatar />
+      <div className="flex items-center justify-between px-4 pb-3 pt-6 border-b border-border/60">
+        <div className="flex items-center gap-4">
+          <OtisAvatar state={avatarState} message={avatarMessage} size="md" />
           <div>
             <div className="text-sm font-semibold">Ask Otis</div>
             <div className="text-xs text-muted-foreground">Your financial advisor, always at your side</div>
@@ -209,13 +229,13 @@ export function OtisChat({ directive, onDirectiveConsumed }: OtisChatProps) {
         {messages.length === 0 && !isStreaming ? (
           <div className="text-center py-8">
             <div className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-              Ask me anything about your financial future. I know your numbers and I'm here to help. 🐾
+              Hi! I know your complete financial picture. What's on your mind today?
             </div>
           </div>
         ) : (
           messages.map((m, i) =>
             m.streaming && m.content === "" ? (
-              <PawThinking key={i} />
+              <DotsThinking key={i} />
             ) : (
               <MessageBubble key={i} role={m.role} content={m.content} streaming={m.streaming} />
             ),
@@ -234,7 +254,16 @@ export function OtisChat({ directive, onDirectiveConsumed }: OtisChatProps) {
         <Input
           ref={inputRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            const value = e.target.value;
+            setInput(value);
+            if (!isStreamingRef.current) {
+              clearIdleTimer();
+              talkingRef.current = false;
+              setAvatarMessage("");
+              setAvatarState(value.trim() ? "listening" : "idle");
+            }
+          }}
           placeholder='Try "Can I afford a kitchen remodel next year?"'
           className="bg-white"
           disabled={isStreaming}
