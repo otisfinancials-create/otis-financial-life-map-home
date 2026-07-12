@@ -155,43 +155,57 @@ export function accountTypeMeta(type: string): AccountTypeMeta | undefined {
 // ── Emoji category icons ─────────────────────────────────────────────────────
 // The category icon CELL in ledger/table rows renders a plain emoji character
 // (no icon library). Lucide icons above remain for charts/badges/nav accents.
+// Insertion order matters: earlier keys win ("gas for" before the generic
+// "gas" fuel entry). Matching is substring-based over category + description.
 export const CATEGORY_EMOJI: Record<string, string> = {
-  income: "💼",
   salary: "💼",
+  income: "💼",
   paycheck: "💼",
-  housing: "🏠",
   mortgage: "🏠",
+  housing: "🏠",
+  rent: "🏠",
   insurance: "🛡️",
-  subscriptions: "📺",
-  auto: "🚗",
-  gas: "🚗",
-  car: "🚗",
-  vehicle: "🚗",
-  transportation: "🚗",
+  subscription: "📺",
+  netflix: "📺",
+  spotify: "📺",
+  streaming: "📺",
   utilities: "⚡",
   electric: "⚡",
   water: "💧",
+  "gas for": "🚗",
+  auto: "🚗",
+  car: "🚗",
+  vehicle: "🚗",
+  transport: "🚗",
   food: "🍽️",
-  groceries: "🛒",
+  grocer: "🛒",
+  restaurant: "🍽️",
+  dining: "🍽️",
   vacation: "✈️",
   travel: "✈️",
   medical: "❤️",
   health: "❤️",
+  doctor: "❤️",
   savings: "🏦",
-  "life event": "⭐",
+  transfer: "🏦",
   pets: "🐾",
   education: "🎓",
-  celebrations: "🎉",
-  "home improvements": "🔨",
+  celebration: "🎉",
+  "home improvement": "🔨",
+  renovation: "🔨",
   "balance update": "🔄",
-  manual: "✏️",
+  garbage: "🗑️",
+  trash: "🗑️",
+  waste: "🗑️",
   other: "📋",
+  manual: "✏️",
+  gas: "⛽",
 };
 
-export function getCategoryEmoji(category: string): string {
-  const lower = category.toLowerCase();
+export function getCategoryEmoji(category: string, description: string = ""): string {
+  const searchText = (category + " " + description).toLowerCase();
   for (const [key, emoji] of Object.entries(CATEGORY_EMOJI)) {
-    if (lower.includes(key)) return emoji;
+    if (searchText.includes(key)) return emoji;
   }
   return "📋";
 }

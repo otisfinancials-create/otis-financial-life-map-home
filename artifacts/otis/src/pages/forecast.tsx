@@ -1110,7 +1110,7 @@ export default function Forecast() {
 
                           return (
                             <Fragment key={tx.id}>
-                            {showHistory && hasPastRows && tx.id === firstFutureTxId && (
+                            {hasPastRows && tx.id === firstFutureTxId && (
                               <div
                                 className="flex items-center justify-between gap-3 px-4 py-1.5 select-none"
                                 style={{ backgroundColor: "#EDFAF4", borderTop: "2px solid #2D9B6F", borderBottom: "2px solid #2D9B6F" }}
@@ -1158,7 +1158,7 @@ export default function Forecast() {
                                   aria-label="Drag to move this transaction to another date"
                                   className="h-3 w-3 shrink-0 text-muted-foreground/25 group-hover:text-muted-foreground/70 cursor-grab"
                                 />
-                                <span className="font-mono tabular-nums text-[11px] text-muted-foreground whitespace-nowrap">
+                                <span className="font-mono tabular-nums text-[12px] whitespace-nowrap" style={{ color: "#999" }}>
                                   {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d")}
                                 </span>
                               </div>
@@ -1168,14 +1168,22 @@ export default function Forecast() {
                                 className="py-[11px] flex items-center justify-center"
                                 style={{ fontSize: "16px", lineHeight: 1 }}
                               >
-                                {getCategoryEmoji(tx.category)}
+                                {getCategoryEmoji(tx.category, tx.description)}
                               </div>
 
                               {/* Description + status badges (Part F) */}
                               <div className="px-2 py-[11px] flex items-center gap-1.5 min-w-0">
-                                <span className={`font-medium text-[13px] truncate min-w-0 ${isMissed ? "line-through text-muted-foreground" : ""}`}>
-                                  {tx.description}
+                                <span
+                                  className={`font-medium text-[13px] truncate min-w-0 ${isMissed ? "line-through text-muted-foreground" : ""}`}
+                                  style={isMissed ? undefined : { color: "#1A1A2E" }}
+                                >
+                                  {isAdjustment ? "Balance updated" : tx.description}
                                 </span>
+                                {isAdjustment && (
+                                  <span className="text-[12px] text-muted-foreground whitespace-nowrap shrink-0">
+                                    · {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d")}
+                                  </span>
+                                )}
                                 {tx.companyUrl && (
                                   <a
                                     href={tx.companyUrl}
@@ -1246,7 +1254,7 @@ export default function Forecast() {
                                 ) : (
                                   <div className="flex flex-col items-end">
                                     <span
-                                      className={`font-mono tabular-nums text-sm font-medium whitespace-nowrap ${isMissed ? "line-through text-muted-foreground" : ""}`}
+                                      className={`font-mono tabular-nums text-[13px] font-medium whitespace-nowrap ${isMissed ? "line-through text-muted-foreground" : ""}`}
                                       style={isMissed ? undefined : {
                                         color: isAdjustment ? "#0C447C" : tx.transactionType === "income" ? "#0F6E56" : "#A32D2D",
                                       }}
@@ -1276,7 +1284,7 @@ export default function Forecast() {
                               {/* Category badge */}
                               <div className="px-2 py-[11px] flex items-center justify-end min-w-0">
                                 <span
-                                  className="text-[10px] font-medium truncate"
+                                  className="text-[11px] font-medium truncate"
                                   style={{ backgroundColor: meta.bg, color: meta.text, padding: "2px 8px", borderRadius: "10px" }}
                                 >
                                   {catLabel(tx.category)}

@@ -228,7 +228,7 @@ export default function LifeEvents() {
                                 style={{ fontSize: "16px", lineHeight: 1 }}
                                 aria-hidden="true"
                               >
-                                {getCategoryEmoji(categoryLabel(ev.category, ev.customCategory))}
+                                {getCategoryEmoji(categoryLabel(ev.category, ev.customCategory), ev.eventName)}
                               </span>
                               <div className="min-w-0">
                                 <p className="font-semibold truncate">{ev.eventName}</p>

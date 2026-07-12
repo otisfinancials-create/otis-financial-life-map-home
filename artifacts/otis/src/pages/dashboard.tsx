@@ -620,7 +620,7 @@ export default function Dashboard() {
                             style={{ fontSize: "16px", lineHeight: 1 }}
                             aria-label={bill.category}
                           >
-                            {getCategoryEmoji(bill.category)}
+                            {getCategoryEmoji(bill.category, bill.billName)}
                           </span>
                           <span className="truncate">{bill.billName}</span>
                         </span>

@@ -249,7 +249,7 @@ export default function Bills() {
                               style={{ fontSize: "16px", lineHeight: 1 }}
                               aria-hidden="true"
                             >
-                              {getCategoryEmoji(bill.category)}
+                              {getCategoryEmoji(bill.category, bill.billName)}
                             </span>
                             <Badge
                               variant="outline"
