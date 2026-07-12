@@ -6,7 +6,7 @@ import {
   ChevronRight, Zap, GripVertical, Download,
   X, RotateCcw, FileSpreadsheet, FileText, ClipboardCopy,
   Briefcase, Home, Shield, Tv, Car, Plane, UtensilsCrossed, HeartPulse,
-  Landmark, CircleEllipsis, PawPrint, Hammer, GraduationCap, PartyPopper,
+  Landmark, Pencil, PawPrint, Hammer, GraduationCap, PartyPopper,
   TriangleAlert, type LucideIcon,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -81,24 +81,24 @@ type CatMeta = { color: string; bg: string; text: string; icon: LucideIcon; labe
 
 const CAT_META: Record<string, CatMeta> = {
   salary:        { color: "#2D9B6F", bg: "#E1F5EE", text: "#085041", icon: Briefcase, label: "Salary" },
-  Housing:       { color: "#185FA5", bg: "#E4EFFA", text: "#0C447C", icon: Home },
-  Insurance:     { color: "#D85A30", bg: "#FBEAE3", text: "#7A2E12", icon: Shield },
+  Housing:       { color: "#185FA5", bg: "#E6F1FB", text: "#0C447C", icon: Home },
+  Insurance:     { color: "#D85A30", bg: "#FAECE7", text: "#712B13", icon: Shield },
   Subscriptions: { color: "#534AB7", bg: "#EEEDFE", text: "#3C3489", icon: Tv },
-  Transportation:{ color: "#BA7517", bg: "#FAF0DD", text: "#6B4308", icon: Car },
-  Utilities:     { color: "#0F6E56", bg: "#E0F2ED", text: "#0A4A3A", icon: Zap },
-  Food:          { color: "#D85A30", bg: "#FBEAE3", text: "#7A2E12", icon: UtensilsCrossed },
-  Health:        { color: "#993556", bg: "#F8E7ED", text: "#6E2540", icon: HeartPulse },
+  Transportation:{ color: "#BA7517", bg: "#FAEEDA", text: "#633806", icon: Car },
+  Utilities:     { color: "#0F6E56", bg: "#E1F5EE", text: "#085041", icon: Zap },
+  Food:          { color: "#D85A30", bg: "#FAECE7", text: "#712B13", icon: UtensilsCrossed },
+  Health:        { color: "#993556", bg: "#FBEAF0", text: "#72243E", icon: HeartPulse },
   Taxes:         { color: "#E24B4A", bg: "#FCEBEB", text: "#791F1F", icon: Landmark },
-  Other:         { color: "#888780", bg: "#F1F1EF", text: "#55544F", icon: CircleEllipsis },
-  Adjustment:        { color: "#3987CE", bg: "#E6F1FB", text: "#0C447C", icon: RefreshCcw, label: "Balance Update" },
-  "Balance Update":  { color: "#3987CE", bg: "#E6F1FB", text: "#0C447C", icon: RefreshCcw },
-  pets:              { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: PawPrint, label: "Pets" },
-  vacations:         { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: Plane, label: "Vacations" },
-  home_improvements: { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: Hammer, label: "Home Improvements" },
-  education:         { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: GraduationCap, label: "Education" },
-  celebrations:      { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: PartyPopper, label: "Celebrations" },
-  vehicle:           { color: "#1D9E75", bg: "#E1F5EE", text: "#0F6E56", icon: Car, label: "Vehicle" },
-  medical:           { color: "#993556", bg: "#F8E7ED", text: "#6E2540", icon: HeartPulse, label: "Medical" },
+  Other:         { color: "#888780", bg: "#F1EFE8", text: "#444441", icon: Pencil },
+  Adjustment:        { color: "#185FA5", bg: "#E6F1FB", text: "#0C447C", icon: RefreshCcw, label: "Balance Update" },
+  "Balance Update":  { color: "#185FA5", bg: "#E6F1FB", text: "#0C447C", icon: RefreshCcw },
+  pets:              { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: PawPrint, label: "Pets" },
+  vacations:         { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: Plane, label: "Vacations" },
+  home_improvements: { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: Hammer, label: "Home Improvements" },
+  education:         { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: GraduationCap, label: "Education" },
+  celebrations:      { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: PartyPopper, label: "Celebrations" },
+  vehicle:           { color: "#1D9E75", bg: "#E1F5EE", text: "#085041", icon: Car, label: "Vehicle" },
+  medical:           { color: "#993556", bg: "#FBEAF0", text: "#72243E", icon: HeartPulse, label: "Medical" },
 };
 const catMeta = (c: string): CatMeta => CAT_META[c] ?? CAT_META.Other;
 const catLabel = (c: string) => catMeta(c).label ?? c;
@@ -149,8 +149,8 @@ function StatusPill({ bg, text, children }: { bg: string; text: string; children
   );
 }
 
-// Running-balance color: red when negative, green when healthy, dark neutral otherwise.
-const balanceColor = (n: number) => (n < 0 ? "#A32D2D" : n >= 1000 ? "#0F6E56" : "#1D1F23");
+// Running-balance color: red when negative, green when healthy, navy otherwise.
+const balanceColor = (n: number) => (n < 0 ? "#A32D2D" : n >= 1000 ? "#0F6E56" : "#0D2B45");
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -197,6 +197,7 @@ export default function Forecast() {
   const [view, setView] = useState<"ledger" | "summary">("ledger");
   const [catFilter, setCatFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [showHistory, setShowHistory] = useState(true);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
   // inline edit
@@ -393,10 +394,19 @@ export default function Forecast() {
     [filtered, todayStr],
   );
 
+  // ── Hide-history toggle (visual only) ─────────────────────────────────────
+  // When history is hidden, rows dated before today are dropped from the
+  // ledger DISPLAY only — totals/footer/summary still use the full range.
+  const displayRows = useMemo(
+    () => (showHistory ? filtered : filtered.filter((t) => t.transactionDate >= todayStr)),
+    [filtered, showHistory, todayStr],
+  );
+  const hiddenPastCount = filtered.length - displayRows.length;
+
   // ── Group by month ────────────────────────────────────────────────────────
-  const groups = useMemo((): MonthGroup[] => {
+  const groupByMonth = (rows: TxRow[]): MonthGroup[] => {
     const map: Record<string, MonthGroup> = {};
-    for (const t of filtered) {
+    for (const t of rows) {
       const d = new Date(t.transactionDate + "T00:00:00");
       const key = format(d, "yyyy-MM");
       if (!map[key]) {
@@ -414,7 +424,14 @@ export default function Forecast() {
       g.endBalance = g.rows.at(-1)?.runningBalance ?? 0;
     }
     return Object.values(map).sort((a, b) => a.key.localeCompare(b.key));
-  }, [filtered]);
+  };
+  // Full-range groups: drive the Monthly Summary view and insights.
+  const groups = useMemo(() => groupByMonth(filtered), [filtered]);
+  // Ledger groups: respect the hide-history toggle.
+  const ledgerGroups = useMemo(
+    () => (showHistory ? groupByMonth(filtered) : groupByMonth(displayRows)),
+    [filtered, displayRows, showHistory],
+  );
 
   // ── Unique categories for filter ──────────────────────────────────────────
   const categories = useMemo(() => {
@@ -429,8 +446,8 @@ export default function Forecast() {
 
   // ── Categories visible in the current view (legend, Part L) ──────────────
   const visibleCategories = useMemo(
-    () => Array.from(new Set(filtered.map((t) => t.category))).sort((a, b) => catLabel(a).localeCompare(catLabel(b))),
-    [filtered],
+    () => Array.from(new Set(displayRows.map((t) => t.category))).sort((a, b) => catLabel(a).localeCompare(catLabel(b))),
+    [displayRows],
   );
 
   // ── Balance as of today (TODAY divider + footer) ─────────────────────────
@@ -478,13 +495,20 @@ export default function Forecast() {
       const firstNeg = g.rows.find((t) => t.runningBalance < 0);
       if (firstNeg) {
         const d = format(new Date(firstNeg.transactionDate + "T00:00:00"), "MMMM d");
+        // Next paycheck after the dip → a concrete, actionable suggestion.
+        const nextPay = txsWithBalance.find(
+          (t) => t.transactionType === "income" && t.sourceBalanceSyncId == null && t.transactionDate > firstNeg.transactionDate,
+        );
+        const suggestion = nextPay
+          ? <> Consider shifting it until after your paycheck on {strong(format(new Date(nextPay.transactionDate + "T00:00:00"), "MMMM d"), "c")}.</>
+          : <> Moving a bill or shifting some savings could cover the gap.</>;
         list.push({
           key: `${g.key}-neg`,
           body: (
-            <>Heads up — your projected balance dips to {strong(`−${money(firstNeg.runningBalance)}`, "a")} on{" "}
-            {strong(d, "b")}. Moving a bill or shifting some savings could cover the gap.</>
+            <>Heads up — your {strong(firstNeg.description, "d")} on {strong(d, "b")} pushes your balance to{" "}
+            {strong(`−${money(firstNeg.runningBalance)}`, "a")}.{suggestion}</>
           ),
-          prompt: `My cash flow forecast shows my balance going negative (−${money(firstNeg.runningBalance)}) on ${d}. What are my options to avoid that?`,
+          prompt: `My cash flow forecast shows "${firstNeg.description}" on ${d} pushing my balance negative (−${money(firstNeg.runningBalance)}). What are my options to avoid that?`,
         });
       }
 
@@ -532,7 +556,7 @@ export default function Forecast() {
       if (list.length) out[g.key] = list;
     }
     return out;
-  }, [groups]);
+  }, [groups, txsWithBalance]);
 
   const askOtis = (prompt: string) => navigate(`/otis?prompt=${encodeURIComponent(prompt)}`);
 
@@ -907,6 +931,15 @@ export default function Forecast() {
           ))}
         </div>
 
+        {/* Hide/Show history toggle — navy active style when history is hidden */}
+        <button
+          onClick={() => setShowHistory((v) => !v)}
+          className={`rounded-[20px] px-[13px] py-[5px] text-xs font-medium transition-colors duration-100 whitespace-nowrap ${showHistory ? "bg-white border border-[#E3E7ED] text-gray-500 hover:text-gray-800 hover:border-gray-300" : "text-white"}`}
+          style={!showHistory ? { backgroundColor: "#0D2B45" } : undefined}
+        >
+          {showHistory ? "Hide history" : "Show history"}
+        </button>
+
         {/* View toggle pill group (active: teal) */}
         <div className="flex items-center gap-1.5 ml-1">
           {(["ledger", "summary"] as const).map((v) => (
@@ -923,7 +956,7 @@ export default function Forecast() {
 
         {/* Category filter */}
         <Select value={catFilter} onValueChange={setCatFilter}>
-          <SelectTrigger className="h-8 text-xs w-36 bg-card border-border">
+          <SelectTrigger className="h-8 text-xs w-32 bg-card border-border">
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
           <SelectContent>
@@ -941,7 +974,7 @@ export default function Forecast() {
             placeholder="Search transactions…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-8 text-xs pl-8 w-48 bg-card border-border"
+            className="h-8 text-xs pl-8 w-44 bg-card border-border"
           />
         </div>
 
@@ -973,9 +1006,16 @@ export default function Forecast() {
         <Button size="sm" variant="outline" className="h-8 text-xs" onClick={openSyncModal}>
           <RefreshCcw className="h-3.5 w-3.5 mr-1" /> Update Current Balance
         </Button>
-        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleRegenerate} disabled={regenerate.isPending}>
-          <RefreshCw className={`h-3.5 w-3.5 mr-1 ${regenerate.isPending ? "animate-spin" : ""}`} />
-          Regenerate
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 w-8 px-0"
+          title="Regenerate forecast"
+          aria-label="Regenerate forecast"
+          onClick={handleRegenerate}
+          disabled={regenerate.isPending}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${regenerate.isPending ? "animate-spin" : ""}`} />
         </Button>
       </div>
 
@@ -1033,7 +1073,12 @@ export default function Forecast() {
         ══════════════════════════════════════════════════════════════════════ */}
         {!loadingTxs && view === "ledger" && (
           <>
-            {groups.length === 0 ? (
+            {!showHistory && hiddenPastCount > 0 && (
+              <div className="text-[11px] text-muted-foreground">
+                Showing from today · {hiddenPastCount} past row{hiddenPastCount !== 1 ? "s" : ""} hidden
+              </div>
+            )}
+            {ledgerGroups.length === 0 ? (
               <div className="py-20 text-center text-muted-foreground border border-border rounded-lg">
                 <Zap className="h-8 w-8 mx-auto mb-3 opacity-30" />
                 <p className="font-medium">No transactions in this range.</p>
@@ -1057,33 +1102,17 @@ export default function Forecast() {
                   </div>
 
                   {/* Month groups */}
-                  {groups.map((group) => {
-                    const net = group.income - group.expenses;
+                  {ledgerGroups.map((group) => {
                     const monthInsights = insightsByMonth[group.key] ?? [];
                     return (
                       <div key={group.key}>
-                        {/* Month group header (Part G) — same grid, sticky within scroll */}
-                        <div className={`sticky top-[37px] z-[9] ${LEDGER_GRID} bg-[#F8F9FB] border-y border-[#EEF1F5]`}>
-                          <div />
-                          <div className="col-span-3 px-1 py-2 flex items-center gap-2.5">
-                            <span className="text-xs font-semibold" style={{ color: "#0D2B45" }}>{group.label}</span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {group.rows.length} transaction{group.rows.length !== 1 ? "s" : ""}
-                            </span>
-                          </div>
-                          <div className="col-span-4 px-3 py-2 flex items-center justify-end gap-2 whitespace-nowrap">
-                            <span className="text-[11px] text-muted-foreground font-mono tabular-nums">
-                              In <FormatCurrency amount={group.income} /> · Out <FormatCurrency amount={group.expenses} />
-                            </span>
-                            <span
-                              className="text-[11px] font-semibold px-2 py-0.5 rounded-full font-mono tabular-nums"
-                              style={net >= 0
-                                ? { backgroundColor: "#E1F5EE", color: "#085041" }
-                                : { backgroundColor: "#FCEBEB", color: "#791F1F" }}
-                            >
-                              {net >= 0 ? "+" : "−"}<FormatCurrency amount={Math.abs(net)} />
-                            </span>
-                          </div>
+                        {/* Month divider — clean centered chapter break */}
+                        <div className="flex items-center gap-3" style={{ padding: "10px 18px" }}>
+                          <div className="flex-1 h-px" style={{ backgroundColor: "#E2E8F0" }} />
+                          <span className="text-[12px] font-semibold tracking-[0.04em]" style={{ color: "#0D2B45" }}>
+                            {group.label}
+                          </span>
+                          <div className="flex-1 h-px" style={{ backgroundColor: "#E2E8F0" }} />
                         </div>
 
                         {/* Transaction rows */}
@@ -1105,7 +1134,7 @@ export default function Forecast() {
 
                           return (
                             <Fragment key={tx.id}>
-                            {hasPastRows && tx.id === firstFutureTxId && (
+                            {showHistory && hasPastRows && tx.id === firstFutureTxId && (
                               <div
                                 className="flex items-center justify-between gap-3 px-4 py-1.5 select-none"
                                 style={{ backgroundColor: "#EDFAF4", borderTop: "2px solid #2D9B6F", borderBottom: "2px solid #2D9B6F" }}
@@ -1127,8 +1156,8 @@ export default function Forecast() {
                               onDragEnd={() => { setDraggingId(null); setDragOver(null); }}
                               onClick={() => { if (!isEditing && !suppressClickRef.current) openTx(tx); }}
                               className={[
-                                `relative ${LEDGER_GRID} border-b border-[#F2F4F7] last:border-0 group cursor-pointer transition-colors duration-100 select-none`,
-                                isPast ? "opacity-75" : "",
+                                `relative ${LEDGER_GRID} min-h-[44px] border-b border-[#F2F4F7] last:border-0 group cursor-pointer transition-colors duration-100 select-none`,
+                                isPast ? "opacity-[0.72]" : "",
                                 draggingId === tx.id ? "opacity-40" : "",
                                 draggingId !== null && draggingId !== tx.id && draggedRow?.transactionDate !== tx.transactionDate ? "hover:border-primary hover:border-2" : "",
                                 isNeg
@@ -1148,7 +1177,7 @@ export default function Forecast() {
                                 />
                               )}
                               {/* Date */}
-                              <div className="px-1 py-2.5 flex items-center gap-0.5 min-w-0">
+                              <div className="px-1 py-[11px] flex items-center gap-0.5 min-w-0">
                                 <GripVertical
                                   aria-label="Drag to move this transaction to another date"
                                   className="h-3 w-3 shrink-0 text-muted-foreground/25 group-hover:text-muted-foreground/70 cursor-grab"
@@ -1158,14 +1187,14 @@ export default function Forecast() {
                                 </span>
                               </div>
 
-                              {/* Category icon (Part D) */}
-                              <div className="py-2.5 flex items-center justify-center">
-                                <CatIcon className="h-3.5 w-3.5 shrink-0" style={{ color: meta.color }} />
+                              {/* Category icon (Part D) — 16px, vertically centered */}
+                              <div className="py-[11px] flex items-center justify-center">
+                                <CatIcon className="h-4 w-4 shrink-0" style={{ color: meta.color }} />
                               </div>
 
                               {/* Description + status badges (Part F) */}
-                              <div className="px-2 py-2.5 flex items-center gap-1.5 min-w-0">
-                                <span className={`font-medium text-sm truncate min-w-0 ${isMissed ? "line-through text-muted-foreground" : ""}`}>
+                              <div className="px-2 py-[11px] flex items-center gap-1.5 min-w-0">
+                                <span className={`font-medium text-[13px] truncate min-w-0 ${isMissed ? "line-through text-muted-foreground" : ""}`}>
                                   {tx.description}
                                 </span>
                                 {tx.companyUrl && (
@@ -1217,7 +1246,7 @@ export default function Forecast() {
 
                               {/* Amount (Part E, double-click to edit) */}
                               <div
-                                className="px-2 py-2.5 flex items-center justify-end"
+                                className="px-2 py-[11px] flex items-center justify-end"
                                 onClick={(e) => e.stopPropagation()}
                                 onDoubleClick={(e) => startEdit(tx, e)}
                               >
@@ -1266,17 +1295,17 @@ export default function Forecast() {
                               </div>
 
                               {/* Category badge */}
-                              <div className="px-2 py-2.5 flex items-center justify-end min-w-0">
+                              <div className="px-2 py-[11px] flex items-center justify-end min-w-0">
                                 <span
-                                  className="text-[11px] font-medium px-2 py-0.5 rounded-full truncate"
-                                  style={{ backgroundColor: meta.bg, color: meta.text }}
+                                  className="text-[10px] font-medium truncate"
+                                  style={{ backgroundColor: meta.bg, color: meta.text, padding: "2px 8px", borderRadius: "10px" }}
                                 >
                                   {catLabel(tx.category)}
                                 </span>
                               </div>
 
                               {/* Running balance */}
-                              <div className="px-2 py-2.5 flex items-center justify-end gap-1.5">
+                              <div className="px-2 py-[11px] flex items-center justify-end gap-1.5">
                                 <span
                                   className="font-mono tabular-nums text-sm font-semibold whitespace-nowrap"
                                   style={{ color: balanceColor(tx.runningBalance) }}
@@ -1295,7 +1324,7 @@ export default function Forecast() {
 
                               {/* Actions (Part K) */}
                               <div
-                                className="px-3 py-2 flex items-center justify-end gap-1"
+                                className="px-3 py-[11px] flex items-center justify-end gap-1"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "expense" && (
@@ -1367,11 +1396,13 @@ export default function Forecast() {
                             >
                               <PawPrint className="h-3.5 w-3.5 text-white" />
                             </div>
-                            <div className="text-[13px] leading-[1.6] min-w-0" style={{ color: "#444444" }}>
-                              {ins.body}{" "}
+                            <div className="min-w-0">
+                              <div className="text-[13px] leading-[1.6]" style={{ color: "#444444" }}>
+                                {ins.body}
+                              </div>
                               <button
                                 onClick={() => askOtis(ins.prompt)}
-                                className="font-medium underline underline-offset-2 whitespace-nowrap hover:opacity-80 transition-opacity"
+                                className="mt-1 text-xs font-medium underline underline-offset-2 whitespace-nowrap hover:opacity-80 transition-opacity"
                                 style={{ color: "#2D9B6F" }}
                               >
                                 Ask Otis about this →
@@ -1395,7 +1426,7 @@ export default function Forecast() {
                     </span>
                     {visibleCategories.map((c) => (
                       <span key={c} className="flex items-center gap-1.5 text-[11px] text-gray-500">
-                        <span className="h-2.5 w-2.5 rounded-[2px] shrink-0" style={{ backgroundColor: catMeta(c).color }} />
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: catMeta(c).color }} />
                         {catLabel(c)}
                       </span>
                     ))}
