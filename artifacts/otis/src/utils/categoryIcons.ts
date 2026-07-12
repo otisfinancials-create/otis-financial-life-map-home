@@ -152,6 +152,50 @@ export function accountTypeMeta(type: string): AccountTypeMeta | undefined {
   return ACCOUNT_TYPE_META[type];
 }
 
+// ── Emoji category icons ─────────────────────────────────────────────────────
+// The category icon CELL in ledger/table rows renders a plain emoji character
+// (no icon library). Lucide icons above remain for charts/badges/nav accents.
+export const CATEGORY_EMOJI: Record<string, string> = {
+  income: "💼",
+  salary: "💼",
+  paycheck: "💼",
+  housing: "🏠",
+  mortgage: "🏠",
+  insurance: "🛡️",
+  subscriptions: "📺",
+  auto: "🚗",
+  gas: "🚗",
+  car: "🚗",
+  vehicle: "🚗",
+  transportation: "🚗",
+  utilities: "⚡",
+  electric: "⚡",
+  water: "💧",
+  food: "🍽️",
+  groceries: "🛒",
+  vacation: "✈️",
+  travel: "✈️",
+  medical: "❤️",
+  health: "❤️",
+  savings: "🏦",
+  "life event": "⭐",
+  pets: "🐾",
+  education: "🎓",
+  celebrations: "🎉",
+  "home improvements": "🔨",
+  "balance update": "🔄",
+  manual: "✏️",
+  other: "📋",
+};
+
+export function getCategoryEmoji(category: string): string {
+  const lower = category.toLowerCase();
+  for (const [key, emoji] of Object.entries(CATEGORY_EMOJI)) {
+    if (lower.includes(key)) return emoji;
+  }
+  return "📋";
+}
+
 // ── Flat lookups (kept for spec compliance / simple consumers) ──────────────
 export const CATEGORY_ICONS = Object.fromEntries(
   (Object.keys(CATEGORY_META) as CategoryKey[]).map((k) => [

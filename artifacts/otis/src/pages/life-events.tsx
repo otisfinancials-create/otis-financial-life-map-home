@@ -35,7 +35,7 @@ import {
   TIMING_LABELS,
   FREQUENCY_LABELS,
 } from "@/components/life-events/constants";
-import { ICON_STROKE } from "@/utils/categoryIcons";
+import { getCategoryEmoji } from "@/utils/categoryIcons";
 
 const cardChrome = "rounded-xl border border-border bg-card shadow-sm";
 
@@ -195,16 +195,15 @@ export default function LifeEvents() {
       ) : (
         <div className="space-y-8">
           {grouped.map(({ cat, items }) => {
-            const Icon = cat.icon;
             const catTotal = items.filter((e) => e.isActive).reduce((s, e) => s + e.amount, 0);
             return (
               <div key={cat.value}>
                 <div className="flex items-center gap-2 mb-3">
                   <span
                     className="flex h-7 w-7 items-center justify-center rounded-md"
-                    style={{ backgroundColor: cat.bg, color: cat.color }}
+                    style={{ backgroundColor: cat.bg, fontSize: "16px", lineHeight: 1 }}
                   >
-                    <Icon className="h-4 w-4" strokeWidth={ICON_STROKE} />
+                    {getCategoryEmoji(cat.label)}
                   </span>
                   <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                     {cat.label}
@@ -223,11 +222,20 @@ export default function LifeEvents() {
                       >
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="font-semibold truncate">{ev.eventName}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {categoryLabel(ev.category, ev.customCategory)}
-                              </p>
+                            <div className="flex items-start gap-2 min-w-0">
+                              <span
+                                className="shrink-0 mt-0.5"
+                                style={{ fontSize: "16px", lineHeight: 1 }}
+                                aria-hidden="true"
+                              >
+                                {getCategoryEmoji(categoryLabel(ev.category, ev.customCategory))}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="font-semibold truncate">{ev.eventName}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {categoryLabel(ev.category, ev.customCategory)}
+                                </p>
+                              </div>
                             </div>
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button

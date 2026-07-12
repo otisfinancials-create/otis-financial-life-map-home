@@ -8,7 +8,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
-import { categoryMeta, categoryDisplayLabel, ICON_STROKE } from "@/utils/categoryIcons";
+import { categoryMeta, categoryDisplayLabel, getCategoryEmoji } from "@/utils/categoryIcons";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -1104,7 +1104,6 @@ export default function Forecast() {
                           const isCurrentBalance = tx.id === currentBalanceTxId;
                           const isLifeEvent = tx.sourceLifeEventId != null;
                           const meta = catMeta(tx.category);
-                          const CatIcon = meta.icon;
                           const variance = tx.isActual && tx.forecastedAmount != null && tx.forecastedAmount !== tx.amount
                             ? tx.amount - tx.forecastedAmount
                             : null;
@@ -1164,9 +1163,12 @@ export default function Forecast() {
                                 </span>
                               </div>
 
-                              {/* Category icon (Part D) — 16px, vertically centered */}
-                              <div className="py-[11px] flex items-center justify-center">
-                                <CatIcon className="h-4 w-4 shrink-0" strokeWidth={ICON_STROKE} style={{ color: meta.color }} />
+                              {/* Category icon (Part D) — emoji, vertically centered */}
+                              <div
+                                className="py-[11px] flex items-center justify-center"
+                                style={{ fontSize: "16px", lineHeight: 1 }}
+                              >
+                                {getCategoryEmoji(tx.category)}
                               </div>
 
                               {/* Description + status badges (Part F) */}

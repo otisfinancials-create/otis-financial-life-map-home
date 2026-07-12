@@ -40,7 +40,7 @@ import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BillDialog } from "@/components/bills/bill-dialog";
 import { BillsAnalytics } from "@/components/bills/bills-analytics";
-import { categoryMeta, ICON_STROKE } from "@/utils/categoryIcons";
+import { categoryMeta, getCategoryEmoji } from "@/utils/categoryIcons";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -242,14 +242,15 @@ export default function Bills() {
                     <TableCell>
                       {(() => {
                         const meta = categoryMeta(bill.category);
-                        const CatIcon = meta.icon;
                         return (
                           <div className="flex items-center gap-2">
-                            <CatIcon
-                              className="h-4 w-4 shrink-0"
-                              strokeWidth={ICON_STROKE}
-                              style={{ color: meta.color }}
-                            />
+                            <span
+                              className="shrink-0"
+                              style={{ fontSize: "16px", lineHeight: 1 }}
+                              aria-hidden="true"
+                            >
+                              {getCategoryEmoji(bill.category)}
+                            </span>
                             <Badge
                               variant="outline"
                               className="font-normal border-transparent"

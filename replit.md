@@ -33,7 +33,7 @@ A personal finance web app for high-earning households. Combines cash flow forec
 - `artifacts/api-server/src/routes/` — Express route handlers (bills, accounts, pay_schedules, forecast, dashboard, subscribe)
 - `artifacts/api-server/src/routes/subscribe.ts` — public (pre-`requireAuth`) `POST /api/subscribe` that adds an email to the Mailchimp audience (used by the Coming Soon page). Reads `MAILCHIMP_API_KEY` + `MAILCHIMP_AUDIENCE_ID`; returns JSON `{ status: "subscribed" | "already" | "invalid_email" | "error" }`.
 - `artifacts/otis/src/` — React frontend (pages, components, layout)
-- `artifacts/otis/src/utils/categoryIcons.ts` — shared category icon/color system (Lucide, 16px, strokeWidth 1.5): `CATEGORY_META`, `categoryMeta()`, `categoryDisplayLabel()`, `ACCOUNT_TYPE_META`, `ICON_STROKE`. Used by Forecast, Bills (rows + donut), Dashboard (Upcoming Bills, By Account Type), and Life Events. Do not create per-page category icon/color maps.
+- `artifacts/otis/src/utils/categoryIcons.ts` — shared category visual system: `CATEGORY_META`, `categoryMeta()`, `categoryDisplayLabel()`, `ACCOUNT_TYPE_META`, `ICON_STROKE`, plus `CATEGORY_EMOJI` + `getCategoryEmoji()` (lowercase substring match, fallback 📋). Category icon CELLS render plain emoji (16px, lineHeight 1) in Forecast ledger rows, Bills rows, Dashboard Upcoming Bills, and Life Events cards/headers; Lucide icons remain for badges/colors, the Bills donut, and the By Account Type panel. Do not create per-page category icon/color maps.
 - `artifacts/coming-soon/` — standalone static "Coming Soon" landing page (self-contained `index.html`, no React; served at the root `/`). This is the public face of the deployment while the main app is not yet launched.
 - Routing note: the main Otis app is served at `/app/` (BASE_PATH `/app/`); the Coming Soon page owns the root `/`; the API server is at `/api`. To make the main app public at the root later, swap the `paths`/`previewPath`/`BASE_PATH` back in the two `artifact.toml` files via `verifyAndReplaceArtifactToml`.
 - `lib/api-client-react/src/generated/` — generated React Query hooks (do not edit)
@@ -61,7 +61,7 @@ A personal finance web app for high-earning households. Combines cash flow forec
   - **Ledger redesign (Jul 2026)**: all ledger rows/headers share one CSS grid (`LEDGER_GRID`); per-category color bar/icon/badge via the shared category icon system; pill controls (navy time range, teal view toggle, navy "Hide/Show history" toggle that hides pre-today rows from the ledger display only); status pills; month headers are clean centered dividers (no In/Out totals); TODAY divider bar shows current balance (only when history is visible); category legend + 4-column totals footer (footer totals track the time range only, ignoring search/category filters). Derived "Otis insight" rows per month (negative balance dip, 3+ bills ≥$500 in a 7-day window, life-event spend ≥$1000) link to `/otis?prompt=…`; the Otis page consumes `?prompt=` on mount to prefill the chat.
 - **Life Events** — full CRUD for major milestones (Pets, Vacations, Home Improvements, Education, Celebrations, Vehicle, Medical, Custom) with timing (one-time / spread-over-months / recurring), priority (Must Do / Planning To / Just Dreaming), and notes. Costs flow into the forecast as `forecasted_transactions` marked with `sourceLifeEventId` (shown in teal). Dashboard has an "Upcoming Life Events" widget and life-event costs are stacked as a distinct teal series on the Cash Flow Trend chart.
 - **Loans** — placeholder (coming soon)
-- **Otis AI** — AI chat assistant with an animated avatar (`artifacts/otis/src/components/OtisAvatar.tsx`): yellow-Lab photo (`artifacts/otis/public/images/otis-avatar.png`), states idle/thinking/talking/listening (spring tilt, pulsing teal ring for thinking/listening, solid navy ring + speech bubble for talking), sizes sm 48px static / md 120px chat header / lg 220px page hero (160px mobile). Page-load greeting and scenario/chat lifecycle drive the state. Sidebar Otis link uses a 28px avatar with a teal glow when active. No emojis in the UI.
+- **Otis AI** — AI chat assistant with an animated avatar (`artifacts/otis/src/components/OtisAvatar.tsx`): yellow-Lab photo (`artifacts/otis/public/images/otis-avatar.png`), states idle/thinking/talking/listening (spring tilt, pulsing teal ring for thinking/listening, solid navy ring + speech bubble for talking), sizes sm 48px static / md 120px chat header / lg 220px page hero (160px mobile). Page-load greeting and scenario/chat lifecycle drive the state. Sidebar Otis link uses a 28px avatar with a teal glow when active.
 
 ## Enhancements backlog (planned, not yet built)
 
@@ -71,7 +71,7 @@ A personal finance web app for high-earning households. Combines cash flow forec
 
 - Light mode as default
 - "Bloomberg meets Notion" aesthetic — data-dense but never cluttered
-- Do not use emojis in the UI
+- Category icons are plain emoji characters (💼 🏠 🍽️ …) via the shared `getCategoryEmoji()`; elsewhere avoid decorative emojis in the UI
 - AI assistant persona named "Otis"
 
 ## Gotchas

@@ -35,7 +35,7 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
-import { categoryMeta, accountTypeMeta, ICON_STROKE } from "@/utils/categoryIcons";
+import { accountTypeMeta, ICON_STROKE, getCategoryEmoji } from "@/utils/categoryIcons";
 import { format, startOfMonth, addDays, differenceInCalendarDays } from "date-fns";
 import { Link, useLocation } from "wouter";
 import type { ReactNode } from "react";
@@ -615,18 +615,13 @@ export default function Dashboard() {
                       />
                       <div className="flex flex-col min-w-0 flex-1">
                         <span className="text-sm font-medium truncate flex items-center gap-1.5">
-                          {(() => {
-                            const meta = categoryMeta(bill.category);
-                            const CatIcon = meta.icon;
-                            return (
-                              <CatIcon
-                                className="h-4 w-4 shrink-0"
-                                strokeWidth={ICON_STROKE}
-                                style={{ color: meta.color }}
-                                aria-label={bill.category}
-                              />
-                            );
-                          })()}
+                          <span
+                            className="shrink-0"
+                            style={{ fontSize: "16px", lineHeight: 1 }}
+                            aria-label={bill.category}
+                          >
+                            {getCategoryEmoji(bill.category)}
+                          </span>
                           <span className="truncate">{bill.billName}</span>
                         </span>
                         <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
