@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon } from "lucide-react";
+import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -66,12 +66,27 @@ function formatPaymentMethod(raw: string | null | undefined): string {
   return map[raw] ?? raw;
 }
 
+type SortKey = "billName" | "category" | "amount" | "frequency" | "dueDay" | "paymentMethod";
+type SortDir = "asc" | "desc";
+
 export default function Bills() {
   const [searchTerm, setSearchTerm] = useState("");
   const [billToEdit, setBillToEdit] = useState<Bill | undefined>(undefined);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [billToDelete, setBillToDelete] = useState<Bill | undefined>(undefined);
   const [showInactive, setShowInactive] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -83,10 +98,11 @@ export default function Bills() {
   const searchedBills = useMemo(
     () =>
       bills?.filter((bill) =>
-        bill.billName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        bill.category.toLowerCase().includes(searchTerm.toLowerCase())
+        (bill.billName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          bill.category.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (!selectedCategory || bill.category === selectedCategory)
       ) || [],
-    [bills, searchTerm],
+    [bills, searchTerm, selectedCategory],
   );
 
   const inactiveCount = useMemo(
@@ -95,10 +111,31 @@ export default function Bills() {
   );
 
   // Active bills first; inactive bills (when shown) sorted to the bottom.
+  // Within each group, apply the user's column sort if one is active.
   const visibleBills = useMemo(() => {
     const list = showInactive ? searchedBills : searchedBills.filter((b) => b.isActive);
-    return [...list].sort((a, b) => Number(b.isActive) - Number(a.isActive));
-  }, [searchedBills, showInactive]);
+    const compareBy = (a: Bill, b: Bill): number => {
+      if (!sortKey) return 0;
+      let cmp = 0;
+      switch (sortKey) {
+        case "amount":
+          cmp = a.amount - b.amount;
+          break;
+        case "dueDay":
+          cmp = (a.dueDay ?? 0) - (b.dueDay ?? 0);
+          break;
+        case "paymentMethod":
+          cmp = formatPaymentMethod(a.paymentMethod).localeCompare(formatPaymentMethod(b.paymentMethod));
+          break;
+        default:
+          cmp = String(a[sortKey] ?? "").localeCompare(String(b[sortKey] ?? ""), undefined, { sensitivity: "base" });
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    };
+    return [...list].sort(
+      (a, b) => Number(b.isActive) - Number(a.isActive) || compareBy(a, b),
+    );
+  }, [searchedBills, showInactive, sortKey, sortDir]);
 
   const handleEdit = (bill: Bill) => {
     setBillToEdit(bill);
@@ -144,7 +181,7 @@ export default function Bills() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Bills & Subscriptions</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Bills</h1>
           <p className="text-muted-foreground mt-1">Manage your recurring expenses and forecast commitments.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -177,9 +214,15 @@ export default function Bills() {
         </div>
       </div>
 
-      {!isLoading && <BillsAnalytics bills={bills ?? []} />}
+      {!isLoading && (
+        <BillsAnalytics
+          bills={bills ?? []}
+          selectedCategory={selectedCategory}
+          onSelectCategory={setSelectedCategory}
+        />
+      )}
 
-      <Card className="border-border bg-card overflow-hidden">
+      <Card className="border-card-border bg-card rounded-xl overflow-hidden">
         {isLoading ? (
           <div className="p-8 space-y-4">
             {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -189,12 +232,34 @@ export default function Bills() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
-                  <TableHead>Bill Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Frequency</TableHead>
-                  <TableHead>Due Day</TableHead>
-                  <TableHead>Payment</TableHead>
+                  {([
+                    ["billName", "Bill Name"],
+                    ["category", "Category"],
+                    ["amount", "Amount"],
+                    ["frequency", "Frequency"],
+                    ["dueDay", "Due Day"],
+                    ["paymentMethod", "Payment"],
+                  ] as [SortKey, string][]).map(([key, label]) => (
+                    <TableHead key={key}>
+                      <button
+                        type="button"
+                        onClick={() => handleSort(key)}
+                        className="flex items-center gap-1 hover:text-foreground transition-colors"
+                        aria-label={`Sort by ${label}`}
+                      >
+                        {label}
+                        {sortKey === key ? (
+                          sortDir === "asc" ? (
+                            <ArrowUp className="h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="h-3 w-3" />
+                          )
+                        ) : (
+                          <ChevronsUpDown className="h-3 w-3 opacity-30" />
+                        )}
+                      </button>
+                    </TableHead>
+                  ))}
                   <TableHead>Active</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>

@@ -119,15 +119,15 @@ export default function PaySchedules() {
       {/* Summary strip */}
       {!isLoading && schedules && schedules.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <Card className="bg-card border-border py-4 px-6 flex flex-col justify-center">
+          <Card className="bg-card border-card-border rounded-xl py-4 px-6 flex flex-col justify-center">
             <span className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
               Monthly Income (est.)
             </span>
-            <span className="text-xl font-mono text-chart-2 font-medium">
+            <span className="text-xl font-mono text-positive font-medium">
               {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(totalMonthlyIncome)}
             </span>
           </Card>
-          <Card className="bg-card border-border py-4 px-6 flex flex-col justify-center">
+          <Card className="bg-card border-card-border rounded-xl py-4 px-6 flex flex-col justify-center">
             <span className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
               Annual Income (est.)
             </span>
@@ -135,7 +135,7 @@ export default function PaySchedules() {
               {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(totalMonthlyIncome * 12)}
             </span>
           </Card>
-          <Card className="bg-card border-border py-4 px-6 flex flex-col justify-center">
+          <Card className="bg-card border-card-border rounded-xl py-4 px-6 flex flex-col justify-center">
             <span className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
               Income Sources
             </span>
@@ -147,7 +147,7 @@ export default function PaySchedules() {
       )}
 
       {/* Table */}
-      <Card className="border-border bg-card overflow-hidden">
+      <Card className="border-card-border bg-card rounded-xl overflow-hidden">
         {isLoading ? (
           <div className="p-8 space-y-4">
             {[1, 2, 3].map((i) => (
@@ -238,7 +238,12 @@ export default function PaySchedules() {
               </p>
             </div>
             <PayScheduleDialog
-              trigger={<Button variant="outline">Add your first income source</Button>}
+              trigger={
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add your first income source
+                </Button>
+              }
             />
           </div>
         )}

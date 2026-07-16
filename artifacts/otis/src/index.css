@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Nunito:wght@800&display=swap');
 @layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
 @import "@clerk/themes/shadcn.css";
@@ -87,41 +87,63 @@
 }
 
 :root {
-  /* Light mode theme for Otis */
-  --background: 210 17% 98%;           /* #f8f9fa — main content area */
-  --foreground: 240 28% 14%;           /* #1a1a2e — headings & body */
-  --border: 214 32% 91%;               /* #e2e8f0 — borders */
+  /* ===== Otis brand palette (UI overhaul) ===== */
+  --color-navy:           #0D2B45;
+  --color-carolina:       #56A0D3;
+  --color-carolina-light: #e8f4fd;
+  --color-carolina-muted: rgba(86,160,211,0.18);
+  --color-page-bg:        #f0f4f8;
+  --color-logo-bg:        #eef2f6;
+  --color-card-bg:        #ffffff;
+  --color-card-border:    #eaecf0;
+  --color-text-primary:   #0D2B45;
+  --color-text-secondary: #6b7280;
+  --color-text-muted:     #9ca3af;
+  --color-positive:       #059669;
+  --color-negative:       #dc2626;
+  --color-warning:        #d97706;
+  --color-sidebar-bg:     #56A0D3;
+  --color-sidebar-text:   rgba(255,255,255,0.85);
+  --color-sidebar-muted:  rgba(255,255,255,0.5);
+  --color-active-bg:      #0D2B45;
+  --color-active-text:    #ffffff;
+  --sidebar-width:        220px;
+
+  /* Light mode theme for Otis — mapped to brand palette */
+  --background: 210 36% 96%;           /* #f0f4f8 — page background */
+  --foreground: 208 68% 16%;           /* #0D2B45 — navy headings & body */
+  --border: 220 17% 93%;               /* #eaecf0 — borders */
   --card: 0 0% 100%;                   /* #ffffff — card background */
-  --card-foreground: 240 28% 14%;
-  --card-border: 214 32% 91%;
-  --sidebar: 210 17% 95%;              /* #f1f3f5 — sidebar background */
-  --sidebar-foreground: 240 28% 14%;
-  --sidebar-border: 214 32% 91%;
-  --sidebar-primary: 210 100% 50%;     /* primary blue */
+  --card-foreground: 208 68% 16%;
+  --card-border: 220 17% 93%;
+  --sidebar: 205 59% 58%;              /* #56A0D3 — Carolina blue sidebar */
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-border: 205 59% 52%;
+  --sidebar-primary: 208 68% 16%;      /* navy */
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 214 32% 89%;       /* hover state in sidebar */
-  --sidebar-accent-foreground: 240 28% 14%;
-  --sidebar-ring: 210 100% 50%;
+  --sidebar-accent: 205 59% 64%;       /* hover state in sidebar */
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-ring: 208 68% 16%;
   --popover: 0 0% 100%;
-  --popover-foreground: 240 28% 14%;
-  --popover-border: 214 32% 91%;
-  --primary: 210 100% 50%;             /* #0080ff — buttons & highlights */
+  --popover-foreground: 208 68% 16%;
+  --popover-border: 220 17% 93%;
+  --primary: 205 59% 58%;              /* #56A0D3 — buttons & highlights */
   --primary-foreground: 0 0% 100%;     /* white text on primary */
-  --secondary: 210 17% 95%;
-  --secondary-foreground: 240 28% 14%;
-  --muted: 210 17% 96%;
-  --muted-foreground: 0 0% 40%;        /* #666 — body/secondary text */
-  --accent: 210 17% 94%;
-  --accent-foreground: 240 28% 14%;
-  --destructive: 0 72% 51%;
+  --secondary: 210 31% 95%;
+  --secondary-foreground: 208 68% 16%;
+  --muted: 210 36% 96%;
+  --muted-foreground: 220 9% 46%;      /* #6b7280 — secondary text */
+  --accent: 205 76% 95%;               /* #e8f4fd carolina light */
+  --accent-foreground: 208 68% 16%;
+  --destructive: 0 72% 51%;            /* #dc2626 */
   --destructive-foreground: 0 0% 100%;
-  --input: 214 32% 91%;                /* input border color */
-  --ring: 210 100% 50%;
-  --chart-1: 210 100% 50%;             /* blue */
-  --chart-2: 165 72% 33%;              /* teal/income — darkened for light bg */
-  --chart-3: 10 75% 50%;              /* coral/expense */
-  --chart-4: 38 92% 46%;              /* amber */
-  --chart-5: 270 72% 52%;             /* purple */
+  --input: 220 17% 93%;                /* input border color */
+  --ring: 205 59% 58%;
+  --chart-1: 205 59% 58%;              /* carolina blue */
+  --chart-2: 160 84% 31%;              /* green/income #059669 */
+  --chart-3: 0 72% 51%;               /* red/expense #dc2626 */
+  --chart-4: 32 95% 44%;              /* amber #d97706 */
+  --chart-5: 208 68% 16%;             /* navy */
   --radius: 0.5rem;
 }
 
@@ -191,4 +213,18 @@
 @keyframes otis-dot-bounce {
   0%, 60%, 100% { transform: translateY(0); }
   30% { transform: translateY(-5px); }
+}
+@keyframes otis-head-tilt {
+  0%, 50%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-6deg); }
+  75% { transform: rotate(6deg); }
+}
+
+/* Deep-link ledger row flash (#4) */
+@keyframes flash-highlight {
+  0%, 55% { background-color: #FEF9C3; }
+  100% { background-color: transparent; }
+}
+.animate-flash-highlight {
+  animation: flash-highlight 2s ease-out;
 }

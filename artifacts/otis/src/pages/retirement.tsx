@@ -70,8 +70,13 @@ export default function Retirement() {
 
   const hasBaseline =
     settings?.currentAge != null &&
-    settings.retirementAge > (settings.currentAge ?? 0) &&
+    settings.retirementAge >= (settings.currentAge ?? 0) &&
     summary != null;
+
+  const retiringToday =
+    settings?.currentAge != null && settings.retirementAge === settings.currentAge;
+
+  const noGoal = (summary?.retirementGoal ?? 0) <= 0;
 
   const scenarioRetireAge = whatIfRetireAge ?? settings?.retirementAge ?? 65;
   const scenarioReturn = whatIfReturn ?? settings?.expectedReturnRate ?? 7;
@@ -139,6 +144,9 @@ export default function Retirement() {
         <h1 className="text-2xl font-bold tracking-tight">Retirement</h1>
         <p className="text-muted-foreground mt-1">
           Here's where you stand today, and where your current path is taking you.
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Retirement savings pulled from accounts marked as 'Retirement' type in Connected Accounts.
         </p>
       </div>
 
@@ -217,12 +225,14 @@ export default function Retirement() {
                 </div>
                 <div className="mt-2 h-2 w-full rounded-full bg-muted overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${readinessColor(summary?.readinessScore ?? 0)}`}
+                    className="h-full rounded-full transition-all bg-[#56A0D3]"
                     style={{ width: `${Math.min(100, summary?.readinessScore ?? 0)}%` }}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  You're {Math.min(100, summary?.readinessScore ?? 0)}% of the way to your retirement goal
+                  {noGoal
+                    ? "No specific goal set — you're ahead of the curve!"
+                    : `You're ${Math.min(100, summary?.readinessScore ?? 0)}% of the way to your retirement goal`}
                 </p>
               </>
             )}
@@ -260,6 +270,11 @@ export default function Retirement() {
               title="Let's set up your projection"
               description="Enter your age and retirement goal in the assumptions below, and we'll chart your path."
             />
+          ) : retiringToday ? (
+            <div className="rounded-lg border bg-muted/40 px-4 py-8 text-center text-sm">
+              Based on retiring today, your projected savings is your current balance of{" "}
+              <FormatCurrency amount={summary?.currentSavings ?? 0} className="font-semibold" />.
+            </div>
           ) : (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -289,7 +304,7 @@ export default function Retirement() {
                     itemStyle={{ color: "hsl(var(--foreground))" }}
                     formatter={(value: number, name: string) => {
                       const labels: Record<string, string> = {
-                        projected: "On Track",
+                        projected: "Current Assumptions",
                         scenario: "What-If",
                         goal: "Goal",
                       };
@@ -303,7 +318,7 @@ export default function Retirement() {
                   <Legend
                     formatter={(value: string) => {
                       const labels: Record<string, string> = {
-                        projected: "On Track",
+                        projected: "Current Assumptions",
                         scenario: "What-If",
                         goal: "Goal",
                       };
@@ -322,7 +337,7 @@ export default function Retirement() {
                     <Line
                       type="monotone"
                       dataKey="scenario"
-                      stroke="#14b8a6"
+                      stroke="#56A0D3"
                       strokeWidth={2}
                       strokeDasharray="6 3"
                       dot={false}
@@ -346,11 +361,26 @@ export default function Retirement() {
       {/* Part E: What-if scenarios */}
       {hasBaseline && settings && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">What if...</CardTitle>
-            <CardDescription>
-              Move the sliders to see how small changes shape your future. The teal line shows your new path.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
+            <div>
+              <CardTitle className="text-base">What if...</CardTitle>
+              <CardDescription>
+                Move the sliders to see how small changes shape your future. The blue dashed line shows your new path.
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              disabled={!scenarioActive}
+              onClick={() => {
+                setExtraContribution(0);
+                setWhatIfRetireAge(null);
+                setWhatIfReturn(null);
+              }}
+            >
+              Reset to Current Assumptions
+            </Button>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -488,7 +518,9 @@ export default function Retirement() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Your retirement accounts</CardTitle>
-            <CardDescription>The accounts powering your projection.</CardDescription>
+            <CardDescription>
+              Retirement savings pulled from accounts marked as 'Retirement' type in Connected Accounts.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {accountsLoading ? (

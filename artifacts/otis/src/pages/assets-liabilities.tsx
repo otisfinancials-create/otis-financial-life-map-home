@@ -55,10 +55,10 @@ const getAssetIcon = (type: string) => {
 
 const getAssetColor = (type: string) => {
   switch (type) {
-    case 'real_estate': return 'text-chart-1';
-    case 'vehicle': return 'text-chart-2';
-    case 'personal_property': return 'text-chart-4';
-    case 'business_interest': return 'text-chart-5';
+    case 'real_estate': return 'text-primary';
+    case 'vehicle': return 'text-[#0D2B45]';
+    case 'personal_property': return 'text-primary';
+    case 'business_interest': return 'text-[#0D2B45]';
     default: return 'text-primary';
   }
 };
@@ -124,7 +124,7 @@ export default function AssetsLiabilities() {
 
       {/* Summary Card */}
       <div className="grid grid-cols-1 gap-4">
-        <Card className="bg-card border-border">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Asset Value</CardTitle>
           </CardHeader>
@@ -149,7 +149,7 @@ export default function AssetsLiabilities() {
       ) : assets && assets.length > 0 ? (
         <div className="space-y-6">
           {Object.entries(assetsByType).map(([type, typeAssets]) => (
-            <Card key={type} className="bg-card border-border overflow-hidden">
+            <Card key={type} className="bg-card border-border overflow-hidden rounded-xl">
               <CardHeader className="border-b border-border bg-muted/20 py-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -166,7 +166,7 @@ export default function AssetsLiabilities() {
                   {typeAssets.map(asset => (
                     <div key={asset.id} className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors group">
                       <div className="flex items-start gap-3 min-w-0">
-                        <div className="h-10 w-10 rounded-md bg-secondary border border-border flex items-center justify-center shrink-0 text-muted-foreground">
+                        <div className={`h-10 w-10 rounded-md bg-secondary border border-border flex items-center justify-center shrink-0 ${getAssetColor(asset.assetType)}`}>
                           {getAssetIcon(asset.assetType)}
                         </div>
                         <div className="min-w-0">
@@ -179,6 +179,11 @@ export default function AssetsLiabilities() {
                           {asset.purchaseDate && (
                             <p className="text-xs text-muted-foreground mt-0.5">
                               Purchased {new Date(asset.purchaseDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </p>
+                          )}
+                          {asset.notes && (
+                            <p className="text-xs text-muted-foreground/80 mt-1 whitespace-pre-wrap break-words">
+                              {asset.notes}
                             </p>
                           )}
                         </div>

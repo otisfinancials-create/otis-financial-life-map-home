@@ -16,7 +16,7 @@ const SIZE_CLASSES: Record<NonNullable<OtisAvatarProps["size"]>, string> = {
 };
 
 const SPRING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
-const TEAL = "#2D9B6F";
+const CAROLINA = "#56A0D3";
 const NAVY = "#0D2B45";
 
 function ThinkingDots() {
@@ -27,7 +27,7 @@ function ThinkingDots() {
           key={i}
           className="inline-block h-2 w-2 rounded-full"
           style={{
-            backgroundColor: TEAL,
+            backgroundColor: CAROLINA,
             animation: "otis-dot-bounce 1s ease-in-out infinite",
             animationDelay: `${i * 0.15}s`,
           }}
@@ -49,9 +49,9 @@ export function OtisAvatar({ state, message, size = "md", className }: OtisAvata
     );
   }
 
-  const rotation = state === "thinking" || state === "listening" ? -14 : state === "talking" ? 4 : 0;
+  const rotation = state === "thinking" ? -14 : state === "talking" ? 4 : 0;
   const showRing = state === "thinking" || state === "listening" || state === "talking";
-  const ringColor = state === "talking" ? NAVY : TEAL;
+  const ringColor = state === "talking" ? NAVY : CAROLINA;
   const ringPulses = state === "thinking" || state === "listening";
   const bubbleVisible = state === "thinking" || (state === "talking" && !!message);
   const bubbleText = message && message.length > 60 ? `${message.slice(0, 60)}…` : message;
@@ -95,17 +95,42 @@ export function OtisAvatar({ state, message, size = "md", className }: OtisAvata
           }}
           aria-hidden="true"
         />
-        <img
-          src={AVATAR_SRC}
-          alt="Otis"
-          className="h-full w-full rounded-full object-cover"
-          style={{
-            transform: `rotate(${rotation}deg)`,
-            transformOrigin: "center 60%",
-            transition: `transform 0.6s ${SPRING}`,
-            animation: state === "idle" ? "otis-breathe 4s ease-in-out infinite" : "none",
-          }}
-        />
+        {state === "listening" ? (
+          // Head-only tilt while the user is typing: the photo is split into a
+          // static body layer (bottom) and a head layer (top) that gently rocks
+          // side to side around the bottom center of the head region.
+          <div className="relative h-full w-full">
+            <img
+              src={AVATAR_SRC}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full rounded-full object-cover"
+              style={{ clipPath: "inset(52% 0 0 0)" }}
+            />
+            <img
+              src={AVATAR_SRC}
+              alt="Otis"
+              className="absolute inset-0 h-full w-full rounded-full object-cover"
+              style={{
+                clipPath: "inset(0 0 44% 0)",
+                transformOrigin: "50% 56%",
+                animation: "otis-head-tilt 2.4s ease-in-out infinite",
+              }}
+            />
+          </div>
+        ) : (
+          <img
+            src={AVATAR_SRC}
+            alt="Otis"
+            className="h-full w-full rounded-full object-cover"
+            style={{
+              transform: `rotate(${rotation}deg)`,
+              transformOrigin: "center 60%",
+              transition: `transform 0.6s ${SPRING}`,
+              animation: state === "idle" ? "otis-breathe 4s ease-in-out infinite" : "none",
+            }}
+          />
+        )}
       </div>
     </div>
   );

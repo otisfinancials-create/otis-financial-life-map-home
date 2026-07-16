@@ -12,16 +12,30 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageCircle, Save } from "lucide-react";
-import { scenarioMeta, fmtSigned, type ScenarioResultData } from "./scenario-meta";
+import { FormatCurrency } from "@/components/ui/format-currency";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ChevronDown, MessageCircle, Save } from "lucide-react";
+import { scenarioMeta, fmtMoney, fmtSigned, type ScenarioResultData } from "./scenario-meta";
+import { computeScenarioAmortization, scenarioAmortInputs } from "./scenario-amortization";
 
 interface ScenarioResultsProps {
   type: string;
   result: ScenarioResultData;
+  inputs: Record<string, unknown>;
   saving: boolean;
   onSave: (name: string) => void;
   onAskOtis: () => void;
 }
+
+const formatDate = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 function compactMoney(v: number): string {
   const abs = Math.abs(v);
@@ -31,9 +45,20 @@ function compactMoney(v: number): string {
   return `${sign}$${Math.round(abs)}`;
 }
 
-export function ScenarioResults({ type, result, saving, onSave, onAskOtis }: ScenarioResultsProps) {
+export function ScenarioResults({ type, result, inputs, saving, onSave, onAskOtis }: ScenarioResultsProps) {
   const meta = scenarioMeta(type);
   const [name, setName] = useState("");
+  const [showSchedule, setShowSchedule] = useState(false);
+
+  const amortInputs = scenarioAmortInputs(type, inputs);
+  const amortization = amortInputs
+    ? computeScenarioAmortization(amortInputs.principal, amortInputs.annualRatePct, amortInputs.termMonths, amortInputs.startDate)
+    : null;
+
+  const sellCurrentHome = type === "buy_home" && inputs["sellCurrentHome"] === true;
+  const salePrice = typeof inputs["salePrice"] === "number" ? (inputs["salePrice"] as number) : 0;
+  const purchasePrice = typeof inputs["purchasePrice"] === "number" ? (inputs["purchasePrice"] as number) : 0;
+  const netNewHousingCost = purchasePrice - salePrice;
 
   const endDiff =
     result.points.length > 0
@@ -100,17 +125,75 @@ export function ScenarioResults({ type, result, saving, onSave, onAskOtis }: Sce
         </CardContent>
       </Card>
 
-      <Card className="border-teal-600/30 bg-teal-600/5">
+      <Card className="border-[#56A0D3]/30 bg-[#56A0D3]/5">
         <CardContent className="pt-5">
           <div className="flex items-start gap-3">
             <div className="text-xl leading-none mt-0.5">🐾</div>
             <div>
-              <div className="text-sm font-semibold text-teal-800 mb-1">Otis says</div>
+              <div className="text-sm font-semibold text-[#0D2B45] mb-1">Otis says</div>
               <p className="text-sm leading-relaxed text-foreground">{result.commentary}</p>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {sellCurrentHome && salePrice > 0 && (
+        <Card className="border-emerald-600/30 bg-emerald-600/5">
+          <CardContent className="pt-5 text-sm text-foreground">
+            After selling your current home for <span className="font-semibold">{fmtMoney(salePrice)}</span>, your net new
+            housing cost is <span className="font-semibold">{fmtMoney(netNewHousingCost)}</span>.
+          </CardContent>
+        </Card>
+      )}
+
+      {amortization && amortization.schedule.length > 0 && (
+        <Card>
+          <CardContent className="pt-5">
+            <button
+              type="button"
+              onClick={() => setShowSchedule((v) => !v)}
+              className="flex w-full items-center justify-between text-sm font-semibold"
+            >
+              <span>View Amortization Schedule</span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${showSchedule ? "rotate-180" : ""}`} />
+            </button>
+            {showSchedule && (
+              <div className="mt-4">
+                <div className="mb-3 text-xs text-muted-foreground">
+                  Estimated monthly payment: <span className="font-semibold text-foreground">{fmtMoney(amortization.monthlyPayment)}</span>
+                  {" · "}Total interest: <span className="font-semibold text-foreground">{fmtMoney(amortization.totalInterest)}</span>
+                </div>
+                <div className="max-h-[440px] overflow-auto rounded-lg border border-border bg-card">
+                  <Table>
+                    <TableHeader className="sticky top-0 z-10 bg-muted">
+                      <TableRow>
+                        <TableHead>Payment #</TableHead>
+                        <TableHead>Payment Date</TableHead>
+                        <TableHead className="text-right">Payment Amount</TableHead>
+                        <TableHead className="text-right">Principal</TableHead>
+                        <TableHead className="text-right">Interest</TableHead>
+                        <TableHead className="text-right">Remaining Balance</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {amortization.schedule.map((entry) => (
+                        <TableRow key={entry.paymentNumber}>
+                          <TableCell className="text-muted-foreground">{entry.paymentNumber}</TableCell>
+                          <TableCell className="whitespace-nowrap text-xs">{formatDate(entry.paymentDate)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs"><FormatCurrency amount={entry.paymentAmount} /></TableCell>
+                          <TableCell className="text-right font-mono text-xs"><FormatCurrency amount={entry.principal} /></TableCell>
+                          <TableCell className="text-right font-mono text-xs text-red-600"><FormatCurrency amount={entry.interest} /></TableCell>
+                          <TableCell className="text-right font-mono text-xs"><FormatCurrency amount={entry.remainingBalance} /></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
@@ -129,7 +212,7 @@ export function ScenarioResults({ type, result, saving, onSave, onAskOtis }: Sce
             {saving ? "Saving…" : "Save Scenario"}
           </Button>
         </div>
-        <Button className="bg-teal-600 hover:bg-teal-700 text-white" onClick={onAskOtis}>
+        <Button className="bg-[#56A0D3] hover:bg-[#56A0D3]/90 text-white" onClick={onAskOtis}>
           <MessageCircle className="h-4 w-4 mr-1.5" />
           Ask Otis about this
         </Button>

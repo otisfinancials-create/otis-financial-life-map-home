@@ -1,35 +1,132 @@
 import { Link, useLocation } from "wouter";
-import { 
-  LayoutDashboard, 
-  Receipt, 
-  Landmark, 
-  LineChart, 
-  CalendarHeart, 
+import {
+  LayoutDashboard,
+  Receipt,
+  Landmark,
+  LineChart,
+  CalendarHeart,
   PiggyBank,
   Scale,
   CreditCard,
   Banknote,
-  LogOut
+  LogOut,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClerk, useUser } from "@clerk/react";
 
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Connected Accounts", href: "/accounts", icon: Landmark },
-  { name: "My Assets", href: "/assets-liabilities", icon: Scale },
-  { name: "Bills", href: "/bills", icon: Receipt },
-  { name: "Pay Schedules", href: "/pay-schedules", icon: Banknote },
-  { name: "Forecast", href: "/forecast", icon: LineChart },
-  { name: "Loans", href: "/loans", icon: CreditCard },
-  { name: "Life Events", href: "/life-events", icon: CalendarHeart },
-  { name: "Retirement", href: "/retirement", icon: PiggyBank },
+interface NavItem {
+  name: string;
+  href: string;
+  icon: LucideIcon;
+}
+
+const sections: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Planning",
+    items: [
+      { name: "Dashboard", href: "/", icon: LayoutDashboard },
+      { name: "Bills", href: "/bills", icon: Receipt },
+      { name: "Pay schedules", href: "/pay-schedules", icon: Banknote },
+      { name: "Forecast", href: "/forecast", icon: LineChart },
+    ],
+  },
+  {
+    label: "Accounts",
+    items: [
+      { name: "Connected accounts", href: "/accounts", icon: Landmark },
+      { name: "Assets", href: "/assets-liabilities", icon: Scale },
+      { name: "Loans", href: "/loans", icon: CreditCard },
+    ],
+  },
+  {
+    label: "Life",
+    items: [
+      { name: "Life events", href: "/life-events", icon: CalendarHeart },
+      { name: "Retirement", href: "/retirement", icon: PiggyBank },
+    ],
+  },
 ];
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-export function Sidebar() {
-  const [location] = useLocation();
+function OtisLogo() {
+  return (
+    <svg viewBox="0 0 680 280" xmlns="http://www.w3.org/2000/svg" style={{ width: 140, height: "auto" }}>
+      <text
+        x="340"
+        y="210"
+        textAnchor="middle"
+        fontSize="195"
+        letterSpacing="-4"
+        style={{
+          fontFamily: "'Nunito', 'Arial Rounded MT Bold', Arial, sans-serif",
+          fontWeight: 800,
+          fill: "#0D2B45",
+        }}
+      >
+        otis
+      </text>
+      <rect x="316" y="24" width="52" height="52" fill="#eef2f6" rx="4" />
+      <g transform="translate(342, 50)">
+        <ellipse cx="0" cy="0" rx="16" ry="13" fill="#56A0D3" />
+        <ellipse cx="-19" cy="-12" rx="9" ry="7.5" fill="#56A0D3" transform="rotate(-20)" />
+        <ellipse cx="19" cy="-12" rx="9" ry="7.5" fill="#56A0D3" transform="rotate(20)" />
+        <ellipse cx="-30" cy="2" rx="7.5" ry="6" fill="#56A0D3" transform="rotate(-35)" />
+        <ellipse cx="30" cy="2" rx="7.5" ry="6" fill="#56A0D3" transform="rotate(35)" />
+      </g>
+    </svg>
+  );
+}
+
+function SidebarItem({
+  item,
+  active,
+  onNavigate,
+}: {
+  item: NavItem;
+  active: boolean;
+  onNavigate?: () => void;
+}) {
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      className={cn(
+        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 mb-0.5 transition-colors",
+        active ? "bg-[var(--color-active-bg)]" : "hover:bg-white/10"
+      )}
+    >
+      <item.icon
+        className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-white/60")}
+        aria-hidden="true"
+      />
+      <span
+        className={cn(
+          "text-[13px]",
+          active ? "text-white font-medium" : "text-[rgba(255,255,255,0.85)] font-normal"
+        )}
+      >
+        {item.name}
+      </span>
+    </Link>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <div className="px-2 pt-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.8px] text-[rgba(255,255,255,0.5)]">
+      {children}
+    </div>
+  );
+}
+
+interface SidebarContentProps {
+  onNavigate?: () => void;
+}
+
+export function SidebarContent({ onNavigate }: SidebarContentProps) {
+  const [location, navigate] = useLocation();
   const { signOut } = useClerk();
   const { user } = useUser();
 
@@ -39,89 +136,97 @@ export function Sidebar() {
     : (user?.primaryEmailAddress?.emailAddress?.[0] ?? "?").toUpperCase();
 
   return (
-    <div className="flex h-full w-64 flex-col border-r border-border bg-sidebar text-sidebar-foreground">
-      <div className="flex h-16 items-center px-6 border-b border-border">
-        <div className="flex items-center gap-2 font-semibold tracking-tight text-lg">
-          <div className="h-6 w-6 rounded-sm bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground text-xs font-bold font-mono">O</span>
-          </div>
-          Otis
-        </div>
+    <div className="flex h-full w-full flex-col bg-[var(--color-sidebar-bg)]">
+      {/* Logo area */}
+      <div className="shrink-0 bg-[var(--color-logo-bg)] px-4 py-5 flex justify-center">
+        <OtisLogo />
       </div>
-      <div className="flex-1 overflow-y-auto py-4">
-        <nav className="space-y-1 px-3">
-          <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Overview
-          </div>
-          {navigation.map((item) => {
-            const isActive = location === item.href;
-            return (
-              <Link 
-                key={item.name} 
-                href={item.href}
-                className={cn(
-                  "group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                )}
-              >
-                <item.icon
-                  className={cn(
-                    "mr-3 h-4 w-4 shrink-0",
-                    isActive ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-foreground"
-                  )}
-                  aria-hidden="true"
-                />
-                {item.name}
-              </Link>
-            );
-          })}
 
-          <div className="mt-8 mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Intelligence
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto px-2.5 py-3.5">
+        {sections.map((section) => (
+          <div key={section.label}>
+            <SectionLabel>{section.label}</SectionLabel>
+            {section.items.map((item) => (
+              <SidebarItem
+                key={item.href}
+                item={item}
+                active={location === item.href}
+                onNavigate={onNavigate}
+              />
+            ))}
           </div>
-          <Link 
-            href="/otis"
+        ))}
+
+        <SectionLabel>Intelligence</SectionLabel>
+        <Link
+          href="/otis"
+          onClick={onNavigate}
+          className={cn(
+            "flex items-center gap-2.5 rounded-lg px-2.5 py-2 mb-0.5 transition-colors",
+            location === "/otis" ? "bg-[var(--color-active-bg)]" : "hover:bg-white/10"
+          )}
+        >
+          <img
+            src={`${import.meta.env.BASE_URL}images/otis-avatar.png`}
+            alt=""
+            className="h-6 w-6 shrink-0 rounded-full object-cover"
+            aria-hidden="true"
+          />
+          <span
             className={cn(
-              "group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "text-[13px]",
               location === "/otis"
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                ? "text-white font-medium"
+                : "text-[rgba(255,255,255,0.85)] font-normal"
             )}
           >
-            <img
-              src={`${import.meta.env.BASE_URL}images/otis-avatar.png`}
-              alt=""
-              className="mr-3 h-7 w-7 shrink-0 rounded-full object-cover"
-              style={location === "/otis" ? { boxShadow: "0 0 0 2px #2D9B6F" } : undefined}
-              aria-hidden="true"
-            />
-            Otis
-          </Link>
-        </nav>
-      </div>
-      <div className="p-4 border-t border-border">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-8 w-8 shrink-0 rounded-full bg-secondary flex items-center justify-center text-xs font-medium border border-border">
+            Otis AI
+          </span>
+        </Link>
+      </nav>
+
+      {/* Bottom area */}
+      <div className="shrink-0 border-t border-white/20 px-2.5 pt-3 pb-4">
+        <button
+          type="button"
+          onClick={() => {
+            navigate("/otis");
+            onNavigate?.();
+          }}
+          className="mb-3 flex w-full items-center gap-2.5 rounded-[10px] border border-white/30 bg-white/[0.18] px-3 py-2.5 transition-colors hover:bg-white/25"
+        >
+          <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-white" />
+          <span className="text-[13px] font-medium text-white">Ask Otis</span>
+        </button>
+        <div className="flex items-center justify-between gap-2 px-2 py-1">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-navy)] text-xs font-semibold text-white">
               {initials}
             </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-medium leading-none truncate">{displayName}</span>
-              <span className="text-xs text-muted-foreground mt-1">Personal</span>
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-xs font-medium text-white/90">{displayName}</span>
+              <span className="text-[10px] text-white/50">Personal plan</span>
             </div>
           </div>
           <button
             type="button"
             onClick={() => signOut({ redirectUrl: basePath || "/" })}
-            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50 transition-colors"
+            className="shrink-0 rounded-md p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
             title="Sign out"
           >
             <LogOut className="h-4 w-4" />
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+export function Sidebar() {
+  return (
+    <div className="hidden md:flex h-full w-[var(--sidebar-width)] shrink-0">
+      <SidebarContent />
     </div>
   );
 }

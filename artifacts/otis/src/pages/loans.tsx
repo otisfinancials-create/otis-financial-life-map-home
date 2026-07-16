@@ -13,6 +13,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 
 import {
   useListLoans,
@@ -89,6 +90,7 @@ export default function Loans() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const { data: loans, isLoading: isLoadingLoans } = useListLoans();
   const { data: summary, isLoading: isLoadingSummary } = useGetLoansSummary();
   const deleteLoan = useDeleteLoan();
@@ -122,19 +124,31 @@ export default function Loans() {
           <h1 className="text-2xl font-bold tracking-tight">Loans</h1>
           <p className="text-muted-foreground mt-1">Track every debt obligation with full amortization detail.</p>
         </div>
-        <LoanDialog
-          trigger={
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Loan
-            </Button>
-          }
-        />
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            variant="outline"
+            onClick={() =>
+              navigate(
+                `/otis?prompt=${encodeURIComponent("I'd like to model a potential new loan. Can you help me understand the financial impact?")}`,
+              )
+            }
+          >
+            Model a Loan 🤖
+          </Button>
+          <LoanDialog
+            trigger={
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Loan
+              </Button>
+            }
+          />
+        </div>
       </div>
 
       {/* Summary */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-card border-border">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Debt Balance</CardTitle>
           </CardHeader>
@@ -148,7 +162,7 @@ export default function Loans() {
             )}
           </CardContent>
         </Card>
-        <Card className="bg-card border-border">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Monthly Payments</CardTitle>
           </CardHeader>
@@ -162,7 +176,7 @@ export default function Loans() {
             )}
           </CardContent>
         </Card>
-        <Card className="bg-card border-border">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Earliest Payoff</CardTitle>
           </CardHeader>
@@ -176,7 +190,7 @@ export default function Loans() {
             )}
           </CardContent>
         </Card>
-        <Card className="bg-card border-border">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Latest Payoff</CardTitle>
           </CardHeader>
@@ -208,11 +222,11 @@ export default function Loans() {
             const isExpanded = expandedId === loan.id;
             const payoffDate = computeAmortization(loan).payoffDate;
             return (
-              <Card key={loan.id} className="bg-card border-border overflow-hidden">
+              <Card key={loan.id} className="bg-card border-border overflow-hidden rounded-xl">
                 <CardContent className="p-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex items-start gap-3 min-w-0">
-                      <div className="h-10 w-10 rounded-md bg-secondary border border-border flex items-center justify-center shrink-0 text-muted-foreground">
+                      <div className="h-10 w-10 rounded-md bg-secondary border border-border flex items-center justify-center shrink-0 text-primary">
                         {getLoanIcon(loan.loanType)}
                       </div>
                       <div className="min-w-0">
@@ -260,7 +274,7 @@ export default function Loans() {
                         of <FormatCurrency amount={loan.originalAmount} /> original
                       </span>
                     </div>
-                    <Progress value={pctPaid} className="mt-2 h-2 [&>div]:bg-emerald-600" />
+                    <Progress value={pctPaid} className="mt-2 h-2 [&>div]:bg-primary" />
                     <div className="mt-1 text-xs text-muted-foreground">
                       {pctPaid.toFixed(1)}% paid off
                     </div>

@@ -68,14 +68,14 @@ const getAccountIcon = (type: string) => {
 
 const getAccountColor = (type: string) => {
   switch (type) {
-    case 'checking': return 'text-chart-1';
-    case 'savings': return 'text-chart-2';
-    case 'credit_card': return 'text-chart-3';
-    case 'investment': return 'text-chart-4';
-    case 'brokerage': return 'text-chart-4';
-    case 'retirement': return 'text-chart-2';
-    case 'loan': return 'text-destructive';
-    case 'mortgage': return 'text-chart-5';
+    case 'checking': return 'text-primary';
+    case 'savings': return 'text-primary';
+    case 'credit_card': return 'text-primary';
+    case 'investment': return 'text-[#0D2B45]';
+    case 'brokerage': return 'text-[#0D2B45]';
+    case 'retirement': return 'text-primary';
+    case 'loan': return 'text-primary';
+    case 'mortgage': return 'text-[#0D2B45]';
     default: return 'text-primary';
   }
 };
@@ -117,17 +117,85 @@ export default function Accounts() {
     });
   };
 
-  const accountsByType = accounts?.reduce((acc, account) => {
-    if (!acc[account.accountType]) {
-      acc[account.accountType] = [];
-    }
-    acc[account.accountType].push(account);
-    return acc;
-  }, {} as Record<string, Account[]>) || {};
-
   // Signed balance: liabilities (credit cards, loans, mortgages) display as negative
   const signedBalance = (account: Account) =>
     account.isAsset ? account.currentBalance : -account.currentBalance;
+
+  const assetAccounts = accounts?.filter((a) => a.isAsset) || [];
+  const liabilityAccounts = accounts?.filter((a) => !a.isAsset) || [];
+
+  const renderAccountCard = (account: Account) => (
+    <Card key={account.id} className="bg-card border-border overflow-hidden rounded-xl">
+      <CardContent className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors group">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className={`h-10 w-10 rounded-md bg-secondary border border-border flex items-center justify-center shrink-0 ${getAccountColor(account.accountType)}`}>
+            {getAccountIcon(account.accountType)}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="text-sm font-medium truncate">
+                {account.institutionName} — {account.accountName}
+              </h4>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 leading-none shrink-0">
+                {getTypeLabel(account.accountType)}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {account.accountNumberLast4 ? `····${account.accountNumberLast4} · ` : ""}
+              Updated {formatDate(account.updatedAt)}
+            </p>
+            {account.notes && (
+              <p className="text-xs text-muted-foreground/80 mt-1 whitespace-pre-wrap break-words">
+                {account.notes}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className={`text-sm font-medium font-mono ${signedBalance(account) >= 0 ? 'text-[#059669]' : 'text-red-600'}`}>
+            <FormatCurrency amount={signedBalance(account)} />
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span tabIndex={0}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  className="h-7 text-xs text-muted-foreground pointer-events-none"
+                >
+                  <Link2 className="mr-1.5 h-3 w-3" />
+                  Connect via Plaid
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Coming soon</TooltipContent>
+          </Tooltip>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEdit(account)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setAccountToDelete(account)}
+                className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <TooltipProvider>
@@ -147,137 +215,60 @@ export default function Accounts() {
           />
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Card className="bg-card border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Assets</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoadingSummary ? (
-                <Skeleton className="h-8 w-[120px]" />
-              ) : (
-                <div className="text-2xl font-bold tracking-tight text-foreground">
-                  <FormatCurrency amount={summary?.totalAssets || 0} />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Liabilities</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoadingSummary ? (
-                <Skeleton className="h-8 w-[120px]" />
-              ) : (
-                <div className="text-2xl font-bold tracking-tight text-red-600">
-                  {(summary?.totalLiabilities || 0) > 0 ? (
-                    <FormatCurrency amount={-(summary?.totalLiabilities || 0)} />
-                  ) : (
-                    <FormatCurrency amount={0} />
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
         {/* Account Lists */}
         {isLoadingAccounts ? (
           <div className="space-y-4">
-            <Skeleton className="h-[200px] w-full" />
-            <Skeleton className="h-[200px] w-full" />
+            <Skeleton className="h-[120px] w-full" />
+            <Skeleton className="h-[100px] w-full" />
+            <Skeleton className="h-[120px] w-full" />
           </div>
         ) : accounts && accounts.length > 0 ? (
-          <div className="space-y-6">
-            {Object.entries(accountsByType).map(([type, typeAccounts]) => {
-              const typeTotal = typeAccounts.reduce((sum, a) => sum + signedBalance(a), 0);
-              return (
-                <Card key={type} className="bg-card border-border overflow-hidden">
-                  <CardHeader className="border-b border-border bg-muted/20 py-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={getAccountColor(type)}>{getAccountIcon(type)}</span>
-                        <CardTitle className="text-sm font-medium">{getTypeLabel(type)}</CardTitle>
-                      </div>
-                      <span className={`font-mono font-medium text-sm ${typeTotal < 0 ? 'text-red-600' : 'text-foreground'}`}>
-                        <FormatCurrency amount={typeTotal} />
-                      </span>
+          <div className="space-y-8">
+            {/* Assets */}
+            <div className="space-y-4">
+              <Card className="bg-card border-border rounded-xl">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 py-4">
+                  <CardTitle className="text-base font-semibold">Total Assets</CardTitle>
+                  {isLoadingSummary ? (
+                    <Skeleton className="h-8 w-[120px]" />
+                  ) : (
+                    <div className="text-2xl font-bold tracking-tight text-[#059669]">
+                      <FormatCurrency amount={summary?.totalAssets || 0} />
                     </div>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="divide-y divide-border">
-                      {typeAccounts.map(account => (
-                        <div key={account.id} className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors group">
-                          <div className="flex items-start gap-3 min-w-0">
-                            <div className="h-10 w-10 rounded-md bg-secondary border border-border flex items-center justify-center shrink-0">
-                              <span className="text-xs font-bold text-muted-foreground">{account.institutionName.substring(0, 2).toUpperCase()}</span>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="text-sm font-medium truncate">
-                                  {account.institutionName} — {account.accountName}
-                                </h4>
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 leading-none shrink-0">
-                                  {getTypeLabel(account.accountType)}
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {account.accountNumberLast4 ? `····${account.accountNumberLast4} · ` : ""}
-                                Updated {formatDate(account.updatedAt)}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <div className={`text-sm font-medium font-mono ${account.isAsset ? 'text-foreground' : 'text-red-600'}`}>
-                              <FormatCurrency amount={signedBalance(account)} />
-                            </div>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span tabIndex={0}>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled
-                                    className="h-7 text-xs text-muted-foreground pointer-events-none"
-                                  >
-                                    <Link2 className="mr-1.5 h-3 w-3" />
-                                    Connect via Plaid
-                                  </Button>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>Coming soon</TooltipContent>
-                            </Tooltip>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleEdit(account)}>
-                                  <Pencil className="mr-2 h-4 w-4" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => setAccountToDelete(account)}
-                                  className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-                      ))}
+                  )}
+                </CardHeader>
+              </Card>
+              {assetAccounts.length > 0 ? (
+                assetAccounts.map(renderAccountCard)
+              ) : (
+                <p className="text-sm text-muted-foreground px-1">No asset accounts yet.</p>
+              )}
+            </div>
+
+            {/* Liabilities */}
+            <div className="space-y-4">
+              <Card className="bg-card border-border rounded-xl">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 py-4">
+                  <CardTitle className="text-base font-semibold">Total Liabilities</CardTitle>
+                  {isLoadingSummary ? (
+                    <Skeleton className="h-8 w-[120px]" />
+                  ) : (
+                    <div className="text-2xl font-bold tracking-tight text-red-600">
+                      {(summary?.totalLiabilities || 0) > 0 ? (
+                        <FormatCurrency amount={-(summary?.totalLiabilities || 0)} />
+                      ) : (
+                        <FormatCurrency amount={0} />
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                  )}
+                </CardHeader>
+              </Card>
+              {liabilityAccounts.length > 0 ? (
+                liabilityAccounts.map(renderAccountCard)
+              ) : (
+                <p className="text-sm text-muted-foreground px-1">No liability accounts yet.</p>
+              )}
+            </div>
           </div>
         ) : (
           <EmptyState

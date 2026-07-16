@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -8,7 +9,6 @@ import {
   type SavedScenario,
 } from "@workspace/api-client-react";
 import { OtisChat, type ChatDirective } from "@/components/otis/OtisChat";
-import { OtisAvatar, type OtisAvatarState } from "@/components/OtisAvatar";
 import { ScenarioForm } from "@/components/otis/ScenarioForm";
 import { ScenarioResults } from "@/components/otis/ScenarioResults";
 import { SavedScenarios } from "@/components/otis/SavedScenarios";
@@ -26,42 +26,9 @@ export default function Otis() {
   const [lastInputs, setLastInputs] = useState<Record<string, unknown>>({});
   const [directive, setDirective] = useState<ChatDirective | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
-  const [avatarState, setAvatarState] = useState<OtisAvatarState>("idle");
-  const [avatarMessage, setAvatarMessage] = useState("");
 
   const chatRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const avatarTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-  const clearAvatarTimers = useCallback(() => {
-    avatarTimersRef.current.forEach(clearTimeout);
-    avatarTimersRef.current = [];
-  }, []);
-
-  const scheduleAvatar = useCallback((fn: () => void, ms: number) => {
-    avatarTimersRef.current.push(setTimeout(fn, ms));
-  }, []);
-
-  // Greeting on first load: brief pause, then Otis says hello, then back to idle.
-  useEffect(() => {
-    const timers = avatarTimersRef.current;
-    timers.push(
-      setTimeout(() => {
-        setAvatarState("talking");
-        setAvatarMessage("Hi! I know your complete financial picture. What's on your mind today?");
-        timers.push(
-          setTimeout(() => {
-            setAvatarState("idle");
-            setAvatarMessage("");
-          }, 4000),
-        );
-      }, 800),
-    );
-    return () => {
-      timers.forEach(clearTimeout);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const runScenario = useRunOtisScenario();
   const createScenario = useCreateScenario({
@@ -77,14 +44,9 @@ export default function Otis() {
       setResult(null);
       setRunError(null);
       setFormKey((k) => k + 1);
-      // Card click: Otis perks up and thinks while the form opens.
-      clearAvatarTimers();
-      setAvatarState("thinking");
-      setAvatarMessage("");
-      scheduleAvatar(() => setAvatarState("listening"), 1800);
       setTimeout(() => panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     },
-    [clearAvatarTimers, scheduleAvatar],
+    [],
   );
 
   const handleRun = useCallback(
@@ -92,29 +54,18 @@ export default function Otis() {
       if (!selectedType || selectedType === "custom") return;
       setRunError(null);
       setLastInputs(inputs);
-      clearAvatarTimers();
-      setAvatarState("thinking");
-      setAvatarMessage("");
       try {
         const res = await runScenario.mutateAsync({
           data: { scenarioType: selectedType as never, inputs },
         });
         const data = res as ScenarioResultData;
         setResult(data);
-        setAvatarState("talking");
-        setAvatarMessage(`Here's what I found: ${fmtSigned(data.monthlyCashFlowImpact)}/month cash flow impact.`);
-        scheduleAvatar(() => {
-          setAvatarState("idle");
-          setAvatarMessage("");
-        }, 5000);
       } catch {
         setResult(null);
         setRunError("Otis couldn't run that scenario. Please check your inputs and try again.");
-        setAvatarState("idle");
-        setAvatarMessage("");
       }
     },
-    [selectedType, runScenario, clearAvatarTimers, scheduleAvatar],
+    [selectedType, runScenario],
   );
 
   const handleSave = useCallback(
@@ -184,9 +135,8 @@ export default function Otis() {
 
   return (
     <div className="space-y-8">
-      <div ref={chatRef} className="flex flex-col items-center pt-16 text-center">
-        <OtisAvatar state={avatarState} message={avatarMessage} size="lg" />
-        <h1 className="mt-6 text-2xl font-semibold tracking-tight">
+      <div ref={chatRef} className="flex flex-col items-center pt-10 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">
           Hi {firstName}, what's on your financial mind today?
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -204,13 +154,13 @@ export default function Otis() {
               key={card.type}
               onClick={() => selectType(card.type)}
               className={`group rounded-xl border bg-card p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
-                selectedType === card.type ? "border-teal-600 ring-1 ring-teal-600/30" : "border-border"
+                selectedType === card.type ? "border-[#56A0D3] ring-1 ring-[#56A0D3]/30" : "border-border"
               }`}
             >
               <div className="text-3xl">{card.emoji}</div>
               <div className="mt-2 font-semibold text-sm">{card.name}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">{card.description}</div>
-              <div className="mt-2 text-xs font-medium text-teal-700 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="mt-2 text-xs font-medium text-[#56A0D3] opacity-0 transition-opacity group-hover:opacity-100">
                 Explore →
               </div>
             </button>
@@ -219,7 +169,20 @@ export default function Otis() {
       </div>
 
       {selectedType && (
-        <div ref={panelRef} className="rounded-xl border border-border bg-stone-50/60 p-5 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div ref={panelRef} className="relative rounded-xl border border-border bg-stone-50/60 p-5 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <button
+            type="button"
+            aria-label="Close scenario"
+            onClick={() => {
+              setSelectedType(null);
+              setResult(null);
+              setRunError(null);
+            }}
+            className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+            Close
+          </button>
           <ScenarioForm
             key={formKey}
             type={selectedType}
@@ -234,7 +197,7 @@ export default function Otis() {
                 {[0, 1, 2].map((i) => (
                   <span
                     key={i}
-                    className="inline-block h-1.5 w-1.5 rounded-full bg-teal-600"
+                    className="inline-block h-1.5 w-1.5 rounded-full bg-[#56A0D3]"
                     style={{ animation: "otis-dot-bounce 1s ease-in-out infinite", animationDelay: `${i * 0.15}s` }}
                   />
                 ))}
@@ -248,6 +211,7 @@ export default function Otis() {
               <ScenarioResults
                 type={selectedType}
                 result={result}
+                inputs={lastInputs}
                 saving={createScenario.isPending}
                 onSave={handleSave}
                 onAskOtis={handleAskOtis}

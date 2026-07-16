@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useListLoans, useGetDashboardSummary, useGetRetirementSettings } from "@workspace/api-client-react";
+import { useListLoans, useGetDashboardSummary, useGetRetirementSettings, useListAssets } from "@workspace/api-client-react";
 import { scenarioMeta, fmtMoney } from "./scenario-meta";
 
 type Inputs = Record<string, unknown>;
@@ -53,6 +53,9 @@ export function ScenarioForm({ type, initialInputs, running, onRun, onCustomSubm
   const { data: summary } = useGetDashboardSummary();
   const { data: loans } = useListLoans();
   const { data: retirement } = useGetRetirementSettings();
+  const { data: assets } = useListAssets();
+
+  const realEstateAsset = (assets ?? []).find((a) => a.assetType === "real_estate");
 
   const set = (k: string, v: unknown) => setF((prev) => ({ ...prev, [k]: v }));
   const num = (k: string, fallback = 0): number => {
@@ -162,7 +165,16 @@ export function ScenarioForm({ type, initialInputs, running, onRun, onCustomSubm
               <Switch id="sf-sell" checked={bool("sellCurrentHome")} onCheckedChange={(v) => set("sellCurrentHome", v)} />
             </div>
           </Row>
-          {bool("sellCurrentHome") && numberField("salePrice", "Expected sale price")}
+          {bool("sellCurrentHome") &&
+            (realEstateAsset ? (
+              <div className="rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground">
+                Using your Real Estate asset <span className="font-semibold text-foreground">{realEstateAsset.assetName}</span> as
+                estimated sale proceeds:{" "}
+                <span className="font-semibold text-foreground">{fmtMoney(realEstateAsset.currentBalance)}</span>
+              </div>
+            ) : (
+              numberField("salePrice", "Estimated sale price of current home ($)")
+            ))}
         </>
       );
       break;
@@ -231,7 +243,7 @@ export function ScenarioForm({ type, initialInputs, running, onRun, onCustomSubm
             <Slider min={50} max={1000} step={25} value={[extra]} onValueChange={([v]) => set("extraMonthly", v)} />
           </Row>
           {debtPreview && (
-            <div className="rounded-lg bg-teal-600/10 px-3 py-2 text-sm text-teal-800">
+            <div className="rounded-lg bg-[#56A0D3]/10 px-3 py-2 text-sm text-[#0D2B45]">
               You'd be debt-free <span className="font-semibold">{debtPreview.monthsSaved} months sooner</span> and save{" "}
               <span className="font-semibold">{fmtMoney(Math.round(debtPreview.interestSaved))}</span> in interest.
             </div>
@@ -396,7 +408,7 @@ export function ScenarioForm({ type, initialInputs, running, onRun, onCustomSubm
             className="bg-white"
           />
           <Button
-            className="bg-teal-600 hover:bg-teal-700 text-white"
+            className="bg-[#56A0D3] hover:bg-[#56A0D3]/90 text-white"
             disabled={!customText.trim()}
             onClick={() => onCustomSubmit(customText.trim())}
           >
@@ -416,10 +428,15 @@ export function ScenarioForm({ type, initialInputs, running, onRun, onCustomSubm
       </div>
       <div className="grid gap-4 sm:max-w-md">{fields}</div>
       <Button
-        className="bg-teal-600 hover:bg-teal-700 text-white"
+        className="bg-[#56A0D3] hover:bg-[#56A0D3]/90 text-white"
         disabled={running}
         onClick={() => {
           const inputs = { ...f };
+          if (type === "buy_home" && inputs["sellCurrentHome"] === true) {
+            if (realEstateAsset) {
+              inputs["salePrice"] = realEstateAsset.currentBalance;
+            }
+          }
           if (type === "extra_debt_payment") {
             if (inputs["loanId"] == null && loans?.length) inputs["loanId"] = loans[0].id;
             if (inputs["extraMonthly"] == null) inputs["extraMonthly"] = 100;

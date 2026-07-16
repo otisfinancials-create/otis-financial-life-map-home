@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { TrendingDown, Clock, Calendar } from "lucide-react";
+import { TrendingDown, Clock, Calendar, Download } from "lucide-react";
 
 import { useGetLoanAmortization } from "@workspace/api-client-react";
 import type { Loan } from "@workspace/api-client-react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,6 +27,15 @@ import { computeAmortization, toYearly } from "./amortization";
 
 const formatDate = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+// Whole months elapsed between two ISO dates (floor, never negative).
+const monthsBetween = (fromIso: string, toIso: string): number => {
+  const [fy, fm, fd] = fromIso.split("-").map(Number);
+  const [ty, tm, td] = toIso.split("-").map(Number);
+  let months = (ty - fy) * 12 + (tm - fm);
+  if (td < fd) months -= 1;
+  return Math.max(0, months);
+};
 
 const formatMonthYear = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", year: "numeric" });
@@ -51,6 +61,31 @@ export function AmortizationSchedule({ loan }: AmortizationScheduleProps) {
   const monthsSaved = baseline.numberOfPayments - simulated.numberOfPayments;
   const interestSaved = baseline.totalInterest - simulated.totalInterest;
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isHistorical = loan.startDate < todayStr;
+  const paymentsMade = monthsBetween(loan.startDate, todayStr);
+
+  const handleExportSchedule = () => {
+    if (!data || data.schedule.length === 0) return;
+    const headers = ["Payment #", "Payment Date", "Payment Amount", "Principal", "Interest", "Remaining Balance"];
+    const lines = [
+      headers.join(","),
+      ...data.schedule.map((e) =>
+        [e.paymentNumber, e.paymentDate, e.paymentAmount, e.principal, e.interest, e.remainingBalance].join(","),
+      ),
+    ];
+    // UTF-8 BOM + plain text Blob: safe client-side CSV generation (same as Forecast export).
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${loan.loanName}-amortization.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   if (isLoading) {
     return <Skeleton className="h-[300px] w-full" />;
   }
@@ -70,7 +105,7 @@ export function AmortizationSchedule({ loan }: AmortizationScheduleProps) {
     <div className="space-y-6 p-4 sm:p-6 bg-muted/10">
       {/* Schedule summary */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card className="bg-card border-border">
+        <Card className="bg-card border-border rounded-xl">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <TrendingDown className="h-3.5 w-3.5" />
@@ -81,7 +116,7 @@ export function AmortizationSchedule({ loan }: AmortizationScheduleProps) {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-card border-border">
+        <Card className="bg-card border-border rounded-xl">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <Clock className="h-3.5 w-3.5" />
@@ -92,7 +127,7 @@ export function AmortizationSchedule({ loan }: AmortizationScheduleProps) {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-card border-border">
+        <Card className="bg-card border-border rounded-xl">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <Calendar className="h-3.5 w-3.5" />
@@ -106,7 +141,7 @@ export function AmortizationSchedule({ loan }: AmortizationScheduleProps) {
       </div>
 
       {/* Extra payment simulator */}
-      <Card className="border-primary/30 bg-primary/5">
+      <Card className="border-primary/30 bg-primary/5 rounded-xl">
         <CardContent className="pt-6">
           <h4 className="text-sm font-semibold text-foreground">What if I pay extra each month?</h4>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -139,7 +174,7 @@ export function AmortizationSchedule({ loan }: AmortizationScheduleProps) {
               </div>
               <div className="rounded-lg border border-border bg-card p-3">
                 <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Time Saved</div>
-                <div className={cn("mt-1 text-sm font-bold tracking-tight", monthsSaved > 0 ? "text-emerald-600" : "text-foreground")}>
+                <div className={cn("mt-1 text-sm font-bold tracking-tight", monthsSaved > 0 ? "text-[#059669]" : "text-foreground")}>
                   {monthsSaved > 0
                     ? `${Math.floor(monthsSaved / 12)}y ${monthsSaved % 12}m`
                     : "—"}
@@ -147,7 +182,7 @@ export function AmortizationSchedule({ loan }: AmortizationScheduleProps) {
               </div>
               <div className="rounded-lg border border-border bg-card p-3">
                 <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Interest Saved</div>
-                <div className={cn("mt-1 text-sm font-bold tracking-tight", interestSaved > 0.5 ? "text-emerald-600" : "text-foreground")}>
+                <div className={cn("mt-1 text-sm font-bold tracking-tight", interestSaved > 0.5 ? "text-[#059669]" : "text-foreground")}>
                   {interestSaved > 0.5 ? <FormatCurrency amount={interestSaved} /> : "—"}
                 </div>
               </div>
@@ -158,18 +193,30 @@ export function AmortizationSchedule({ loan }: AmortizationScheduleProps) {
 
       {/* Schedule table */}
       <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-foreground">Amortization Schedule</h4>
-          <ToggleGroup
-            type="single"
-            value={view}
-            onValueChange={(v) => v && setView(v as "all" | "yearly")}
-            variant="outline"
-            size="sm"
-          >
-            <ToggleGroupItem value="yearly" className="text-xs">Yearly</ToggleGroupItem>
-            <ToggleGroupItem value="all" className="text-xs">All Payments</ToggleGroupItem>
-          </ToggleGroup>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h4 className="text-sm font-semibold text-foreground">Amortization Schedule</h4>
+            {isHistorical && (
+              <span className="text-[12px] text-muted-foreground">
+                Showing payments from today forward. This loan started on {formatDate(loan.startDate)} with {paymentsMade} {paymentsMade === 1 ? "payment" : "payments"} already made.
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleExportSchedule}>
+              <Download className="h-3.5 w-3.5 mr-1" /> Export Schedule
+            </Button>
+            <ToggleGroup
+              type="single"
+              value={view}
+              onValueChange={(v) => v && setView(v as "all" | "yearly")}
+              variant="outline"
+              size="sm"
+            >
+              <ToggleGroupItem value="yearly" className="text-xs">Yearly</ToggleGroupItem>
+              <ToggleGroupItem value="all" className="text-xs">All Payments</ToggleGroupItem>
+            </ToggleGroup>
+          </div>
         </div>
 
         <div className="max-h-[440px] overflow-auto rounded-lg border border-border bg-card">

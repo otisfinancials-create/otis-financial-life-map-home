@@ -82,7 +82,7 @@ const catLabel = categoryDisplayLabel;
 
 // Shared column definition (Part A): every row — header, month headers, data
 // rows — uses this exact grid so columns align perfectly.
-const LEDGER_GRID = "grid grid-cols-[3px_80px_32px_1fr_100px_120px_120px_110px]";
+const LEDGER_GRID = "grid grid-cols-[3px_80px_32px_1fr_100px_120px_120px_110px] min-w-[700px]";
 
 const MANUAL_CATEGORIES = [
   "Housing","Subscriptions","Utilities","Insurance",
@@ -127,7 +127,7 @@ function StatusPill({ bg, text, children }: { bg: string; text: string; children
 }
 
 // Running-balance color: red when negative, green when healthy, navy otherwise.
-const balanceColor = (n: number) => (n < 0 ? "#A32D2D" : n >= 1000 ? "#0F6E56" : "#0D2B45");
+const balanceColor = (n: number) => (n < 0 ? "var(--color-negative)" : n >= 1000 ? "var(--color-positive)" : "var(--color-navy)");
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -181,6 +181,11 @@ export default function Forecast() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
+
+  // deep-link highlight (#4): scroll + flash a matching ledger row
+  const [highlightId, setHighlightId] = useState<number | null>(null);
+  const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const deepLinkDone = useRef(false);
 
   // modals
   const [showManualModal, setShowManualModal] = useState(false);
@@ -333,6 +338,45 @@ export default function Forecast() {
     });
   }, [rawTxs, startingBalance, billsMap, todayStr]);
 
+  // ── Deep-link highlight (#4) ──────────────────────────────────────────────
+  // On mount, read ?tx=<id> or ?txdate=&txdesc= from the URL, scroll the
+  // matching ledger row into view and flash it, then clean the query params.
+  useEffect(() => {
+    if (deepLinkDone.current || txsWithBalance.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const txParam = params.get("tx");
+    const txDate = params.get("txdate");
+    const txDesc = params.get("txdesc");
+    if (!txParam && !txDate && !txDesc) return;
+
+    let match: TxRow | undefined;
+    if (txParam) {
+      const id = Number(txParam);
+      match = txsWithBalance.find((t) => t.id === id);
+    } else if (txDate || txDesc) {
+      match = txsWithBalance.find(
+        (t) =>
+          (!txDate || t.transactionDate === txDate) &&
+          (!txDesc || t.description.toLowerCase() === txDesc.toLowerCase()),
+      );
+    }
+
+    deepLinkDone.current = true;
+
+    if (match) {
+      const targetId = match.id;
+      if (match.transactionDate < todayStr) setShowHistory(true);
+      setHighlightId(targetId);
+      setTimeout(() => {
+        rowRefs.current[targetId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 150);
+      setTimeout(() => setHighlightId(null), 2200);
+    }
+
+    // Clean the query params from the URL without a navigation entry.
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [txsWithBalance, todayStr]);
+
   // ── Filter ────────────────────────────────────────────────────────────────
   const filtered = useMemo(() =>
     txsWithBalance.filter((t) => {
@@ -464,7 +508,7 @@ export default function Forecast() {
     const out: Record<string, Insight[]> = {};
     const money = (n: number) =>
       new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Math.abs(n));
-    const strong = (s: string, k: string) => <b key={k} style={{ color: "#085041" }}>{s}</b>;
+    const strong = (s: string, k: string) => <b key={k} style={{ color: "var(--color-navy)" }}>{s}</b>;
     for (const g of groups) {
       const list: Insight[] = [];
 
@@ -852,7 +896,8 @@ export default function Forecast() {
       EXPORT_HEADERS.join(","),
       ...exportRows().map((r) => EXPORT_HEADERS.map((h) => esc(r[h])).join(",")),
     ];
-    downloadBlob(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }), `forecast-${todayStr}.csv`);
+    // UTF-8 BOM keeps Excel happy and avoids antivirus false-positives on the blob.
+    downloadBlob(new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }), `forecast-${todayStr}.csv`);
     toast({ title: "CSV downloaded" });
   };
 
@@ -877,6 +922,16 @@ export default function Forecast() {
       toast({ title: "Could not access the clipboard", variant: "destructive" });
     }
   };
+
+  // When searching, auto-expand every month that contains matching rows so the
+  // Monthly Summary view surfaces the matches directly (TC via spec #11).
+  const groupKeysStr = groups.map((g) => g.key).join(",");
+  useEffect(() => {
+    if (search.trim()) {
+      setExpandedMonths(new Set(groupKeysStr ? groupKeysStr.split(",") : []));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, groupKeysStr]);
 
   const toggleMonth = (label: string) => {
     setExpandedMonths((prev) => {
@@ -917,14 +972,14 @@ export default function Forecast() {
           {showHistory ? "Hide history" : "Show history"}
         </button>
 
-        {/* View toggle pill group (active: teal) */}
+        {/* View toggle pill group (active: carolina) */}
         <div className="flex items-center gap-1.5 ml-1">
           {(["ledger", "summary"] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
               className={`rounded-[20px] px-[13px] py-[5px] text-xs font-medium transition-colors duration-100 ${view === v ? "text-white" : "bg-white border border-[#E3E7ED] text-gray-500 hover:text-gray-800 hover:border-gray-300"}`}
-              style={view === v ? { backgroundColor: "#2D9B6F" } : undefined}
+              style={view === v ? { backgroundColor: "var(--color-carolina)" } : undefined}
             >
               {v === "ledger" ? "Ledger" : "Monthly Summary"}
             </button>
@@ -975,7 +1030,7 @@ export default function Forecast() {
         </DropdownMenu>
         <Button
           size="sm"
-          className="h-8 text-xs text-white bg-[#2D9B6F] hover:bg-[#268a62]"
+          className="h-8 text-xs text-primary-foreground bg-primary hover:bg-primary/90"
           onClick={() => setShowManualModal(true)}
         >
           <Plus className="h-3.5 w-3.5 mr-1" /> Add Entry
@@ -1064,7 +1119,7 @@ export default function Forecast() {
             ) : (
               <div className="bg-white border border-[#E8ECF0] rounded-[14px] overflow-hidden">
                 {/* Scrollable ledger with its own sticky context */}
-                <div className="overflow-y-auto max-h-[calc(100vh-330px)]">
+                <div className="overflow-auto max-h-[calc(100vh-330px)]">
 
                   {/* Column headers (Part N) — same grid as every row */}
                   <div className={`sticky top-0 z-10 ${LEDGER_GRID} bg-[#F5F7FA] border-b border-[#EEF1F5] text-[11px] font-semibold text-[#AAB0BB] uppercase tracking-[0.05em]`}>
@@ -1113,18 +1168,19 @@ export default function Forecast() {
                             {hasPastRows && tx.id === firstFutureTxId && (
                               <div
                                 className="flex items-center justify-between gap-3 px-4 py-1.5 select-none"
-                                style={{ backgroundColor: "#EDFAF4", borderTop: "2px solid #2D9B6F", borderBottom: "2px solid #2D9B6F" }}
+                                style={{ backgroundColor: "var(--color-carolina-muted)", borderTop: "2px solid var(--color-carolina)", borderBottom: "2px solid var(--color-carolina)" }}
                               >
-                                <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: "#2D9B6F" }}>
-                                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#2D9B6F" }} />
+                                <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: "var(--color-carolina)" }}>
+                                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "var(--color-carolina)" }} />
                                   Today — {format(today, "MMMM d, yyyy")}
                                 </span>
-                                <span className="text-xs font-semibold font-mono tabular-nums whitespace-nowrap" style={{ color: "#0F6E56" }}>
+                                <span className="text-xs font-semibold font-mono tabular-nums whitespace-nowrap" style={{ color: "var(--color-navy)" }}>
                                   Current balance {currentBalanceValue < 0 && "−"}<FormatCurrency amount={Math.abs(currentBalanceValue)} />
                                 </span>
                               </div>
                             )}
                             <div
+                              ref={(el) => { rowRefs.current[tx.id] = el; }}
                               draggable={!isEditing && !isAdjustment}
                               onDragStart={(e) => { if (isAdjustment) { e.preventDefault(); return; } handleRowDragStart(tx, e); }}
                               onDragOver={(e) => handleRowDragOver(tx, e)}
@@ -1133,6 +1189,7 @@ export default function Forecast() {
                               onClick={() => { if (!isEditing && !suppressClickRef.current) openTx(tx); }}
                               className={[
                                 `relative ${LEDGER_GRID} min-h-[44px] border-b border-[#F2F4F7] last:border-0 group cursor-pointer transition-colors duration-100 select-none`,
+                                tx.id === highlightId ? "animate-flash-highlight" : "",
                                 isPast ? "opacity-[0.72]" : "",
                                 draggingId === tx.id ? "opacity-40" : "",
                                 draggingId !== null && draggingId !== tx.id && draggedRow?.transactionDate !== tx.transactionDate ? "hover:border-primary hover:border-2" : "",
@@ -1149,7 +1206,7 @@ export default function Forecast() {
                               <div style={{ backgroundColor: meta.color }} />
                               {dragOver?.id === tx.id && (
                                 <div
-                                  className={`absolute left-0 right-0 h-0.5 bg-primary z-20 pointer-events-none ${dragOver.pos === "before" ? "-top-px" : "-bottom-px"}`}
+                                  className={`absolute left-0 right-0 h-0.5 bg-carolina z-20 pointer-events-none ${dragOver.pos === "before" ? "-top-px" : "-bottom-px"}`}
                                 />
                               )}
                               {/* Date */}
@@ -1197,7 +1254,7 @@ export default function Forecast() {
                                   </a>
                                 )}
                                 {tx.isActual && (
-                                  <StatusPill bg="#E1F5EE" text="#085041">
+                                  <StatusPill bg="var(--color-carolina-muted)" text="var(--color-primary)">
                                     <Check className="h-2.5 w-2.5" />
                                     {tx.transactionType === "income" ? "Confirmed" : "Paid"}
                                   </StatusPill>
@@ -1218,10 +1275,10 @@ export default function Forecast() {
                                   <StatusPill bg="#EEEDFE" text="#3C3489">~ estimated</StatusPill>
                                 )}
                                 {isLifeEvent && (
-                                  <StatusPill bg="#E1F5EE" text="#0F6E56">Life event</StatusPill>
+                                  <StatusPill bg="var(--color-carolina-muted)" text="var(--color-primary)">Life event</StatusPill>
                                 )}
                                 {isAdjustment && (
-                                  <StatusPill bg="#E6F1FB" text="#0C447C">
+                                  <StatusPill bg="var(--color-carolina-muted)" text="var(--color-primary)">
                                     <RefreshCw className="h-2.5 w-2.5" />
                                     Balance update
                                   </StatusPill>
@@ -1231,11 +1288,10 @@ export default function Forecast() {
                                 )}
                               </div>
 
-                              {/* Amount (Part E, double-click to edit) */}
+                              {/* Amount (Part E, single-click to edit) */}
                               <div
                                 className="px-2 py-[11px] flex items-center justify-end"
-                                onClick={(e) => e.stopPropagation()}
-                                onDoubleClick={(e) => startEdit(tx, e)}
+                                onClick={(e) => { e.stopPropagation(); if (!isEditing) startEdit(tx, e); }}
                               >
                                 {isEditing ? (
                                   <input
@@ -1256,7 +1312,7 @@ export default function Forecast() {
                                     <span
                                       className={`font-mono tabular-nums text-[13px] font-medium whitespace-nowrap ${isMissed ? "line-through text-muted-foreground" : ""}`}
                                       style={isMissed ? undefined : {
-                                        color: isAdjustment ? "#0C447C" : tx.transactionType === "income" ? "#0F6E56" : "#A32D2D",
+                                        color: isAdjustment ? "var(--color-primary)" : tx.transactionType === "income" ? "var(--color-positive)" : "var(--color-negative)",
                                       }}
                                       title={
                                         isAdjustment
@@ -1303,8 +1359,7 @@ export default function Forecast() {
                                 {isCurrentBalance && (
                                   <span
                                     title="Current balance"
-                                    className="h-1.5 w-1.5 rounded-full shrink-0"
-                                    style={{ backgroundColor: "#2D9B6F" }}
+                                    className="h-1.5 w-1.5 rounded-full shrink-0 bg-primary"
                                   />
                                 )}
                               </div>
@@ -1327,8 +1382,7 @@ export default function Forecast() {
                                   <button
                                     title="Confirm received"
                                     onClick={() => handleMarkPaid(tx)}
-                                    className="inline-flex items-center gap-1 rounded-md border bg-white px-2 py-[3px] text-[11px] font-medium transition-colors whitespace-nowrap hover:bg-[#E1F5EE]"
-                                    style={{ borderColor: "#2D9B6F", color: "#0F6E56" }}
+                                    className="inline-flex items-center gap-1 rounded-md border bg-white px-2 py-[3px] text-[11px] font-medium transition-colors whitespace-nowrap hover:bg-primary/10 border-primary text-primary"
                                   >
                                     Confirm <Check className="h-3 w-3" />
                                   </button>
@@ -1390,7 +1444,7 @@ export default function Forecast() {
                               <button
                                 onClick={() => askOtis(ins.prompt)}
                                 className="mt-1 text-xs font-medium underline underline-offset-2 whitespace-nowrap hover:opacity-80 transition-opacity"
-                                style={{ color: "#2D9B6F" }}
+                                style={{ color: "var(--color-carolina)" }}
                               >
                                 Ask Otis about this →
                               </button>
@@ -1503,8 +1557,8 @@ export default function Forecast() {
             )}
 
             {/* Summary accordion table */}
-            <div className="border border-border rounded-lg overflow-hidden">
-              <div className="grid grid-cols-[1fr_130px_130px_130px_148px] bg-muted/60 border-b border-border text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="border border-border rounded-lg overflow-x-auto">
+              <div className="grid grid-cols-[1fr_130px_130px_130px_148px] min-w-[640px] bg-muted/60 border-b border-border text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                 <div className="px-4 py-2.5">Month</div>
                 <div className="px-4 py-2.5 text-right">Income</div>
                 <div className="px-4 py-2.5 text-right">Expenses</div>
@@ -1519,7 +1573,7 @@ export default function Forecast() {
                   <div key={g.key} className="border-b border-border last:border-0">
                     {/* Summary row */}
                     <div
-                      className="grid grid-cols-[1fr_130px_130px_130px_148px] cursor-pointer hover:bg-muted/30 transition-colors"
+                      className="grid grid-cols-[1fr_130px_130px_130px_148px] min-w-[640px] cursor-pointer hover:bg-muted/30 transition-colors"
                       onClick={() => toggleMonth(g.key)}
                     >
                       <div className="px-4 py-3 flex items-center gap-2">
@@ -1549,7 +1603,7 @@ export default function Forecast() {
                         {g.rows.map((tx) => (
                           <div
                             key={tx.id}
-                            className="grid grid-cols-[1fr_130px_130px_130px_148px] border-b border-border/30 last:border-0 hover:bg-muted/20 cursor-pointer"
+                            className="grid grid-cols-[1fr_130px_130px_130px_148px] min-w-[640px] border-b border-border/30 last:border-0 hover:bg-muted/20 cursor-pointer"
                             onClick={() => openTx(tx)}
                           >
                             <div className="px-4 py-2 pl-10 flex items-center gap-3 min-w-0">
