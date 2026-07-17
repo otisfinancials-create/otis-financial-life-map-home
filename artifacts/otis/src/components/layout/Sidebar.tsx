@@ -108,7 +108,7 @@ interface SidebarContentProps {
 }
 
 export function SidebarContent({ onNavigate }: SidebarContentProps) {
-  const [location, navigate] = useLocation();
+  const [location] = useLocation();
   const { signOut } = useClerk();
   const { user } = useUser();
 
@@ -120,8 +120,22 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
   return (
     <div className="flex h-full w-full flex-col bg-[var(--color-sidebar-bg)]">
       {/* Logo area */}
-      <div className="shrink-0 bg-[var(--color-logo-bg)] px-4 py-5 flex justify-center">
+      <div className="shrink-0 bg-[var(--color-logo-bg)] px-4 py-5 flex flex-col items-center">
         <OtisLogo />
+        <div
+          className="sidebar-tagline"
+          style={{
+            fontSize: 8,
+            color: "#6b7280",
+            letterSpacing: "0.8px",
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
+            marginTop: 4,
+            fontWeight: 500,
+          }}
+        >
+          Organize · Track · Inform · Simulate
+        </div>
       </div>
 
       {/* Nav */}
@@ -170,17 +184,6 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
 
       {/* Bottom area */}
       <div className="shrink-0 border-t border-white/20 px-2.5 pt-3 pb-4">
-        <button
-          type="button"
-          onClick={() => {
-            navigate("/otis");
-            onNavigate?.();
-          }}
-          className="mb-3 flex w-full items-center gap-2.5 rounded-[10px] border border-white/30 bg-white/[0.18] px-3 py-2.5 transition-colors hover:bg-white/25"
-        >
-          <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-white" />
-          <span className="text-[13px] font-medium text-white">Ask Otis</span>
-        </button>
         <div className="flex items-center justify-between gap-2 px-2 py-1">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-navy)] text-xs font-semibold text-white">
@@ -207,7 +210,10 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
 
 export function Sidebar() {
   return (
-    <div className="hidden md:flex h-full w-[var(--sidebar-width)] shrink-0">
+    <div
+      className="hidden md:flex w-[var(--sidebar-width)] shrink-0 overflow-hidden rounded-2xl"
+      style={{ margin: "12px 0 12px 12px", height: "calc(100vh - 24px)" }}
+    >
       <SidebarContent />
     </div>
   );

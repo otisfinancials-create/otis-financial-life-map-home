@@ -946,6 +946,12 @@ export default function Forecast() {
   return (
     <div className="animate-in fade-in duration-500 -mx-6 -mt-6 flex flex-col">
 
+      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      <div className="px-6 pt-6 pb-4">
+        <h1 className="text-2xl font-bold tracking-tight">Forecast</h1>
+        <p className="text-muted-foreground mt-1">Your complete financial picture, month by month</p>
+      </div>
+
       {/* ── Controls Bar ─────────────────────────────────────────────────────── */}
       <div className="sticky top-[57px] z-20 bg-background/95 backdrop-blur-sm border-b border-border px-6 py-3 flex items-center gap-2 flex-wrap">
 

@@ -26,9 +26,6 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           <h1 className="truncate text-lg font-semibold text-[var(--color-text-primary)]">
             {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
           </h1>
-          <p className="mt-0.5 hidden text-[13px] text-[var(--color-text-secondary)] sm:block">
-            Organize · Track · Inform · Simulate
-          </p>
         </div>
       </div>
       <div className="flex items-center gap-x-2">
