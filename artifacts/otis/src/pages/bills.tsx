@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
-import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
+import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon, ArrowUp, ArrowDown, ChevronsUpDown, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
   useListBills,
   useDeleteBill,
   useUpdateBill,
+  useListForecast,
+  getListForecastQueryKey,
   getListBillsQueryKey,
   getGetUpcomingBillsQueryKey,
   getGetDashboardSummaryQueryKey,
@@ -38,7 +40,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
-import { BillDialog } from "@/components/bills/bill-dialog";
+import { BillDialog, BillForm } from "@/components/bills/bill-dialog";
+import { monthlyFactor } from "@/lib/bill-math";
 import { BillsAnalytics } from "@/components/bills/bills-analytics";
 import { categoryMeta, getCategoryEmoji } from "@/utils/categoryIcons";
 import {
@@ -59,7 +62,8 @@ function formatPaymentMethod(raw: string | null | undefined): string {
     return card ? `Credit Card – ${card}` : "Credit Card";
   }
   const map: Record<string, string> = {
-    "auto-pay": "Auto-pay",
+    "auto-pay": "Bank Draft",
+    "bank-draft": "Bank Draft",
     "manual": "Manual",
     "credit-card": "Credit Card",
   };
@@ -72,7 +76,7 @@ type SortDir = "asc" | "desc";
 export default function Bills() {
   const [searchTerm, setSearchTerm] = useState("");
   const [billToEdit, setBillToEdit] = useState<Bill | undefined>(undefined);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [view, setView] = useState<"bills" | "planned">("bills");
   const [billToDelete, setBillToDelete] = useState<Bill | undefined>(undefined);
   const [showInactive, setShowInactive] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -138,8 +142,7 @@ export default function Bills() {
   }, [searchedBills, showInactive, sortKey, sortDir]);
 
   const handleEdit = (bill: Bill) => {
-    setBillToEdit(bill);
-    setIsEditDialogOpen(true);
+    setBillToEdit((current) => (current?.id === bill.id ? undefined : bill));
   };
 
   const handleToggleActive = (bill: Bill) => {
@@ -167,6 +170,7 @@ export default function Bills() {
         queryClient.invalidateQueries({ queryKey: getGetUpcomingBillsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
         toast({ title: "Bill deleted", description: "It and its forecast entries have been removed." });
+        setBillToEdit((current) => (current?.id === billToDelete.id ? undefined : current));
         setBillToDelete(undefined);
         syncForecast();
       },
@@ -214,7 +218,29 @@ export default function Bills() {
         </div>
       </div>
 
-      {!isLoading && (
+      <div className="flex items-center gap-2">
+        {([
+          ["bills", "All Bills"],
+          ["planned", "Planned vs Actual"],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setView(key)}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              view === key
+                ? "bg-[var(--color-navy)] text-white shadow-sm"
+                : "bg-card border border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "planned" && <PlannedVsActual bills={bills ?? []} />}
+
+      {view === "bills" && !isLoading && (
         <BillsAnalytics
           bills={bills ?? []}
           selectedCategory={selectedCategory}
@@ -222,7 +248,9 @@ export default function Bills() {
         />
       )}
 
-      <Card className="border-card-border bg-card rounded-xl overflow-hidden">
+      {view === "bills" && (
+      <div className="flex flex-col lg:flex-row gap-4 items-start">
+      <Card className={`border-card-border bg-card rounded-xl overflow-hidden transition-all duration-300 w-full min-w-0 ${billToEdit ? "lg:w-[60%]" : "lg:w-full"}`}>
         {isLoading ? (
           <div className="p-8 space-y-4">
             {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -268,7 +296,8 @@ export default function Bills() {
                 {visibleBills.map((bill) => (
                   <TableRow
                     key={bill.id}
-                    className={`border-border group ${bill.isActive ? "" : "opacity-60"}`}
+                    onClick={() => handleEdit(bill)}
+                    className={`border-border group cursor-pointer ${bill.isActive ? "" : "opacity-60"} ${billToEdit?.id === bill.id ? "bg-muted/60" : ""}`}
                   >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-1.5">
@@ -277,6 +306,7 @@ export default function Bills() {
                             href={bill.companyUrl}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
                             title={bill.billName}
                             className="hover:text-primary transition-colors flex items-center gap-1 group/link max-w-[200px]"
                           >
@@ -339,14 +369,14 @@ export default function Bills() {
                     <TableCell className="text-muted-foreground text-sm">
                       {formatPaymentMethod(bill.paymentMethod) || <span className="text-muted-foreground/40">—</span>}
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <Switch
                         checked={bill.isActive}
                         onCheckedChange={() => handleToggleActive(bill)}
                         aria-label={`Toggle ${bill.billName} active`}
                       />
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -398,11 +428,33 @@ export default function Bills() {
         )}
       </Card>
 
-      <BillDialog
-        bill={billToEdit}
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
-      />
+      {billToEdit && (
+        <Card className="border-card-border bg-card rounded-xl w-full lg:w-[40%] shrink-0 p-5 animate-in slide-in-from-right-4 fade-in duration-300">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold">Edit Bill</h2>
+              <p className="text-sm text-muted-foreground">{billToEdit.billName}</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 -mt-1 -mr-1"
+              onClick={() => setBillToEdit(undefined)}
+              aria-label="Close edit panel"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <BillForm
+            key={billToEdit.id}
+            bill={billToEdit}
+            onSaved={() => setBillToEdit(undefined)}
+            onCancel={() => setBillToEdit(undefined)}
+          />
+        </Card>
+      )}
+      </div>
+      )}
 
       <AlertDialog
         open={!!billToDelete}
@@ -429,5 +481,106 @@ export default function Bills() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+// ── Planned vs Actual (current month snapshot) ───────────────────────────────
+function monthBounds(): { start: string; end: string; label: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  const label = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  return { start: `${y}-${pad(m + 1)}-01`, end: `${y}-${pad(m + 1)}-${pad(lastDay)}`, label };
+}
+
+function PlannedVsActual({ bills }: { bills: Bill[] }) {
+  const { start, end, label } = monthBounds();
+  const { data: txs = [], isLoading } = useListForecast(
+    { startDate: start, endDate: end },
+    { query: { queryKey: getListForecastQueryKey({ startDate: start, endDate: end }) } },
+  );
+
+  const billCategoryById = new Map<number, string>();
+  for (const b of bills) billCategoryById.set(b.id, b.category);
+
+  // Planned: monthly-equivalent budget per category from active bills.
+  const planned: Record<string, number> = {};
+  for (const b of bills) {
+    if (!b.isActive) continue;
+    planned[b.category] = (planned[b.category] ?? 0) + b.amount * monthlyFactor(b.frequency);
+  }
+
+  // Actual: bill-linked forecast rows marked paid this month (not missed).
+  const actual: Record<string, number> = {};
+  for (const tx of txs) {
+    if (!tx.isActual || tx.status === "missed") continue;
+    if (tx.sourceBillId == null) continue;
+    const category = billCategoryById.get(tx.sourceBillId) ?? tx.category ?? "Other";
+    actual[category] = (actual[category] ?? 0) + Math.abs(tx.amount);
+  }
+
+  const categories = Array.from(new Set([...Object.keys(planned), ...Object.keys(actual)]))
+    .sort((a, b) => (planned[b] ?? 0) - (planned[a] ?? 0));
+
+  const totalPlanned = Object.values(planned).reduce((s, v) => s + v, 0);
+  const totalActual = Object.values(actual).reduce((s, v) => s + v, 0);
+
+  return (
+    <Card className="border-card-border bg-card rounded-xl overflow-hidden">
+      <div className="px-5 pt-5 pb-3">
+        <h2 className="text-base font-semibold">Planned vs Actual — {label}</h2>
+        <p className="text-[12px] text-muted-foreground mt-0.5">
+          Planned is your monthly-equivalent budget per category; Actual counts bills marked paid this month.
+        </p>
+      </div>
+      {isLoading ? (
+        <div className="p-5 space-y-3">
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+        </div>
+      ) : categories.length === 0 ? (
+        <p className="px-5 pb-5 text-sm text-muted-foreground">No active bills yet.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow className="border-border hover:bg-transparent">
+              <TableHead>Category</TableHead>
+              <TableHead className="text-right">Planned</TableHead>
+              <TableHead className="text-right">Actual</TableHead>
+              <TableHead className="text-right">Remaining</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {categories.map((cat) => {
+              const p = planned[cat] ?? 0;
+              const a = actual[cat] ?? 0;
+              const r = p - a;
+              return (
+                <TableRow key={cat} className="border-border">
+                  <TableCell className="font-medium">
+                    <span className="mr-2" style={{ fontSize: 16, lineHeight: 1 }}>{getCategoryEmoji(cat)}</span>
+                    {cat}
+                  </TableCell>
+                  <TableCell className="text-right font-mono"><FormatCurrency amount={p} /></TableCell>
+                  <TableCell className="text-right font-mono"><FormatCurrency amount={a} /></TableCell>
+                  <TableCell className={`text-right font-mono ${r < 0 ? "text-red-600" : "text-foreground"}`}>
+                    <FormatCurrency amount={r} />
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            <TableRow className="border-border bg-muted/40 hover:bg-muted/40 font-semibold">
+              <TableCell>Total</TableCell>
+              <TableCell className="text-right font-mono"><FormatCurrency amount={totalPlanned} /></TableCell>
+              <TableCell className="text-right font-mono"><FormatCurrency amount={totalActual} /></TableCell>
+              <TableCell className={`text-right font-mono ${totalPlanned - totalActual < 0 ? "text-red-600" : ""}`}>
+                <FormatCurrency amount={totalPlanned - totalActual} />
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      )}
+    </Card>
   );
 }

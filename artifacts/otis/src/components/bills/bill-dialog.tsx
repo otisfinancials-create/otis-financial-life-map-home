@@ -9,7 +9,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -51,8 +50,10 @@ const CATEGORIES = [
   "Subscriptions",
   "Utilities",
   "Auto",
+  "Cell Phone",
   "Food",
   "Medical",
+  "Pets",
   "Debt Payments",
   "Other",
 ];
@@ -66,7 +67,7 @@ const FREQUENCIES = [
 ];
 
 const PAYMENT_METHODS = [
-  { value: "auto-pay", label: "Auto-pay" },
+  { value: "auto-pay", label: "Bank Draft" },
   { value: "manual", label: "Manual" },
   { value: "credit-card", label: "Credit Card" },
 ];
@@ -80,7 +81,12 @@ const billSchema = z
       .min(2, { message: "Name must be at least 2 characters." })
       .max(MAX_TEXT, { message: `Name must be ${MAX_TEXT} characters or fewer.` }),
     category: z.string().min(1, { message: "Please select a category." }),
-    amount: z.coerce.number().positive({ message: "Amount must be greater than 0." }),
+    amount: z.coerce
+      .number({ message: "Amount must be a number." })
+      .positive({ message: "Amount must be greater than 0." })
+      .refine((v) => /^\d{1,9}(\.\d{1,2})?$/.test(String(v)), {
+        message: "Amount is limited to 9 digits before the decimal point and 2 decimal places.",
+      }),
     frequency: z.string().min(1, { message: "Please select a frequency." }),
     dueDay: z.preprocess(
       (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
@@ -136,6 +142,15 @@ const billSchema = z
   });
 
 type BillFormValues = z.infer<typeof billSchema>;
+
+// Normalize a company URL: if it has no protocol, prefix "https://www."
+// (skipping the "www." part when the user already typed it).
+export function normalizeCompanyUrl(raw: string | undefined): string | undefined {
+  const url = raw?.trim();
+  if (!url) return undefined;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `https://${url.toLowerCase().startsWith("www.") ? "" : "www."}${url}`;
+}
 
 function parsePaymentMethod(raw: string | null | undefined): { paymentMethod: string; creditCardName: string } {
   if (!raw) return { paymentMethod: "", creditCardName: "" };
@@ -219,19 +234,15 @@ function previewOccurrences(frequency: string, dueDay?: number, startDate?: stri
   return out;
 }
 
-interface BillDialogProps {
+interface BillFormProps {
   bill?: Bill;
-  trigger?: React.ReactNode;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  onSaved: () => void;
+  onCancel: () => void;
 }
 
-export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProps) {
-  const [internalOpen, setInternalOpen] = useState(false);
-  const isControlled = open !== undefined && onOpenChange !== undefined;
-  const isOpen = isControlled ? open : internalOpen;
-  const setIsOpen = isControlled ? onOpenChange : setInternalOpen;
-
+// Shared bill form — used by the Add Bill dialog and the inline edit panel on
+// the Bills page (split-panel layout).
+export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createBill = useCreateBill();
@@ -261,26 +272,24 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
   });
 
   useEffect(() => {
-    if (isOpen) {
-      const parsed = parsePaymentMethod(bill?.paymentMethod);
-      form.reset({
-        billName: bill?.billName || "",
-        category: bill?.category || "",
-        amount: bill?.amount || 0,
-        frequency: bill?.frequency || "monthly",
-        dueDay: bill?.dueDay,
-        paymentMethod: parsed.paymentMethod,
-        creditCardName: parsed.creditCardName,
-        companyUrl: bill?.companyUrl || "",
-        startDate: bill?.startDate || "",
-        endDate: bill?.endDate || "",
-        isVariable: bill?.isVariable || false,
-        isActive: bill?.isActive ?? true,
-        notes: bill?.notes || "",
-      });
-    }
+    const parsed = parsePaymentMethod(bill?.paymentMethod);
+    form.reset({
+      billName: bill?.billName || "",
+      category: bill?.category || "",
+      amount: bill?.amount || 0,
+      frequency: bill?.frequency || "monthly",
+      dueDay: bill?.dueDay,
+      paymentMethod: parsed.paymentMethod,
+      creditCardName: parsed.creditCardName,
+      companyUrl: bill?.companyUrl || "",
+      startDate: bill?.startDate || "",
+      endDate: bill?.endDate || "",
+      isVariable: bill?.isVariable || false,
+      isActive: bill?.isActive ?? true,
+      notes: bill?.notes || "",
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, bill?.id]);
+  }, [bill?.id]);
 
   const watchedPaymentMethod = form.watch("paymentMethod");
   const watchedIsVariable = form.watch("isVariable");
@@ -322,23 +331,23 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
       frequency: data.frequency,
       dueDay: dueDay ?? 1,
       paymentMethod: buildPaymentMethod(data),
-      companyUrl: data.companyUrl?.trim() || undefined,
+      companyUrl: normalizeCompanyUrl(data.companyUrl),
       startDate: data.startDate || undefined,
-      endDate: data.endDate || undefined,
       isVariable: data.isVariable,
       isActive: data.isActive,
       notes: data.notes || undefined,
     };
 
     if (isEditing) {
-      updateBill.mutate({ id: bill.id, data: payload }, {
+      // On edit, send null so clearing the end date is persisted (undefined
+      // would omit the field from the PATCH and the old value would stick).
+      updateBill.mutate({ id: bill.id, data: { ...payload, endDate: data.endDate || null } }, {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetUpcomingBillsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
           toast({ title: "Bill updated", description: "Forecast is syncing in the background." });
-          setIsOpen(false);
-          if (!isControlled) form.reset();
+          onSaved();
           syncForecast();
         },
         onError: () => {
@@ -346,14 +355,13 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
         },
       });
     } else {
-      createBill.mutate({ data: payload }, {
+      createBill.mutate({ data: { ...payload, endDate: data.endDate || undefined } }, {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetUpcomingBillsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
           toast({ title: "Bill added", description: "Forecast is syncing in the background." });
-          setIsOpen(false);
-          if (!isControlled) form.reset();
+          onSaved();
           syncForecast();
         },
         onError: () => {
@@ -363,11 +371,6 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
     }
   }
 
-  const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen && !isControlled) form.reset();
-    setIsOpen(newOpen);
-  };
-
   const dueDateLabel = isMonthly
     ? "Due day of month"
     : isAnnual
@@ -375,18 +378,7 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
     : "First bill date";
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Bill" : "Add Bill"}</DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? "Make changes to your bill here."
-              : "Add a new recurring bill to your forecast."}
-          </DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
+    <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
             <FormField
               control={form.control}
@@ -669,8 +661,8 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
               />
             </div>
 
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={onCancel}>
                 Cancel
               </Button>
               <Button type="submit" disabled={createBill.isPending || updateBill.isPending}>
@@ -680,9 +672,45 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
                   ? "Save Changes"
                   : "Add Bill"}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
-        </Form>
+    </Form>
+  );
+}
+
+interface BillDialogProps {
+  bill?: Bill;
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined && onOpenChange !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange : setInternalOpen;
+  const isEditing = !!bill;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
+      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{isEditing ? "Edit Bill" : "Add Bill"}</DialogTitle>
+          <DialogDescription>
+            {isEditing
+              ? "Make changes to your bill here."
+              : "Add a new recurring bill to your forecast."}
+          </DialogDescription>
+        </DialogHeader>
+        {isOpen && (
+          <BillForm
+            bill={bill}
+            onSaved={() => setIsOpen(false)}
+            onCancel={() => setIsOpen(false)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

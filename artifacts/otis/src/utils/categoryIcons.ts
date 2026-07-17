@@ -25,6 +25,7 @@ import {
   Receipt,
   RefreshCw,
   Shield,
+  Smartphone,
   Sparkles,
   TrendingUp,
   Tv,
@@ -42,6 +43,7 @@ export type CategoryKey =
   | "insurance"
   | "subscriptions"
   | "auto"
+  | "cellPhone"
   | "utilities"
   | "food"
   | "vacation"
@@ -75,6 +77,7 @@ export const CATEGORY_META: Record<CategoryKey, CategoryMeta> = {
   insurance:        { icon: Shield,          color: "#D85A30", bg: "#FAECE7", text: "#712B13", label: "Insurance" },
   subscriptions:    { icon: Tv,              color: "#534AB7", bg: "#EEEDFE", text: "#3C3489", label: "Subscriptions" },
   auto:             { icon: Car,             color: "#BA7517", bg: "#FAEEDA", text: "#633806", label: "Auto" },
+  cellPhone:        { icon: Smartphone,      color: "#8B5CF6", bg: "#F1EBFD", text: "#5B21B6", label: "Cell Phone" },
   utilities:        { icon: Zap,             color: "#0F6E56", bg: "#E1F5EE", text: "#085041", label: "Utilities" },
   food:             { icon: UtensilsCrossed,  color: "#D85A30", bg: "#FAECE7", text: "#712B13", label: "Food" },
   vacation:         { icon: Plane,           color: "#1D9E75", bg: "#E1F5EE", text: "#085041", label: "Vacations" },
@@ -100,6 +103,7 @@ const NAME_TO_KEY: Record<string, CategoryKey> = {
   insurance: "insurance",
   subscriptions: "subscriptions", subscription: "subscriptions",
   auto: "auto", gas: "auto", car: "auto", transportation: "auto", vehicle: "auto",
+  "cell phone": "cellPhone", cellphone: "cellPhone", cell_phone: "cellPhone", phone: "cellPhone", mobile: "cellPhone",
   utilities: "utilities", electric: "utilities", water: "utilities",
   food: "food", groceries: "food",
   vacation: "vacation", vacations: "vacation", travel: "vacation",
@@ -172,6 +176,9 @@ export const CATEGORY_EMOJI: Record<string, string> = {
   utilities: "⚡",
   electric: "⚡",
   water: "💧",
+  "cell phone": "📱",
+  cellphone: "📱",
+  phone: "📱",
   "gas for": "🚗",
   auto: "🚗",
   car: "🚗",
