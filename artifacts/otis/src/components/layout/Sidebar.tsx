@@ -52,30 +52,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function OtisLogo() {
   return (
-    <svg viewBox="0 0 680 280" xmlns="http://www.w3.org/2000/svg" style={{ width: 140, height: "auto" }}>
-      <text
-        x="340"
-        y="210"
-        textAnchor="middle"
-        fontSize="195"
-        letterSpacing="-4"
-        style={{
-          fontFamily: "'Nunito', 'Arial Rounded MT Bold', Arial, sans-serif",
-          fontWeight: 800,
-          fill: "#0D2B45",
-        }}
-      >
-        otis
-      </text>
-      <rect x="316" y="24" width="52" height="52" fill="#eef2f6" rx="4" />
-      <g transform="translate(342, 50)">
-        <ellipse cx="0" cy="0" rx="16" ry="13" fill="#56A0D3" />
-        <ellipse cx="-19" cy="-12" rx="9" ry="7.5" fill="#56A0D3" transform="rotate(-20)" />
-        <ellipse cx="19" cy="-12" rx="9" ry="7.5" fill="#56A0D3" transform="rotate(20)" />
-        <ellipse cx="-30" cy="2" rx="7.5" ry="6" fill="#56A0D3" transform="rotate(-35)" />
-        <ellipse cx="30" cy="2" rx="7.5" ry="6" fill="#56A0D3" transform="rotate(35)" />
-      </g>
-    </svg>
+    <img
+      src={`${basePath}/images/otis_logo.png`}
+      alt="Otis Financial"
+      className="sidebar-logo-img"
+      style={{ width: 120, height: "auto", display: "block" }}
+    />
   );
 }
 
