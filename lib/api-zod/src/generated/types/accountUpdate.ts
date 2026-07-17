@@ -23,4 +23,22 @@ export interface AccountUpdate {
   accountNumberLast4?: string | null;
   /** @nullable */
   notes?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccCycleStartDate?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccCycleEndDate?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccPaymentDueDate?: number | null;
 }

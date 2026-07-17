@@ -3,7 +3,7 @@ import { format, addMonths, subDays } from "date-fns";
 import { useLocation } from "wouter";
 import {
   ExternalLink, Plus, Trash2, Check, RefreshCw, Search,
-  ChevronRight, Zap, PawPrint, GripVertical, Download,
+  ChevronRight, Zap, PawPrint, Download,
   X, RotateCcw, FileSpreadsheet, FileText, ClipboardCopy,
   TriangleAlert,
 } from "lucide-react";
@@ -81,8 +81,9 @@ const catMeta = categoryMeta;
 const catLabel = categoryDisplayLabel;
 
 // Shared column definition (Part A): every row — header, month headers, data
-// rows — uses this exact grid so columns align perfectly.
-const LEDGER_GRID = "grid grid-cols-[3px_80px_32px_1fr_100px_120px_120px_110px] min-w-[700px]";
+// rows — uses this exact grid so columns align perfectly. The per-row date
+// column has been removed — dates are shown once per day in a group header.
+const LEDGER_GRID = "grid grid-cols-[3px_32px_1fr_100px_120px_120px_110px] min-w-[620px]";
 
 const MANUAL_CATEGORIES = [
   "Housing","Subscriptions","Utilities","Insurance",
@@ -129,6 +130,13 @@ function StatusPill({ bg, text, children }: { bg: string; text: string; children
 // Running-balance color: red when negative, green when healthy, navy otherwise.
 const balanceColor = (n: number) => (n < 0 ? "var(--color-negative)" : n >= 1000 ? "var(--color-positive)" : "var(--color-navy)");
 
+// Credit-card grouping (manual version — Plaid will automate this in a future
+// phase). A CC child row carries a bill amount but must never affect the
+// running balance or income/expense totals — only its parent "Credit Card
+// Payment" row does. Parent rows (isCcParent) DO count.
+const isCcChild = (t: { ccAccountId?: number | null; isCcParent?: boolean }) =>
+  t.ccAccountId != null && !t.isCcParent;
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type TxRow = {
@@ -142,6 +150,8 @@ type TxRow = {
   sourcePayId?: number | null;
   sourceLifeEventId?: number | null;
   sourceBalanceSyncId?: number | null;
+  ccAccountId?: number | null;
+  isCcParent: boolean;
   isActual: boolean;
   isCommitted: boolean;
   status?: string | null;
@@ -176,6 +186,8 @@ export default function Forecast() {
   const [search, setSearch] = useState("");
   const [showHistory, setShowHistory] = useState(true);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  // CC groups are expanded by default; this tracks the ones the user collapsed.
+  const [collapsedCc, setCollapsedCc] = useState<Set<number>>(new Set());
 
   // inline edit
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -291,7 +303,9 @@ export default function Forecast() {
     );
     const isOverride = (t: typeof sorted[number]) => t.sourceBalanceSyncId != null;
     const signed = (t: typeof sorted[number]) =>
-      t.status === "missed" ? 0 : t.transactionType === "income" ? t.amount : -t.amount;
+      t.status === "missed" || isCcChild(t)
+        ? 0
+        : t.transactionType === "income" ? t.amount : -t.amount;
 
     const balances = new Array<number>(sorted.length).fill(0);
     let anchorIdx = -1;
@@ -434,9 +448,10 @@ export default function Forecast() {
         map[key] = { key, label: format(d, "MMMM yyyy"), rows: [], income: 0, expenses: 0, endBalance: 0 };
       }
       map[key].rows.push(t);
-      // Balance updates are balance values (not cash flows) and missed rows
-      // never happened — neither counts toward monthly income/expense totals.
-      if (t.sourceBalanceSyncId == null && t.status !== "missed") {
+      // Balance updates are balance values (not cash flows), missed rows never
+      // happened, and CC child rows are aggregated into their parent — none of
+      // them count toward monthly income/expense totals.
+      if (t.sourceBalanceSyncId == null && t.status !== "missed" && !isCcChild(t)) {
         if (t.transactionType === "income") map[key].income += t.amount;
         else map[key].expenses += t.amount;
       }
@@ -482,25 +497,6 @@ export default function Forecast() {
     }
     return val;
   }, [txsWithBalance, startingBalance, todayStr]);
-
-  // ── Period totals (sticky footer, Part M) ────────────────────────────────
-  // Footer tracks the selected time range only — search/category filters do
-  // not change these numbers. Mirrors the month-group exclusion rules:
-  // balance updates and missed rows never count toward income/expenses.
-  const periodTotals = useMemo(() => {
-    let income = 0;
-    let expenses = 0;
-    const monthKeys = new Set<string>();
-    for (const t of txsWithBalance) {
-      monthKeys.add(t.transactionDate.slice(0, 7));
-      if (t.sourceBalanceSyncId == null && t.status !== "missed") {
-        if (t.transactionType === "income") income += t.amount;
-        else expenses += t.amount;
-      }
-    }
-    const n = Math.max(monthKeys.size, 1);
-    return { net: income - expenses, monthlyIncome: income / n, monthlyBills: expenses / n };
-  }, [txsWithBalance]);
 
   // ── Otis insight rows (Part I) — derived, presentation-only ──────────────
   type Insight = { key: string; body: ReactNode; prompt: string };
@@ -632,7 +628,18 @@ export default function Forecast() {
     });
   };
 
+  const toggleCc = (parentId: number) => {
+    setCollapsedCc((prev) => {
+      const next = new Set(prev);
+      if (next.has(parentId)) next.delete(parentId); else next.add(parentId);
+      return next;
+    });
+  };
+
   const startEdit = (tx: TxRow, e: React.MouseEvent) => {
+    // CC parent amounts are server-managed; CC child amounts roll up to the
+    // parent — neither is inline-editable.
+    if (tx.ccAccountId != null) return;
     if (tx.isActual || tx.sourceBalanceSyncId != null) return;
     e.stopPropagation();
     setEditingId(tx.id);
@@ -790,6 +797,8 @@ export default function Forecast() {
 
   // ── Full row edit (opens on row click) ────────────────────────────────────
   const openTx = (tx: TxRow) => {
+    // CC parent rows are payment aggregators — not editable via the edit sheet.
+    if (tx.isCcParent) return;
     setSelectedTx(tx);
     setEditErrors({});
     setEditForm({
@@ -873,7 +882,8 @@ export default function Forecast() {
     Category: t.category,
     Type: typeLabel(t),
     Amount: t.sourceBalanceSyncId != null ? t.amount : t.transactionType === "income" ? t.amount : -t.amount,
-    "Running Balance": Math.round(t.runningBalance * 100) / 100,
+    // CC child rows don't affect the running balance — export it blank.
+    "Running Balance": isCcChild(t) ? "" : Math.round(t.runningBalance * 100) / 100,
   }));
 
   const EXPORT_HEADERS = ["Date", "Description", "Category", "Type", "Amount", "Running Balance"] as const;
@@ -944,16 +954,16 @@ export default function Forecast() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="animate-in fade-in duration-500 -mx-6 -mt-6 flex flex-col">
+    <div className="animate-in fade-in duration-500 -mx-6 -mt-6 flex flex-col h-[calc(100vh-92px)] overflow-hidden">
 
       {/* ── Page header ─────────────────────────────────────────────────────── */}
-      <div className="px-6 pt-6 pb-4">
+      <div className="px-6 pt-6 pb-4 shrink-0">
         <h1 className="text-2xl font-bold tracking-tight">Forecast</h1>
         <p className="text-muted-foreground mt-1">Your complete financial picture, month by month</p>
       </div>
 
       {/* ── Controls Bar ─────────────────────────────────────────────────────── */}
-      <div className="sticky top-[57px] z-20 bg-background/95 backdrop-blur-sm border-b border-border px-6 py-3 flex items-center gap-2 flex-wrap">
+      <div className="shrink-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border px-6 py-3 flex items-center gap-2 flex-wrap">
 
         {/* Time range pill group (active: navy) */}
         <div className="flex items-center gap-1.5">
@@ -1057,7 +1067,7 @@ export default function Forecast() {
         </Button>
       </div>
 
-      <div className="px-6 py-4 space-y-4">
+      <div className="px-6 py-4 flex-1 min-h-0 flex flex-col gap-4">
 
         {/* ── Starting Balance Banner ─────────────────────────────────────────── */}
         {!loadingSettings && startingBalance === 0 && (
@@ -1123,14 +1133,15 @@ export default function Forecast() {
                 <p className="text-sm mt-1">Try a longer time range or regenerate the forecast.</p>
               </div>
             ) : (
-              <div className="bg-white border border-[#E8ECF0] rounded-[14px] overflow-hidden">
-                {/* Scrollable ledger with its own sticky context */}
-                <div className="overflow-auto max-h-[calc(100vh-330px)]">
+              <div className="bg-white border border-[#E8ECF0] rounded-[14px] overflow-hidden flex-1 min-h-0 flex flex-col">
+                {/* Locked layout: only this rows area scrolls; the column
+                    headers stay sticky inside it. Horizontal scroll is kept
+                    for narrow screens. */}
+                <div className="overflow-auto flex-1 min-h-0">
 
                   {/* Column headers (Part N) — same grid as every row */}
                   <div className={`sticky top-0 z-10 ${LEDGER_GRID} bg-[#F5F7FA] border-b border-[#EEF1F5] text-[11px] font-semibold text-[#AAB0BB] uppercase tracking-[0.05em]`}>
                     <div />
-                    <div className="px-1 py-2.5">Date</div>
                     <div />
                     <div className="px-2 py-2.5">Description</div>
                     <div className="px-2 py-2.5 text-right">Amount</div>
@@ -1142,6 +1153,14 @@ export default function Forecast() {
                   {/* Month groups */}
                   {ledgerGroups.map((group) => {
                     const monthInsights = insightsByMonth[group.key] ?? [];
+                    // Map each CC group (date + card) to its parent row id so
+                    // child rows can find their parent for collapse handling.
+                    const ccParentIdByKey: Record<string, number> = {};
+                    for (const t of group.rows) {
+                      if (t.isCcParent && t.ccAccountId != null) {
+                        ccParentIdByKey[`${t.transactionDate}|${t.ccAccountId}`] = t.id;
+                      }
+                    }
                     return (
                       <div key={group.key}>
                         {/* Month divider — clean centered chapter break */}
@@ -1169,8 +1188,29 @@ export default function Forecast() {
                             ? tx.amount - tx.forecastedAmount
                             : null;
 
+                          // ── CC grouping (manual — Plaid will automate this) ──
+                          const isCcParent = tx.isCcParent;
+                          const ccChild = isCcChild(tx);
+                          const isCc = tx.ccAccountId != null;
+                          const ccParentId = ccChild
+                            ? ccParentIdByKey[`${tx.transactionDate}|${tx.ccAccountId}`]
+                            : undefined;
+                          // Collapse: skip child rows whose parent is collapsed.
+                          if (ccChild && ccParentId != null && collapsedCc.has(ccParentId)) return null;
+                          const ccCollapsed = isCcParent && collapsedCc.has(tx.id);
+
+                          // Day header: shown once per date (before the first
+                          // row of a new day within this month group).
+                          const showDayHeader =
+                            idx === 0 || group.rows[idx - 1].transactionDate !== tx.transactionDate;
+
                           return (
                             <Fragment key={tx.id}>
+                            {showDayHeader && (
+                              <div className="px-4 py-1.5 bg-[#F5F7FA] border-b border-[#EEF1F5] text-[11px] font-semibold tracking-[0.03em]" style={{ color: "#6B7280" }}>
+                                {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d, yyyy")}
+                              </div>
+                            )}
                             {hasPastRows && tx.id === firstFutureTxId && (
                               <div
                                 className="flex items-center justify-between gap-3 px-4 py-1.5 select-none"
@@ -1187,8 +1227,8 @@ export default function Forecast() {
                             )}
                             <div
                               ref={(el) => { rowRefs.current[tx.id] = el; }}
-                              draggable={!isEditing && !isAdjustment}
-                              onDragStart={(e) => { if (isAdjustment) { e.preventDefault(); return; } handleRowDragStart(tx, e); }}
+                              draggable={!isEditing && !isAdjustment && !isCc}
+                              onDragStart={(e) => { if (isAdjustment || isCc) { e.preventDefault(); return; } handleRowDragStart(tx, e); }}
                               onDragOver={(e) => handleRowDragOver(tx, e)}
                               onDrop={(e) => handleRowDrop(tx, e)}
                               onDragEnd={() => { setDraggingId(null); setDragOver(null); }}
@@ -1215,27 +1255,30 @@ export default function Forecast() {
                                   className={`absolute left-0 right-0 h-0.5 bg-carolina z-20 pointer-events-none ${dragOver.pos === "before" ? "-top-px" : "-bottom-px"}`}
                                 />
                               )}
-                              {/* Date */}
-                              <div className="px-1 py-[11px] flex items-center gap-0.5 min-w-0">
-                                <GripVertical
-                                  aria-label="Drag to move this transaction to another date"
-                                  className="h-3 w-3 shrink-0 text-muted-foreground/25 group-hover:text-muted-foreground/70 cursor-grab"
-                                />
-                                <span className="font-mono tabular-nums text-[12px] whitespace-nowrap" style={{ color: "#999" }}>
-                                  {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d")}
-                                </span>
-                              </div>
-
-                              {/* Category icon (Part D) — emoji, vertically centered */}
+                              {/* Category icon (Part D) — emoji, or a chevron
+                                  toggle for CC parent rows. Vertically centered. */}
                               <div
                                 className="py-[11px] flex items-center justify-center"
                                 style={{ fontSize: "16px", lineHeight: 1 }}
+                                onClick={isCcParent ? (e) => { e.stopPropagation(); toggleCc(tx.id); } : undefined}
                               >
-                                {getCategoryEmoji(tx.category, tx.description)}
+                                {isCcParent ? (
+                                  <button
+                                    aria-label={ccCollapsed ? "Expand credit-card charges" : "Collapse credit-card charges"}
+                                    className="text-muted-foreground hover:text-foreground transition-colors"
+                                  >
+                                    <ChevronRight className={`h-4 w-4 transition-transform ${ccCollapsed ? "" : "rotate-90"}`} />
+                                  </button>
+                                ) : (
+                                  getCategoryEmoji(tx.category, tx.description)
+                                )}
                               </div>
 
                               {/* Description + status badges (Part F) */}
-                              <div className="px-2 py-[11px] flex items-center gap-1.5 min-w-0">
+                              <div className={`px-2 py-[11px] flex items-center gap-1.5 min-w-0 ${ccChild ? "pl-6" : ""}`}>
+                                {ccChild && (
+                                  <span className="shrink-0 text-muted-foreground text-[13px]" aria-hidden>↳</span>
+                                )}
                                 <span
                                   className={`font-medium text-[13px] truncate min-w-0 ${isMissed ? "line-through text-muted-foreground" : ""}`}
                                   style={isMissed ? undefined : { color: "#1A1A2E" }}
@@ -1353,15 +1396,18 @@ export default function Forecast() {
                                 </span>
                               </div>
 
-                              {/* Running balance */}
+                              {/* Running balance — CC child rows don't affect
+                                  the balance, so they show none. */}
                               <div className="px-2 py-[11px] flex items-center justify-end gap-1.5">
-                                <span
-                                  className="font-mono tabular-nums text-sm font-semibold whitespace-nowrap"
-                                  style={{ color: balanceColor(tx.runningBalance) }}
-                                >
-                                  {isNeg && "−"}
-                                  <FormatCurrency amount={Math.abs(tx.runningBalance)} />
-                                </span>
+                                {!ccChild && (
+                                  <span
+                                    className="font-mono tabular-nums text-sm font-semibold whitespace-nowrap"
+                                    style={{ color: balanceColor(tx.runningBalance) }}
+                                  >
+                                    {isNeg && "−"}
+                                    <FormatCurrency amount={Math.abs(tx.runningBalance)} />
+                                  </span>
+                                )}
                                 {isCurrentBalance && (
                                   <span
                                     title="Current balance"
@@ -1480,39 +1526,6 @@ export default function Forecast() {
                   </div>
                 )}
 
-                {/* Totals footer (Part M) */}
-                <div
-                  className="grid grid-cols-4 divide-x divide-[#DDE2E8] border-t"
-                  style={{ backgroundColor: "#F8F9FB", borderColor: "#DDE2E8" }}
-                >
-                  <div className="px-4 py-2.5">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Monthly income</div>
-                    <div className="text-[15px] font-semibold font-mono tabular-nums" style={{ color: "#0F6E56" }}>
-                      <FormatCurrency amount={periodTotals.monthlyIncome} />
-                    </div>
-                  </div>
-                  <div className="px-4 py-2.5">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Monthly bills</div>
-                    <div className="text-[15px] font-semibold font-mono tabular-nums" style={{ color: "#A32D2D" }}>
-                      <FormatCurrency amount={periodTotals.monthlyBills} />
-                    </div>
-                  </div>
-                  <div className="px-4 py-2.5">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Net this period</div>
-                    <div
-                      className="text-[15px] font-semibold font-mono tabular-nums"
-                      style={{ color: periodTotals.net >= 0 ? "#0F6E56" : "#A32D2D" }}
-                    >
-                      {periodTotals.net >= 0 ? "+" : "−"}<FormatCurrency amount={Math.abs(periodTotals.net)} />
-                    </div>
-                  </div>
-                  <div className="px-4 py-2.5">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Current balance</div>
-                    <div className="text-[15px] font-semibold font-mono tabular-nums" style={{ color: "#0D2B45" }}>
-                      {currentBalanceValue < 0 && "−"}<FormatCurrency amount={Math.abs(currentBalanceValue)} />
-                    </div>
-                  </div>
-                </div>
               </div>
             )}
           </>
@@ -1522,7 +1535,7 @@ export default function Forecast() {
             MONTHLY SUMMARY VIEW
         ══════════════════════════════════════════════════════════════════════ */}
         {!loadingTxs && view === "summary" && (
-          <div className="space-y-4">
+          <div className="space-y-4 flex-1 min-h-0 overflow-y-auto">
             {/* Chart */}
             {!loadingMonthly && monthlyData.length > 0 && (
               <Card className="bg-card border-border">

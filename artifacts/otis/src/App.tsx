@@ -11,6 +11,8 @@ import { queryClient } from "@/lib/queryClient";
 import { Shell } from "@/components/layout/Shell";
 import Dashboard from "@/pages/dashboard";
 import Bills from "@/pages/bills";
+import Budget from "@/pages/budget";
+import Goals from "@/pages/goals";
 import Accounts from "@/pages/accounts";
 import AssetsLiabilities from "@/pages/assets-liabilities";
 import Forecast from "@/pages/forecast";
@@ -218,6 +220,12 @@ function ClerkProviderWithRoutes() {
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route path="/bills">
               <ProtectedShell><Bills /></ProtectedShell>
+            </Route>
+            <Route path="/budget">
+              <ProtectedShell><Budget /></ProtectedShell>
+            </Route>
+            <Route path="/goals">
+              <ProtectedShell><Goals /></ProtectedShell>
             </Route>
             <Route path="/accounts">
               <ProtectedShell><Accounts /></ProtectedShell>

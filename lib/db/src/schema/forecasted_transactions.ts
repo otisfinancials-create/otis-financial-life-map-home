@@ -14,6 +14,13 @@ export const forecastedTransactionsTable = pgTable("forecasted_transactions", {
   sourcePayId: integer("source_pay_id"),
   sourceLifeEventId: integer("source_life_event_id"),
   sourceBalanceSyncId: integer("source_balance_sync_id"),
+  // Credit-card billing cycle grouping (manual version — Plaid will automate
+  // this in a future phase). ccAccountId links a row to a credit_card account.
+  // isCcParent=true marks the "Credit Card Payment" row (starts at $0 and
+  // increments as its child rows are marked paid); children carry the bill
+  // amounts but do not affect the running balance.
+  ccAccountId: integer("cc_account_id"),
+  isCcParent: boolean("is_cc_parent").notNull().default(false),
   isActual: boolean("is_actual").notNull().default(false),
   isCommitted: boolean("is_committed").notNull().default(false),
   // 'missed' = past bill the user marked as not paid; excluded from running balance.

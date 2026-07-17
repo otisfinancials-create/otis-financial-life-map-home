@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, boolean, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -13,6 +13,9 @@ export const accountsTable = pgTable("accounts", {
   retirementSubtype: text("retirement_subtype"),
   isAsset: boolean("is_asset").notNull().default(true),
   accountNumberLast4: text("account_number_last4"),
+  ccCycleStartDate: integer("cc_cycle_start_date"),
+  ccCycleEndDate: integer("cc_cycle_end_date"),
+  ccPaymentDueDate: integer("cc_payment_due_date"),
   notes: text("notes"),
   plaidAccountId: text("plaid_account_id"),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),

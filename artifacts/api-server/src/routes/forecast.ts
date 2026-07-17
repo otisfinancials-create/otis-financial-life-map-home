@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lt, lte, gt, inArray, isNull, desc } from "drizzle-orm";
-import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable } from "@workspace/db";
+import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable } from "@workspace/db";
 import {
   CreateForecastedTransactionBody,
   UpdateForecastedTransactionBody,
@@ -92,6 +92,9 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
     // Balance-update override rows are balance values, not cash flows; missed
     // rows never happened — both are excluded from monthly totals.
     if (row.sourceBalanceSyncId != null || row.status === "missed") continue;
+    // CC parent rows are payment aggregators — their children already carry
+    // the expense amounts, so counting the parent would double-count.
+    if (row.isCcParent) continue;
     const d = new Date(row.transactionDate);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     if (!monthlyMap[key]) continue;
@@ -156,21 +159,133 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     .from(billsTable)
     .where(and(eq(billsTable.isActive, true), eq(billsTable.userId, userId)));
 
+  // Credit-card billing cycle grouping (manual version — Plaid will automate
+  // this in a future phase). Bills paid by a configured credit card do NOT
+  // appear on their own due dates; instead each occurrence is grouped under a
+  // "Credit Card Payment" parent row on the card's payment due date.
+  const ccAccounts = await db
+    .select()
+    .from(accountsTable)
+    .where(and(
+      eq(accountsTable.userId, userId),
+      eq(accountsTable.accountType, "credit_card"),
+    ));
+  const ccByName = new Map<string, typeof ccAccounts[number]>();
+  for (const acct of ccAccounts) {
+    if (acct.ccCycleStartDate != null && acct.ccCycleEndDate != null && acct.ccPaymentDueDate != null) {
+      ccByName.set(acct.accountName.trim().toLowerCase(), acct);
+    }
+  }
+
+  // groups: key = `${accountId}|${dueDateStr}` → child rows for that CC payment
+  const ccGroups = new Map<string, { account: typeof ccAccounts[number]; dueDate: string; children: Array<typeof forecastedTransactionsTable.$inferInsert> }>();
+
+  // Paid (actual) CC children survive the delete above but their parent rows
+  // (isActual=false) do not. Track survivors so we (a) don't insert duplicate
+  // children for occurrences already marked paid, and (b) recreate each
+  // group's parent with the correct paid amount instead of $0.
+  const survivingCcChildren = await db
+    .select()
+    .from(forecastedTransactionsTable)
+    .where(and(
+      eq(forecastedTransactionsTable.userId, userId),
+      eq(forecastedTransactionsTable.isActual, true),
+      eq(forecastedTransactionsTable.isCcParent, false),
+      gte(forecastedTransactionsTable.transactionDate, regenTodayStr),
+    ));
+  const survivorsByGroup = new Map<string, number>(); // key → paid sum
+  const survivorOccurrences = new Set<string>(); // `${sourceBillId}|${dueDate}`
+  for (const child of survivingCcChildren) {
+    if (child.ccAccountId == null) continue;
+    const key = `${child.ccAccountId}|${child.transactionDate}`;
+    if (child.status !== "missed") {
+      survivorsByGroup.set(key, (survivorsByGroup.get(key) ?? 0) + parseFloat(String(child.amount)));
+    }
+    if (child.sourceBillId != null) {
+      survivorOccurrences.add(`${child.sourceBillId}|${child.transactionDate}`);
+    }
+  }
+
   for (const bill of bills) {
     const amount = parseFloat(String(bill.amount));
+    const cardName = bill.paymentMethod?.startsWith("credit-card:")
+      ? bill.paymentMethod.slice("credit-card:".length).trim().toLowerCase()
+      : null;
+    const card = cardName ? ccByName.get(cardName) : undefined;
+
     for (const dateStr of generateBillOccurrences(bill, todayStr, endStr)) {
-      toInsert.push({
-        userId,
-        transactionDate: dateStr,
-        description: bill.billName,
-        amount: String(amount),
-        transactionType: "expense",
-        category: bill.category,
-        sourceBillId: bill.id,
-        isActual: false,
-        isCommitted: false,
-      });
+      if (card) {
+        const dueDate = ccPaymentDueDateFor(dateStr, card.ccCycleEndDate!, card.ccPaymentDueDate!);
+        const key = `${card.id}|${dueDate}`;
+        let group = ccGroups.get(key);
+        if (!group) {
+          group = { account: card, dueDate, children: [] };
+          ccGroups.set(key, group);
+        }
+        // A paid (actual) row for this occurrence already exists — keep it,
+        // don't insert a duplicate forecasted child.
+        if (survivorOccurrences.has(`${bill.id}|${dueDate}`)) continue;
+        group.children.push({
+          userId,
+          transactionDate: dueDate,
+          description: bill.billName,
+          amount: String(amount),
+          transactionType: "expense",
+          category: bill.category,
+          sourceBillId: bill.id,
+          ccAccountId: card.id,
+          isCcParent: false,
+          isActual: false,
+          isCommitted: false,
+        });
+      } else {
+        toInsert.push({
+          userId,
+          transactionDate: dateStr,
+          description: bill.billName,
+          amount: String(amount),
+          transactionType: "expense",
+          category: bill.category,
+          sourceBillId: bill.id,
+          isActual: false,
+          isCommitted: false,
+        });
+      }
     }
+  }
+
+  // Emit one parent "Credit Card Payment" row per CC group (starts at $0;
+  // increments as children are marked paid), followed by its children. Only
+  // future-dated groups are emitted (past rows were preserved above).
+  // Ensure groups that now consist solely of surviving paid children still get
+  // a parent row recreated.
+  for (const [key, paidSum] of survivorsByGroup) {
+    if (ccGroups.has(key)) continue;
+    const [acctIdStr, dueDate] = key.split("|");
+    const account = ccAccounts.find((a) => a.id === Number(acctIdStr));
+    if (account) ccGroups.set(key, { account, dueDate, children: [] });
+    void paidSum;
+  }
+
+  for (const [key, group] of ccGroups) {
+    if (group.dueDate < todayStr || group.dueDate > endStr) continue;
+    const paidSum = survivorsByGroup.get(key) ?? 0;
+    toInsert.push({
+      userId,
+      transactionDate: group.dueDate,
+      description: `Credit Card Payment — ${group.account.accountName}`,
+      amount: String(Math.round(paidSum * 100) / 100),
+      transactionType: "expense",
+      category: "debt_payments",
+      ccAccountId: group.account.id,
+      isCcParent: true,
+      isActual: false,
+      isCommitted: false,
+      sortOrder: 0,
+    });
+    group.children.forEach((child, i) => {
+      toInsert.push({ ...child, sortOrder: i + 1 });
+    });
   }
 
   // Generate from pay schedules
@@ -247,11 +362,13 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
       const frequency = ev.frequency ?? "annually";
       const recurEndStr = ev.endDate && ev.endDate < endStr ? ev.endDate : endStr;
       let current = ev.startDate;
-      while (current <= recurEndStr) {
+      let guard = 0;
+      while (current <= recurEndStr && guard < 5000) {
         if (current >= todayStr) {
           pushRow(current, total, ev.eventName);
         }
-        current = advanceIsoByFrequency(current, frequency);
+        current = advanceIsoByFrequency(current, frequency, ev.customIntervalDays);
+        guard++;
       }
     }
   }
@@ -363,12 +480,45 @@ router.post("/forecast/sync-balance", async (req, res): Promise<void> => {
     }).returning();
 
     // Replace any existing balance-update row on this date, then insert the
-    // new override row first-of-day (sortOrder -1 sorts before everything else).
+    // new override row positioned AFTER the paid (actual) transactions on the
+    // date but BEFORE any unpaid ones — the override becomes the running
+    // balance baseline and unpaid rows calculate forward from it.
     await tx.delete(forecastedTransactionsTable).where(and(
       eq(forecastedTransactionsTable.userId, req.userId),
       eq(forecastedTransactionsTable.transactionDate, syncDate),
       gt(forecastedTransactionsTable.sourceBalanceSyncId, 0),
     ));
+
+    const sameDay = await tx
+      .select({
+        id: forecastedTransactionsTable.id,
+        isActual: forecastedTransactionsTable.isActual,
+        sortOrder: forecastedTransactionsTable.sortOrder,
+      })
+      .from(forecastedTransactionsTable)
+      .where(and(
+        eq(forecastedTransactionsTable.userId, req.userId),
+        eq(forecastedTransactionsTable.transactionDate, syncDate),
+      ))
+      .orderBy(forecastedTransactionsTable.sortOrder, forecastedTransactionsTable.id);
+
+    // Re-number the day: paid rows keep their order first, then the override,
+    // then unpaid rows in their existing order.
+    const paid = sameDay.filter((r) => r.isActual);
+    const unpaid = sameDay.filter((r) => !r.isActual);
+    let order = 0;
+    for (const r of paid) {
+      await tx.update(forecastedTransactionsTable)
+        .set({ sortOrder: order++ })
+        .where(eq(forecastedTransactionsTable.id, r.id));
+    }
+    const overrideSortOrder = order++;
+    for (const r of unpaid) {
+      await tx.update(forecastedTransactionsTable)
+        .set({ sortOrder: order++ })
+        .where(eq(forecastedTransactionsTable.id, r.id));
+    }
+
     await tx.insert(forecastedTransactionsTable).values({
       userId: req.userId,
       transactionDate: syncDate,
@@ -379,7 +529,7 @@ router.post("/forecast/sync-balance", async (req, res): Promise<void> => {
       sourceBalanceSyncId: syncRow.id,
       isActual: false,
       isCommitted: true,
-      sortOrder: -1,
+      sortOrder: overrideSortOrder,
     });
 
     // Updating today's balance also becomes the new starting balance so the
@@ -527,6 +677,18 @@ router.patch("/forecast/:id", async (req, res): Promise<void> => {
       .where(and(eq(forecastedTransactionsTable.id, params.data.id), eq(forecastedTransactionsTable.userId, req.userId)))
       .returning();
 
+    // CC group behavior: the "Credit Card Payment" parent row's amount is
+    // always the sum of its PAID children (that sum is what actually hits the
+    // running balance). Recompute it deterministically after any child
+    // mutation — paid toggles, amount edits, or date moves (old + new group).
+    // Plaid will automate this in a future phase — this is the manual version.
+    if (existing.ccAccountId != null && !existing.isCcParent) {
+      await recomputeCcParent(trx, req.userId, existing.ccAccountId, existing.transactionDate);
+      if (updated.transactionDate !== existing.transactionDate) {
+        await recomputeCcParent(trx, req.userId, existing.ccAccountId, updated.transactionDate);
+      }
+    }
+
     // Recurring rows: optionally apply description/category/amount to all
     // future, not-yet-paid occurrences of the same bill or paycheck.
     if (applyToFuture && (existing.sourceBillId != null || existing.sourcePayId != null)) {
@@ -561,7 +723,13 @@ router.delete("/forecast/:id", async (req, res): Promise<void> => {
     return;
   }
   const [existing] = await db
-    .select({ id: forecastedTransactionsTable.id, sourceBalanceSyncId: forecastedTransactionsTable.sourceBalanceSyncId })
+    .select({
+      id: forecastedTransactionsTable.id,
+      sourceBalanceSyncId: forecastedTransactionsTable.sourceBalanceSyncId,
+      ccAccountId: forecastedTransactionsTable.ccAccountId,
+      isCcParent: forecastedTransactionsTable.isCcParent,
+      transactionDate: forecastedTransactionsTable.transactionDate,
+    })
     .from(forecastedTransactionsTable)
     .where(and(eq(forecastedTransactionsTable.id, params.data.id), eq(forecastedTransactionsTable.userId, req.userId)));
   if (!existing) {
@@ -572,11 +740,84 @@ router.delete("/forecast/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Balance update rows cannot be deleted — they keep the running balance in sync with your bank" });
     return;
   }
-  await db
-    .delete(forecastedTransactionsTable)
-    .where(and(eq(forecastedTransactionsTable.id, params.data.id), eq(forecastedTransactionsTable.userId, req.userId)));
+  await db.transaction(async (trx) => {
+    await trx
+      .delete(forecastedTransactionsTable)
+      .where(and(eq(forecastedTransactionsTable.id, params.data.id), eq(forecastedTransactionsTable.userId, req.userId)));
+    if (existing.ccAccountId != null) {
+      if (existing.isCcParent) {
+        // Deleting a parent orphans its children — remove the whole group.
+        await trx.delete(forecastedTransactionsTable).where(and(
+          eq(forecastedTransactionsTable.userId, req.userId),
+          eq(forecastedTransactionsTable.ccAccountId, existing.ccAccountId),
+          eq(forecastedTransactionsTable.isCcParent, false),
+          eq(forecastedTransactionsTable.transactionDate, existing.transactionDate),
+        ));
+      } else {
+        await recomputeCcParent(trx, req.userId, existing.ccAccountId, existing.transactionDate);
+      }
+    }
+  });
   res.sendStatus(204);
 });
+
+// Sets a CC group's "Credit Card Payment" parent amount to the sum of its
+// PAID (isActual) children on the same date. Deterministic: safe to call after
+// any child mutation. No-op if the group has no parent row.
+async function recomputeCcParent(
+  trx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  userId: string,
+  ccAccountId: number,
+  dateStr: string,
+): Promise<void> {
+  const children = await trx
+    .select({ amount: forecastedTransactionsTable.amount, isActual: forecastedTransactionsTable.isActual, status: forecastedTransactionsTable.status })
+    .from(forecastedTransactionsTable)
+    .where(and(
+      eq(forecastedTransactionsTable.userId, userId),
+      eq(forecastedTransactionsTable.ccAccountId, ccAccountId),
+      eq(forecastedTransactionsTable.isCcParent, false),
+      eq(forecastedTransactionsTable.transactionDate, dateStr),
+    ));
+  const total = children
+    .filter((c) => c.isActual && c.status !== "missed")
+    .reduce((sum, c) => sum + parseFloat(String(c.amount)), 0);
+  await trx
+    .update(forecastedTransactionsTable)
+    .set({ amount: String(Math.round(total * 100) / 100) })
+    .where(and(
+      eq(forecastedTransactionsTable.userId, userId),
+      eq(forecastedTransactionsTable.ccAccountId, ccAccountId),
+      eq(forecastedTransactionsTable.isCcParent, true),
+      eq(forecastedTransactionsTable.transactionDate, dateStr),
+    ));
+}
+
+// Given a bill occurrence date within a CC billing cycle, returns the card's
+// payment due date (YYYY-MM-DD) for the cycle that occurrence falls in: the
+// first ccPaymentDueDate strictly after the cycle end that covers the
+// occurrence. Cycle end day is clamped per month (e.g. day 31 in Feb → 28/29).
+function ccPaymentDueDateFor(occurrenceIso: string, cycleEndDay: number, paymentDueDay: number): string {
+  const y = Number(occurrenceIso.slice(0, 4));
+  const m = Number(occurrenceIso.slice(5, 7));
+  // Cycle end on/after the occurrence (this month, else next month).
+  let cycleEnd = clampDay(y, m, cycleEndDay);
+  if (cycleEnd < occurrenceIso) {
+    const nm = m === 12 ? 1 : m + 1;
+    const ny = m === 12 ? y + 1 : y;
+    cycleEnd = clampDay(ny, nm, cycleEndDay);
+  }
+  // Payment due date strictly after the cycle end.
+  const ey = Number(cycleEnd.slice(0, 4));
+  const em = Number(cycleEnd.slice(5, 7));
+  let due = clampDay(ey, em, paymentDueDay);
+  if (due <= cycleEnd) {
+    const nm = em === 12 ? 1 : em + 1;
+    const ny = em === 12 ? ey + 1 : ey;
+    due = clampDay(ny, nm, paymentDueDay);
+  }
+  return due;
+}
 
 function advanceByFrequency(date: Date, frequency: string): Date {
   const d = new Date(date);
@@ -615,11 +856,13 @@ function addMonthsIso(iso: string, months: number): string {
   return base.toISOString().slice(0, 10);
 }
 
-function advanceIsoByFrequency(iso: string, frequency: string): string {
+function advanceIsoByFrequency(iso: string, frequency: string, customIntervalDays?: number | null): string {
   switch (frequency.toLowerCase()) {
     case "monthly": return addMonthsIso(iso, 1);
     case "quarterly": return addMonthsIso(iso, 3);
+    case "biannually": case "bi-annually": case "semi-annual": case "semiannual": case "biannual": return addMonthsIso(iso, 6);
     case "annual": case "annually": case "yearly": return addMonthsIso(iso, 12);
+    case "custom": return addDaysIso(iso, customIntervalDays && customIntervalDays > 0 ? customIntervalDays : 30);
     default: return addMonthsIso(iso, 12);
   }
 }

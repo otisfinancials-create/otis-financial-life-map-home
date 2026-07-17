@@ -67,7 +67,8 @@ export interface BillUpdate {
   dueDay?: number;
   paymentMethod?: string;
   startDate?: string;
-  endDate?: string;
+  /** @nullable */
+  endDate?: string | null;
   companyUrl?: string;
   isVariable?: boolean;
   isActive?: boolean;
@@ -90,6 +91,8 @@ export interface LifeEvent {
   endDate?: string | null;
   /** @nullable */
   frequency?: string | null;
+  /** @nullable */
+  customIntervalDays?: number | null;
   priority: string;
   /** @nullable */
   notes?: string | null;
@@ -108,6 +111,7 @@ export interface LifeEventInput {
   startDate?: string;
   endDate?: string;
   frequency?: string;
+  customIntervalDays?: number;
   priority: string;
   notes?: string;
   isActive?: boolean;
@@ -128,6 +132,8 @@ export interface LifeEventUpdate {
   endDate?: string | null;
   /** @nullable */
   frequency?: string | null;
+  /** @nullable */
+  customIntervalDays?: number | null;
   priority?: string;
   /** @nullable */
   notes?: string | null;
@@ -201,6 +207,24 @@ export interface Account {
   accountNumberLast4?: string | null;
   /** @nullable */
   notes?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccCycleStartDate?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccCycleEndDate?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccPaymentDueDate?: number | null;
   /** @nullable */
   plaidAccountId?: string | null;
   /** @nullable */
@@ -239,6 +263,24 @@ export interface AccountInput {
   accountNumberLast4?: string | null;
   /** @nullable */
   notes?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccCycleStartDate?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccCycleEndDate?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccPaymentDueDate?: number | null;
 }
 
 /**
@@ -271,6 +313,24 @@ export interface AccountUpdate {
   accountNumberLast4?: string | null;
   /** @nullable */
   notes?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccCycleStartDate?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccCycleEndDate?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  ccPaymentDueDate?: number | null;
 }
 
 export interface AccountTypeGroup {
@@ -359,6 +419,15 @@ export interface Loan {
   updatedAt: string;
 }
 
+export interface BillSync {
+  matched: boolean;
+  billName: string;
+}
+
+export type LoanMutationResult = Loan & {
+  billSync?: BillSync;
+};
+
 export interface LoanInput {
   loanName: string;
   lenderName: string;
@@ -433,6 +502,13 @@ export interface ForecastedTransaction {
   sourceLifeEventId?: number | null;
   /** @nullable */
   sourceBalanceSyncId?: number | null;
+  /**
+     * Credit-card account this row belongs to (CC billing cycle grouping)
+     * @nullable
+     */
+  ccAccountId?: number | null;
+  /** True for the "Credit Card Payment" parent row of a CC group */
+  isCcParent: boolean;
   isActual: boolean;
   isCommitted: boolean;
   /**
@@ -620,6 +696,21 @@ export const OtisChatMessageRole = {
 export interface OtisChatMessage {
   role: OtisChatMessageRole;
   content: string;
+}
+
+export type OtisHistoryMessageRole = typeof OtisHistoryMessageRole[keyof typeof OtisHistoryMessageRole];
+
+
+export const OtisHistoryMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export interface OtisHistoryMessage {
+  id: number;
+  role: OtisHistoryMessageRole;
+  content: string;
+  createdAt: string;
 }
 
 export interface OtisChatRequest {

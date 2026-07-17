@@ -9,6 +9,8 @@ import {
   Scale,
   CreditCard,
   Banknote,
+  Wallet,
+  Target,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
@@ -28,6 +30,7 @@ const sections: { label: string; items: NavItem[] }[] = [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
       { name: "Bills", href: "/bills", icon: Receipt },
       { name: "Pay schedules", href: "/pay-schedules", icon: Banknote },
+      { name: "Budget", href: "/budget", icon: Wallet },
       { name: "Forecast", href: "/forecast", icon: LineChart },
     ],
   },
@@ -43,6 +46,7 @@ const sections: { label: string; items: NavItem[] }[] = [
     label: "Life",
     items: [
       { name: "Life events", href: "/life-events", icon: CalendarHeart },
+      { name: "Goals", href: "/goals", icon: Target },
       { name: "Retirement", href: "/retirement", icon: PiggyBank },
     ],
   },

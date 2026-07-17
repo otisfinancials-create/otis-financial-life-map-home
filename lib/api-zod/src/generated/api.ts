@@ -148,7 +148,7 @@ export const UpdateBillBody = zod.object({
   "dueDay": zod.number().optional(),
   "paymentMethod": zod.string().optional(),
   "startDate": zod.string().optional(),
-  "endDate": zod.string().optional(),
+  "endDate": zod.string().nullish(),
   "companyUrl": zod.string().optional(),
   "isVariable": zod.boolean().optional(),
   "isActive": zod.boolean().optional(),
@@ -198,6 +198,7 @@ export const ListLifeEventsResponseItem = zod.object({
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
   "frequency": zod.string().nullish(),
+  "customIntervalDays": zod.number().nullish(),
   "priority": zod.string(),
   "notes": zod.string().nullish(),
   "isActive": zod.boolean(),
@@ -220,6 +221,7 @@ export const CreateLifeEventBody = zod.object({
   "startDate": zod.string().optional(),
   "endDate": zod.string().optional(),
   "frequency": zod.string().optional(),
+  "customIntervalDays": zod.number().optional(),
   "priority": zod.string(),
   "notes": zod.string().optional(),
   "isActive": zod.boolean().optional()
@@ -236,6 +238,7 @@ export const CreateLifeEventResponse = zod.object({
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
   "frequency": zod.string().nullish(),
+  "customIntervalDays": zod.number().nullish(),
   "priority": zod.string(),
   "notes": zod.string().nullish(),
   "isActive": zod.boolean(),
@@ -261,6 +264,7 @@ export const UpdateLifeEventBody = zod.object({
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
   "frequency": zod.string().nullish(),
+  "customIntervalDays": zod.number().nullish(),
   "priority": zod.string().optional(),
   "notes": zod.string().nullish(),
   "isActive": zod.boolean().optional()
@@ -277,6 +281,7 @@ export const UpdateLifeEventResponse = zod.object({
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
   "frequency": zod.string().nullish(),
+  "customIntervalDays": zod.number().nullish(),
   "priority": zod.string(),
   "notes": zod.string().nullish(),
   "isActive": zod.boolean(),
@@ -393,6 +398,14 @@ export const DeletePayScheduleResponse = zod.void()
 /**
  * @summary List all accounts
  */
+export const listAccountsResponseCcCycleStartDateMax = 31;
+
+export const listAccountsResponseCcCycleEndDateMax = 31;
+
+export const listAccountsResponseCcPaymentDueDateMax = 31;
+
+
+
 export const ListAccountsResponseItem = zod.object({
   "id": zod.number(),
   "accountName": zod.string(),
@@ -404,6 +417,9 @@ export const ListAccountsResponseItem = zod.object({
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "ccCycleStartDate": zod.number().min(1).max(listAccountsResponseCcCycleStartDateMax).nullish(),
+  "ccCycleEndDate": zod.number().min(1).max(listAccountsResponseCcCycleEndDateMax).nullish(),
+  "ccPaymentDueDate": zod.number().min(1).max(listAccountsResponseCcPaymentDueDateMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
   "lastSyncedAt": zod.string().nullish(),
   "createdAt": zod.string(),
@@ -416,6 +432,12 @@ export const ListAccountsResponse = zod.array(ListAccountsResponseItem)
  * @summary Create an account
  */
 export const createAccountBodyAccountNumberLast4RegExp = new RegExp('^\\d{4}$');
+export const createAccountBodyCcCycleStartDateMax = 31;
+
+export const createAccountBodyCcCycleEndDateMax = 31;
+
+export const createAccountBodyCcPaymentDueDateMax = 31;
+
 
 
 export const CreateAccountBody = zod.object({
@@ -427,8 +449,19 @@ export const CreateAccountBody = zod.object({
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().regex(createAccountBodyAccountNumberLast4RegExp).nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "ccCycleStartDate": zod.number().min(1).max(createAccountBodyCcCycleStartDateMax).nullish(),
+  "ccCycleEndDate": zod.number().min(1).max(createAccountBodyCcCycleEndDateMax).nullish(),
+  "ccPaymentDueDate": zod.number().min(1).max(createAccountBodyCcPaymentDueDateMax).nullish()
 })
+
+export const createAccountResponseCcCycleStartDateMax = 31;
+
+export const createAccountResponseCcCycleEndDateMax = 31;
+
+export const createAccountResponseCcPaymentDueDateMax = 31;
+
+
 
 export const CreateAccountResponse = zod.object({
   "id": zod.number(),
@@ -441,6 +474,9 @@ export const CreateAccountResponse = zod.object({
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "ccCycleStartDate": zod.number().min(1).max(createAccountResponseCcCycleStartDateMax).nullish(),
+  "ccCycleEndDate": zod.number().min(1).max(createAccountResponseCcCycleEndDateMax).nullish(),
+  "ccPaymentDueDate": zod.number().min(1).max(createAccountResponseCcPaymentDueDateMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
   "lastSyncedAt": zod.string().nullish(),
   "createdAt": zod.string(),
@@ -470,6 +506,14 @@ export const GetAccountParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getAccountResponseCcCycleStartDateMax = 31;
+
+export const getAccountResponseCcCycleEndDateMax = 31;
+
+export const getAccountResponseCcPaymentDueDateMax = 31;
+
+
+
 export const GetAccountResponse = zod.object({
   "id": zod.number(),
   "accountName": zod.string(),
@@ -481,6 +525,9 @@ export const GetAccountResponse = zod.object({
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "ccCycleStartDate": zod.number().min(1).max(getAccountResponseCcCycleStartDateMax).nullish(),
+  "ccCycleEndDate": zod.number().min(1).max(getAccountResponseCcCycleEndDateMax).nullish(),
+  "ccPaymentDueDate": zod.number().min(1).max(getAccountResponseCcPaymentDueDateMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
   "lastSyncedAt": zod.string().nullish(),
   "createdAt": zod.string(),
@@ -496,6 +543,12 @@ export const UpdateAccountParams = zod.object({
 })
 
 export const updateAccountBodyAccountNumberLast4RegExp = new RegExp('^\\d{4}$');
+export const updateAccountBodyCcCycleStartDateMax = 31;
+
+export const updateAccountBodyCcCycleEndDateMax = 31;
+
+export const updateAccountBodyCcPaymentDueDateMax = 31;
+
 
 
 export const UpdateAccountBody = zod.object({
@@ -507,8 +560,19 @@ export const UpdateAccountBody = zod.object({
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean().optional(),
   "accountNumberLast4": zod.string().regex(updateAccountBodyAccountNumberLast4RegExp).nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "ccCycleStartDate": zod.number().min(1).max(updateAccountBodyCcCycleStartDateMax).nullish(),
+  "ccCycleEndDate": zod.number().min(1).max(updateAccountBodyCcCycleEndDateMax).nullish(),
+  "ccPaymentDueDate": zod.number().min(1).max(updateAccountBodyCcPaymentDueDateMax).nullish()
 })
+
+export const updateAccountResponseCcCycleStartDateMax = 31;
+
+export const updateAccountResponseCcCycleEndDateMax = 31;
+
+export const updateAccountResponseCcPaymentDueDateMax = 31;
+
+
 
 export const UpdateAccountResponse = zod.object({
   "id": zod.number(),
@@ -521,6 +585,9 @@ export const UpdateAccountResponse = zod.object({
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "ccCycleStartDate": zod.number().min(1).max(updateAccountResponseCcCycleStartDateMax).nullish(),
+  "ccCycleEndDate": zod.number().min(1).max(updateAccountResponseCcCycleEndDateMax).nullish(),
+  "ccPaymentDueDate": zod.number().min(1).max(updateAccountResponseCcPaymentDueDateMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
   "lastSyncedAt": zod.string().nullish(),
   "createdAt": zod.string(),
@@ -714,7 +781,12 @@ export const CreateLoanResponse = zod.object({
   "notes": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).and(zod.object({
+  "billSync": zod.object({
+  "matched": zod.boolean(),
+  "billName": zod.string()
+}).optional()
+}))
 
 
 /**
@@ -790,7 +862,12 @@ export const UpdateLoanResponse = zod.object({
   "notes": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).and(zod.object({
+  "billSync": zod.object({
+  "matched": zod.boolean(),
+  "billName": zod.string()
+}).optional()
+}))
 
 
 /**
@@ -846,6 +923,8 @@ export const ListForecastResponseItem = zod.object({
   "sourcePayId": zod.number().nullish(),
   "sourceLifeEventId": zod.number().nullish(),
   "sourceBalanceSyncId": zod.number().nullish(),
+  "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
+  "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
   "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
@@ -883,6 +962,8 @@ export const CreateForecastedTransactionResponse = zod.object({
   "sourcePayId": zod.number().nullish(),
   "sourceLifeEventId": zod.number().nullish(),
   "sourceBalanceSyncId": zod.number().nullish(),
+  "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
+  "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
   "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
@@ -993,6 +1074,8 @@ export const UpdateForecastedTransactionResponse = zod.object({
   "sourcePayId": zod.number().nullish(),
   "sourceLifeEventId": zod.number().nullish(),
   "sourceBalanceSyncId": zod.number().nullish(),
+  "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
+  "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
   "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
@@ -1146,6 +1229,18 @@ export const SendOtisChatBody = zod.object({
 })
 
 export const SendOtisChatResponse = zod.unknown()
+
+
+/**
+ * @summary Load the user's recent Otis conversation history
+ */
+export const GetOtisHistoryResponseItem = zod.object({
+  "id": zod.number(),
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string(),
+  "createdAt": zod.string()
+})
+export const GetOtisHistoryResponse = zod.array(GetOtisHistoryResponseItem)
 
 
 /**

@@ -45,20 +45,53 @@ export const ACCOUNT_TYPE_OPTIONS = [
   { value: "retirement", label: "Retirement" },
   { value: "mortgage", label: "Mortgage" },
   { value: "loan", label: "Loan" },
+  { value: "other", label: "Other" },
 ] as const;
 
 const LIABILITY_TYPES = ["credit_card", "loan", "mortgage"];
 
-const accountSchema = z.object({
-  accountName: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  institutionName: z.string().min(1, { message: "Please provide an institution name." }),
-  accountType: z.string().min(1, { message: "Please select an account type." }),
-  currentBalance: z.coerce.number(),
-  accountNumberLast4: z
-    .string()
-    .refine((v) => v === "" || /^\d{4}$/.test(v), { message: "Enter exactly 4 digits." }),
-  notes: z.string(),
-});
+const accountSchema = z
+  .object({
+    accountName: z.string().min(2, { message: "Name must be at least 2 characters." }),
+    institutionName: z.string().min(1, { message: "Please provide an institution name." }),
+    accountType: z.string().min(1, { message: "Please select an account type." }),
+    currentBalance: z.coerce
+      .number({ message: "Balance must be a number." })
+      .refine((v) => Number.isFinite(v), { message: "Balance must be a number." })
+      .refine((v) => /^-?\d{1,9}(\.\d{1,2})?$/.test(String(v)), {
+        message: "Balance is limited to 9 digits before the decimal point and 2 decimal places.",
+      }),
+    accountNumberLast4: z
+      .string()
+      .refine((v) => v === "" || /^\d{4}$/.test(v), { message: "Enter exactly 4 digits." }),
+    monthlyContribution: z.coerce
+      .number({ message: "Monthly contribution must be a number." })
+      .refine((v) => Number.isFinite(v) && v >= 0, {
+        message: "Monthly contribution must be a positive number.",
+      }),
+    notes: z.string().max(200, { message: "Notes are limited to 200 characters." }),
+    ccCycleStartDate: z.string(),
+    ccCycleEndDate: z.string(),
+    ccPaymentDueDate: z.string(),
+  })
+  .superRefine((vals, ctx) => {
+    if (vals.accountType === "credit_card") {
+      for (const key of ["ccCycleStartDate", "ccCycleEndDate", "ccPaymentDueDate"] as const) {
+        const v = vals[key];
+        if (v !== "" && !(/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 31)) {
+          ctx.addIssue({ code: "custom", path: [key], message: "Enter a day of month (1-31)." });
+        }
+      }
+    }
+    if (LIABILITY_TYPES.includes(vals.accountType) && vals.currentBalance < 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["currentBalance"],
+        message:
+          "Credit card and loan balances are always treated as negative in calculations. Enter the balance as a positive number and Otis will do the rest.",
+      });
+    }
+  });
 
 type AccountFormValues = z.infer<typeof accountSchema>;
 
@@ -87,7 +120,11 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
     accountType: account?.accountType || "",
     currentBalance: account?.currentBalance || 0,
     accountNumberLast4: account?.accountNumberLast4 || "",
+    monthlyContribution: account?.monthlyContribution || 0,
     notes: account?.notes || "",
+    ccCycleStartDate: account?.ccCycleStartDate != null ? String(account.ccCycleStartDate) : "",
+    ccCycleEndDate: account?.ccCycleEndDate != null ? String(account.ccCycleEndDate) : "",
+    ccPaymentDueDate: account?.ccPaymentDueDate != null ? String(account.ccPaymentDueDate) : "",
   });
 
   const form = useForm<AccountFormValues>({
@@ -103,14 +140,21 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
   }, [isOpen, account?.id]);
 
   function onSubmit(values: AccountFormValues) {
+    const isLiability = LIABILITY_TYPES.includes(values.accountType);
     const data = {
       accountName: values.accountName,
       institutionName: values.institutionName,
       accountType: values.accountType,
-      currentBalance: values.currentBalance,
-      isAsset: !LIABILITY_TYPES.includes(values.accountType),
+      // Liability balances are stored as positive magnitudes and treated as
+      // negative in all calculations (isAsset: false).
+      currentBalance: isLiability ? Math.abs(values.currentBalance) : values.currentBalance,
+      isAsset: !isLiability,
       accountNumberLast4: values.accountNumberLast4 || null,
+      monthlyContribution: values.accountType === "retirement" ? values.monthlyContribution : 0,
       notes: values.notes || null,
+      ccCycleStartDate: values.accountType === "credit_card" && values.ccCycleStartDate !== "" ? Number(values.ccCycleStartDate) : null,
+      ccCycleEndDate: values.accountType === "credit_card" && values.ccCycleEndDate !== "" ? Number(values.ccCycleEndDate) : null,
+      ccPaymentDueDate: values.accountType === "credit_card" && values.ccPaymentDueDate !== "" ? Number(values.ccPaymentDueDate) : null,
     };
     const invalidate = () => {
       queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
@@ -226,6 +270,68 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                 )}
               />
             </div>
+            {form.watch("accountType") === "credit_card" && (
+              <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+                <p className="text-sm font-semibold">Credit Card Billing Cycle</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="ccCycleStartDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Start Date</FormLabel>
+                        <FormControl>
+                          <Input placeholder="1" inputMode="numeric" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="ccCycleEndDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">End Date</FormLabel>
+                        <FormControl>
+                          <Input placeholder="31" inputMode="numeric" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="ccPaymentDueDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Payment Due Date</FormLabel>
+                        <FormControl>
+                          <Input placeholder="15" inputMode="numeric" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Day of month (1-31). Bills paid by this card are grouped in the forecast on the payment due date.</p>
+              </div>
+            )}
+            {form.watch("accountType") === "retirement" && (
+              <FormField
+                control={form.control}
+                name="monthlyContribution"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Monthly Contribution ($)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="accountNumberLast4"
@@ -246,8 +352,9 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                 <FormItem>
                   <FormLabel>Notes</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Optional notes about this account" rows={2} {...field} />
+                    <Textarea placeholder="Optional notes about this account" rows={2} maxLength={200} {...field} />
                   </FormControl>
+                  <div className="text-right text-xs text-muted-foreground">{field.value.length}/200</div>
                   <FormMessage />
                 </FormItem>
               )}

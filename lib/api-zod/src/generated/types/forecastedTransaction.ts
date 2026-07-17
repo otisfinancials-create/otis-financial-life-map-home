@@ -21,6 +21,13 @@ export interface ForecastedTransaction {
   sourceLifeEventId?: number | null;
   /** @nullable */
   sourceBalanceSyncId?: number | null;
+  /**
+     * Credit-card account this row belongs to (CC billing cycle grouping)
+     * @nullable
+     */
+  ccAccountId?: number | null;
+  /** True for the "Credit Card Payment" parent row of a CC group */
+  isCcParent: boolean;
   isActual: boolean;
   isCommitted: boolean;
   /**

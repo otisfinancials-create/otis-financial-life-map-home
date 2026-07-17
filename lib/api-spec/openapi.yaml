@@ -576,7 +576,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Loan"
+                $ref: "#/components/schemas/LoanMutationResult"
 
   /loans/summary:
     get:
@@ -633,7 +633,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Loan"
+                $ref: "#/components/schemas/LoanMutationResult"
         "404":
           description: Not found
     delete:
@@ -941,6 +941,20 @@ paths:
           description: SSE stream of assistant response chunks
           content:
             text/event-stream: {}
+  /otis/history:
+    get:
+      operationId: getOtisHistory
+      tags: [otis]
+      summary: Load the user's recent Otis conversation history
+      responses:
+        "200":
+          description: Recent conversation messages, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OtisHistoryMessage"
   /otis/scenario:
     post:
       operationId: runOtisScenario
@@ -1125,7 +1139,7 @@ components:
         startDate:
           type: string
         endDate:
-          type: string
+          type: ["string", "null"]
         companyUrl:
           type: string
         isVariable:
@@ -1160,6 +1174,8 @@ components:
           type: ["string", "null"]
         frequency:
           type: ["string", "null"]
+        customIntervalDays:
+          type: ["integer", "null"]
         priority:
           type: string
         notes:
@@ -1193,6 +1209,8 @@ components:
           type: string
         frequency:
           type: string
+        customIntervalDays:
+          type: integer
         priority:
           type: string
         notes:
@@ -1221,6 +1239,8 @@ components:
           type: ["string", "null"]
         frequency:
           type: ["string", "null"]
+        customIntervalDays:
+          type: ["integer", "null"]
         priority:
           type: string
         notes:
@@ -1324,6 +1344,18 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        ccCycleStartDate:
+          type: ["integer", "null"]
+          minimum: 1
+          maximum: 31
+        ccCycleEndDate:
+          type: ["integer", "null"]
+          minimum: 1
+          maximum: 31
+        ccPaymentDueDate:
+          type: ["integer", "null"]
+          minimum: 1
+          maximum: 31
         plaidAccountId:
           type: ["string", "null"]
         lastSyncedAt:
@@ -1357,6 +1389,18 @@ components:
           pattern: "^\\d{4}$"
         notes:
           type: ["string", "null"]
+        ccCycleStartDate:
+          type: ["integer", "null"]
+          minimum: 1
+          maximum: 31
+        ccCycleEndDate:
+          type: ["integer", "null"]
+          minimum: 1
+          maximum: 31
+        ccPaymentDueDate:
+          type: ["integer", "null"]
+          minimum: 1
+          maximum: 31
 
     AccountUpdate:
       type: object
@@ -1381,6 +1425,18 @@ components:
           pattern: "^\\d{4}$"
         notes:
           type: ["string", "null"]
+        ccCycleStartDate:
+          type: ["integer", "null"]
+          minimum: 1
+          maximum: 31
+        ccCycleEndDate:
+          type: ["integer", "null"]
+          minimum: 1
+          maximum: 31
+        ccPaymentDueDate:
+          type: ["integer", "null"]
+          minimum: 1
+          maximum: 31
 
     AccountsSummary:
       type: object
@@ -1531,6 +1587,23 @@ components:
         updatedAt:
           type: string
 
+    BillSync:
+      type: object
+      required: [matched, billName]
+      properties:
+        matched:
+          type: boolean
+        billName:
+          type: string
+
+    LoanMutationResult:
+      allOf:
+        - $ref: "#/components/schemas/Loan"
+        - type: object
+          properties:
+            billSync:
+              $ref: "#/components/schemas/BillSync"
+
     LoanInput:
       type: object
       required: [loanName, lenderName, loanType, originalAmount, currentBalance, interestRate, monthlyPayment, startDate, termMonths, nextPaymentDate]
@@ -1638,7 +1711,7 @@ components:
     # ── Forecasted Transactions ───────────────────────────────────────────────
     ForecastedTransaction:
       type: object
-      required: [id, transactionDate, description, amount, transactionType, category, isActual, isCommitted, sortOrder, createdAt]
+      required: [id, transactionDate, description, amount, transactionType, category, isCcParent, isActual, isCommitted, sortOrder, createdAt]
       properties:
         id:
           type: integer
@@ -1660,6 +1733,12 @@ components:
           type: ["integer", "null"]
         sourceBalanceSyncId:
           type: ["integer", "null"]
+        ccAccountId:
+          type: ["integer", "null"]
+          description: Credit-card account this row belongs to (CC billing cycle grouping)
+        isCcParent:
+          type: boolean
+          description: True for the "Credit Card Payment" parent row of a CC group
         isActual:
           type: boolean
         isCommitted:
@@ -1934,6 +2013,23 @@ components:
       required:
         - role
         - content
+    OtisHistoryMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - role
+        - content
+        - createdAt
     OtisChatRequest:
       type: object
       properties:

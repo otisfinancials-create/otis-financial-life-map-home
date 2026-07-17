@@ -1,21 +1,19 @@
 import {
   useGetDashboardSummary,
-  useGetUpcomingBills,
   useListAccounts,
   useGetMonthlyForecast,
   useListBills,
   useListForecast,
-  useListLifeEvents,
   useListLoans,
   useListAssets,
   useListPaySchedules,
   useGetRetirementSummary,
-  useGetUserSettings,
 } from "@workspace/api-client-react";
 import {
   NetWorthModal,
   CashFlowModal,
-  LiabilitiesModal,
+  SavingsInvestmentsModal,
+  BillsSnapshotModal,
 } from "@/components/dashboard/breakdown-modals";
 import { useState } from "react";
 import { FormatCurrency } from "@/components/ui/format-currency";
@@ -25,17 +23,16 @@ import { monthlyFactor } from "@/lib/bill-math";
 import {
   Wallet,
   TrendingUp,
-  TrendingDown,
-  AlertCircle,
-  Banknote,
+  PiggyBank,
+  CalendarHeart,
   ArrowRight,
   ArrowUpRight,
   ArrowDownRight,
   Minus,
   ExternalLink,
-  CalendarHeart,
 } from "lucide-react";
 import {
+  AreaChart,
   ComposedChart,
   Area,
   Bar,
@@ -44,10 +41,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  ReferenceLine,
 } from "recharts";
-import { accountTypeMeta, ICON_STROKE, getCategoryEmoji } from "@/utils/categoryIcons";
-import { format, startOfMonth, addDays, differenceInCalendarDays } from "date-fns";
+import { categoryMeta, accountTypeMeta } from "@/utils/categoryIcons";
+import { format, startOfMonth, addMonths, addDays, differenceInCalendarDays } from "date-fns";
 import { Link, useLocation } from "wouter";
 import type { ReactNode } from "react";
 
@@ -60,17 +56,6 @@ const fmt = (v: number) =>
 
 // Shared "premium" card chrome: 12px radius, 1px light border, subtle shadow.
 const cardChrome = "rounded-xl border border-border bg-card shadow-sm";
-
-// #4: Upcoming Bills rows deep-link to the Forecast ledger. UpcomingBill has no
-// forecasted-transaction id, so we pass date + description for the Forecast page
-// to locate and flash the matching row.
-function billForecastHref(bill: { dueDate: string; billName: string }): string {
-  const params = new URLSearchParams({
-    txdate: bill.dueDate,
-    txdesc: bill.billName,
-  });
-  return `/forecast?${params.toString()}`;
-}
 
 /* ── Trend badge ──────────────────────────────────────────────────────── */
 
@@ -200,16 +185,67 @@ function MetricCard({
   );
 }
 
+/* ── 6 Month View tooltip ─────────────────────────────────────────────── */
+
+function SixMonthTooltip({
+  active,
+  payload,
+  label,
+  categories,
+}: {
+  active?: boolean;
+  payload?: Array<{ dataKey?: string | number; value?: number }>;
+  label?: string;
+  categories: string[];
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const byKey = new Map<string, number>();
+  payload.forEach((p) => {
+    if (p.dataKey != null) byKey.set(String(p.dataKey), Number(p.value ?? 0));
+  });
+  const income = categories.reduce((s, c) => s + (byKey.get(c) ?? 0), 0) + (byKey.get("remaining") ?? 0);
+  const net = byKey.get("remaining") ?? 0;
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 shadow-md text-xs space-y-1 min-w-[180px]">
+      <p className="font-semibold text-sm mb-1">{label}</p>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-muted-foreground">Income</span>
+        <span className="font-mono tabular-nums font-medium text-emerald-600">{fmt(income)}</span>
+      </div>
+      {categories.map((c) => (
+        <div key={c} className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-1.5">
+            <span
+              className="h-2 w-2 rounded-full shrink-0"
+              style={{ backgroundColor: categoryMeta(c).color }}
+            />
+            <span className="text-muted-foreground">{categoryMeta(c).label}</span>
+          </span>
+          <span className="font-mono tabular-nums">{fmt(byKey.get(c) ?? 0)}</span>
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-4 pt-1 mt-1 border-t border-border">
+        <span className="font-medium">Net cash flow</span>
+        <span
+          className={`font-mono tabular-nums font-semibold ${
+            net >= 0 ? "text-emerald-600" : "text-red-600"
+          }`}
+        >
+          {fmt(net)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /* ── Dashboard ────────────────────────────────────────────────────────── */
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
-  const { data: upcomingBills, isLoading: isLoadingBills } = useGetUpcomingBills();
-  const { data: lifeEvents, isLoading: isLoadingLifeEvents } = useListLifeEvents();
   const { data: accounts, isLoading: isLoadingAccounts } = useListAccounts();
   const { data: monthlyForecast, isLoading: isLoadingForecast } = useGetMonthlyForecast();
-  const { data: bills } = useListBills();
+  const { data: bills, isLoading: isLoadingBills } = useListBills();
   const { data: loans } = useListLoans();
   const { data: assets } = useListAssets();
   const { data: paySchedules } = useListPaySchedules();
@@ -217,123 +253,78 @@ export default function Dashboard() {
 
   const [netWorthOpen, setNetWorthOpen] = useState(false);
   const [cashFlowOpen, setCashFlowOpen] = useState(false);
-  const [liabilitiesOpen, setLiabilitiesOpen] = useState(false);
+  const [savingsOpen, setSavingsOpen] = useState(false);
+  const [billsSnapshotOpen, setBillsSnapshotOpen] = useState(false);
 
   const today = new Date();
   const monthStartStr = format(startOfMonth(today), "yyyy-MM-dd");
   const snapshotEndStr = format(addDays(today, 60), "yyyy-MM-dd");
-  const { data: forecastTxs, isLoading: isLoadingTxs } = useListForecast({
+  const { data: forecastTxs } = useListForecast({
     startDate: monthStartStr,
     endDate: snapshotEndStr,
   });
-  const { data: userSettings } = useGetUserSettings();
 
-  /* Chart data.
-     Life-event costs are part of totalExpenses (so netCashFlow stays correct),
-     so we break them out and show regular expenses = total − life events. The
-     two stack together to equal total spending. */
-  const cashFlowData = (monthlyForecast ?? []).slice(0, 6).map((m) => ({
-    month: m.label,
-    income: m.totalIncome,
-    expenses: Math.max(0, m.totalExpenses - m.totalLifeEvents),
-    lifeEvents: m.totalLifeEvents,
-    net: m.netCashFlow,
-  }));
-  const hasLifeEvents = cashFlowData.some((m) => m.lifeEvents > 0);
+  /* ── Monthly-equivalent income & bills ──────────────────────────────── */
+  const payMonthly = (paySchedules ?? []).reduce(
+    (s, p) => s + p.amount * monthlyFactor(p.frequency),
+    0,
+  );
+  const activeBills = (bills ?? []).filter((b) => b.isActive);
+  const billsByCategory = activeBills.reduce<Record<string, number>>((acc, b) => {
+    acc[b.category] = (acc[b.category] ?? 0) + b.amount * monthlyFactor(b.frequency);
+    return acc;
+  }, {});
+  const billsMonthlyTotal = Object.values(billsByCategory).reduce((s, v) => s + v, 0);
+  // No historical variance exists, so the 3-month average equals the current
+  // monthly income − bills (identical for all 3 months). Acceptable per spec.
+  const avgMonthlyCashFlow = payMonthly - billsMonthlyTotal;
 
-  /* Upcoming life events: soonest by date, active only, in the future. */
-  const todayIso = format(today, "yyyy-MM-dd");
-  const upcomingLifeEvents = (lifeEvents ?? [])
-    .filter((e) => e.isActive)
-    .map((e) => ({ event: e, date: e.eventDate || e.startDate || "" }))
-    .filter((x) => x.date && x.date >= todayIso)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 4);
-  const avgIncome =
-    cashFlowData.length > 0
-      ? cashFlowData.reduce((s, m) => s + m.income, 0) / cashFlowData.length
-      : 0;
+  /* ── 6 Month View chart data ────────────────────────────────────────── */
+  // Categories largest-first so the biggest band renders at the bottom.
+  const categoryEntries = Object.entries(billsByCategory).sort((a, b) => b[1] - a[1]);
+  const chartCategories = categoryEntries.map(([cat]) => cat);
+  const remainingCashFlow = Math.max(0, payMonthly - billsMonthlyTotal);
+  const sixMonthData = Array.from({ length: 6 }, (_, i) => {
+    const label = format(addMonths(startOfMonth(today), i), "MMM");
+    const row: Record<string, number | string> = { month: label };
+    categoryEntries.forEach(([cat, amt]) => {
+      row[cat] = amt;
+    });
+    row.remaining = remainingCashFlow;
+    return row;
+  });
 
-  /* Trend estimates.
-     No historical snapshots exist, so net worth / liabilities changes are
-     estimated from monthly cash flow and debt payments (labeled "est.").
-     Income and cash flow are recurring (bills + pay schedules), so their
-     month-over-month change is flat unless the user edits them. */
-  const netWorth = summary?.netWorth ?? 0;
-  const cashFlow = summary?.monthlyCashFlow ?? 0;
-  const liabilities = summary?.totalLiabilities ?? 0;
-  const monthlyDebtPayments = (bills ?? [])
-    .filter((b) => b.isActive && b.category === "Debt Payments")
-    .reduce((s, b) => s + b.amount * monthlyFactor(b.frequency), 0);
+  /* ── Savings & investments ──────────────────────────────────────────── */
+  const SAVINGS_INVESTMENT_TYPES = ["savings", "investment", "retirement", "brokerage"];
+  const savingsAccounts = (accounts ?? []).filter((a) =>
+    SAVINGS_INVESTMENT_TYPES.includes(a.accountType),
+  );
+  const savingsTotal = savingsAccounts.reduce((s, a) => s + a.currentBalance, 0);
 
-  const prevNetWorth = netWorth - cashFlow;
-  const prevLiabilities = liabilities + monthlyDebtPayments;
-
-  /* Monthly snapshot */
-  const monthKey = format(today, "yyyy-MM");
+  /* ── Next paycheck ──────────────────────────────────────────────────── */
   const todayStr = format(today, "yyyy-MM-dd");
-  const monthTxs = (forecastTxs ?? []).filter((t) => t.transactionDate.startsWith(monthKey));
-  const billsPaidThisMonth = monthTxs.filter(
-    (t) => t.transactionType === "expense" && t.isActual
-  ).length;
-  const billsRemainingThisMonth = monthTxs.filter(
-    (t) => t.transactionType === "expense" && !t.isActual
-  ).length;
   const nextPaycheck = (forecastTxs ?? [])
     .filter(
       (t) =>
         t.transactionType === "income" &&
         t.transactionDate >= todayStr &&
         !t.isActual &&
-        !t.sourceBalanceSyncId
+        !t.sourceBalanceSyncId,
     )
     .sort((a, b) => a.transactionDate.localeCompare(b.transactionDate))[0];
   const daysUntilPaycheck = nextPaycheck
     ? differenceInCalendarDays(new Date(nextPaycheck.transactionDate + "T00:00:00"), today)
     : null;
 
-  /* Upcoming forecast rows with running balance (simplified version of the
-     forecast page anchor algorithm: latest balance-override row ≤ today wins,
-     otherwise start from settings starting balance minus past net). */
-  const startingBalance = userSettings?.startingBalance ?? 0;
-  const sortedTxs = [...(forecastTxs ?? [])].sort(
-    (a, b) =>
-      a.transactionDate.localeCompare(b.transactionDate) ||
-      (a.sortOrder ?? 0) - (b.sortOrder ?? 0) ||
-      a.id - b.id
-  );
-  const isOverride = (t: (typeof sortedTxs)[number]) => t.sourceBalanceSyncId != null;
-  const signedAmt = (t: (typeof sortedTxs)[number]) =>
-    t.status === "missed" ? 0 : t.transactionType === "income" ? t.amount : -t.amount;
-  let anchorIdx = -1;
-  for (let i = 0; i < sortedTxs.length; i++) {
-    if (isOverride(sortedTxs[i]) && sortedTxs[i].transactionDate <= todayStr) anchorIdx = i;
-  }
-  const balances: number[] = new Array(sortedTxs.length).fill(0);
-  if (anchorIdx >= 0) {
-    let run = sortedTxs[anchorIdx].amount;
-    balances[anchorIdx] = run;
-    for (let i = anchorIdx + 1; i < sortedTxs.length; i++) {
-      run = isOverride(sortedTxs[i]) ? sortedTxs[i].amount : run + signedAmt(sortedTxs[i]);
-      balances[i] = run;
-    }
-  } else {
-    // No override anchor: starting balance is as-of today, so rewind past net first.
-    const pastNet = sortedTxs
-      .filter((t) => t.transactionDate < todayStr && !isOverride(t))
-      .reduce((s, t) => s + signedAmt(t), 0);
-    let run = startingBalance - pastNet;
-    for (let i = 0; i < sortedTxs.length; i++) {
-      run = isOverride(sortedTxs[i]) ? sortedTxs[i].amount : run + signedAmt(sortedTxs[i]);
-      balances[i] = run;
-    }
-  }
-  const upcomingRows = sortedTxs
-    .map((tx, i) => ({ tx, balance: balances[i] }))
-    .filter(({ tx }) => tx.transactionDate >= todayStr && !isOverride(tx))
-    .slice(0, 8);
+  /* ── Cash Flow Trend (from monthly forecast) ────────────────────────── */
+  const cashFlowData = (monthlyForecast ?? []).slice(0, 6).map((m) => ({
+    month: m.label,
+    income: m.totalIncome,
+    expenses: m.totalExpenses,
+    net: m.netCashFlow,
+  }));
 
-  /* Accounts by type */
+  /* ── Connected accounts (by type) ───────────────────────────────────── */
   const accountsByType = (accounts ?? []).reduce<Record<string, number>>((acc, a) => {
     const key = a.accountType;
     const bal = a.isAsset ? a.currentBalance : -a.currentBalance;
@@ -341,8 +332,6 @@ export default function Dashboard() {
     return acc;
   }, {});
   const maxTypeAbs = Math.max(1, ...Object.values(accountsByType).map((v) => Math.abs(v)));
-  // #17: negative-balance types first (by absolute value, highest first),
-  // then positive types low → high.
   const sortedAccountTypes = Object.entries(accountsByType).sort(([, a], [, b]) => {
     const aNeg = a < 0;
     const bNeg = b < 0;
@@ -361,6 +350,7 @@ export default function Dashboard() {
     loan: "Loans",
     credit_card: "Credit Card",
     mortgage: "Mortgage",
+    brokerage: "Brokerage",
   };
   const typeLabel = (type: string) =>
     TYPE_LABELS[type] ??
@@ -369,10 +359,10 @@ export default function Dashboard() {
       .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
       .join(" ");
 
-  const urgencyColor = (days: number) =>
-    days <= 3 ? "#ef4444" : days <= 7 ? "#d97706" : "#9ca3af";
-  const urgencyFill = (days: number) =>
-    `${Math.max(8, Math.round(((30 - Math.min(days, 30)) / 30) * 100))}%`;
+  /* ── Trend estimates for Net Worth pill ─────────────────────────────── */
+  const netWorth = summary?.netWorth ?? 0;
+  const liabilities = summary?.totalLiabilities ?? 0;
+  const prevNetWorth = netWorth - avgMonthlyCashFlow;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -408,21 +398,21 @@ export default function Dashboard() {
         />
 
         <MetricCard
-          title="Monthly Cash Flow"
+          title="Average Monthly Cash Flow"
           icon={<Wallet className="h-4 w-4" />}
           accent="#059669"
-          loading={isLoadingSummary}
-          value={<FormatCurrency amount={cashFlow} compact showSign />}
-          valueClass={cashFlow >= 0 ? "text-emerald-600" : "text-destructive"}
+          loading={isLoadingSummary || isLoadingBills}
+          value={<FormatCurrency amount={avgMonthlyCashFlow} compact showSign />}
+          valueClass={avgMonthlyCashFlow >= 0 ? "text-emerald-600" : "text-destructive"}
           trend={<SteadyBadge />}
           subline={
             <span>
               <span className="text-emerald-600">
-                <FormatCurrency amount={summary?.monthlyIncome ?? 0} compact /> in
+                <FormatCurrency amount={payMonthly} compact /> in
               </span>
               <span className="text-muted-foreground"> / </span>
               <span className="text-orange-600">
-                <FormatCurrency amount={summary?.monthlyExpenses ?? 0} compact /> out
+                <FormatCurrency amount={billsMonthlyTotal} compact /> out
               </span>
             </span>
           }
@@ -430,280 +420,145 @@ export default function Dashboard() {
         />
 
         <MetricCard
-          title="Total Liabilities"
-          icon={<AlertCircle className="h-4 w-4" />}
-          accent="#d97706"
-          loading={isLoadingSummary}
-          value={<FormatCurrency amount={liabilities} compact />}
+          title="Savings & Investments"
+          icon={<PiggyBank className="h-4 w-4" />}
+          accent="#0F6E56"
+          loading={isLoadingAccounts}
+          value={<FormatCurrency amount={savingsTotal} compact />}
           trend={
-            <TrendBadge
-              current={liabilities}
-              previous={monthlyDebtPayments > 0 ? prevLiabilities : null}
-              positiveIsGood={false}
-              estimated
-            />
+            <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+              <Minus className="h-3 w-3" />
+              <span>{savingsAccounts.length} account{savingsAccounts.length === 1 ? "" : "s"}</span>
+            </p>
           }
-          subline={
-            <span>
-              <span className="text-emerald-600">
-                <FormatCurrency amount={summary?.totalAssets ?? 0} compact />
-              </span>
-              {" total assets"}
-            </span>
-          }
-          onClick={() => setLiabilitiesOpen(true)}
+          subline={<span>Savings, investment &amp; retirement</span>}
+          onClick={() => setSavingsOpen(true)}
         />
 
         <MetricCard
-          title="Bills This Month"
+          title="Bills Snapshot"
           icon={<CalendarHeart className="h-4 w-4" />}
           accent="var(--color-navy)"
-          loading={isLoadingTxs}
-          value={billsPaidThisMonth + billsRemainingThisMonth}
+          loading={isLoadingBills}
+          value={<FormatCurrency amount={avgMonthlyCashFlow} compact showSign />}
+          valueClass={avgMonthlyCashFlow >= 0 ? "text-emerald-600" : "text-destructive"}
           trend={
             <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
-              <span>{billsPaidThisMonth} paid</span>
+              <span>
+                {daysUntilPaycheck === null
+                  ? "No upcoming paycheck"
+                  : daysUntilPaycheck === 0
+                    ? "Paycheck today"
+                    : `Next paycheck in ${daysUntilPaycheck}d`}
+              </span>
             </p>
           }
           subline={
             <span>
-              <span className="text-orange-600">{billsRemainingThisMonth}</span>
-              {" remaining"}
+              <span className="text-emerald-600">
+                <FormatCurrency amount={payMonthly} compact />
+              </span>
+              {" in / "}
+              <span className="text-orange-600">
+                <FormatCurrency amount={billsMonthlyTotal} compact />
+              </span>
+              {" out"}
             </span>
           }
-          onClick={() => navigate("/bills")}
+          onClick={() => setBillsSnapshotOpen(true)}
         />
       </div>
 
-      {/* Row 2 */}
+      {/* Row 2: 6 Month View + Retirement Progress */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Upcoming Forecast */}
-        <div className="col-span-1 lg:col-span-2 flex flex-col gap-6">
-          <Card className={`${cardChrome} flex-1`}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-semibold tracking-tight">Upcoming Forecast</CardTitle>
-                  <CardDescription>Next 8 transactions</CardDescription>
-                </div>
-                <Link
-                  href="/forecast"
-                  className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
-                >
-                  View ledger <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {isLoadingTxs ? (
-                <div className="space-y-4">
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                    <div key={i} className="flex justify-between items-center">
-                      <div className="space-y-1.5">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-20" />
-                      </div>
-                      <Skeleton className="h-4 w-16" />
-                    </div>
-                  ))}
-                </div>
-              ) : upcomingRows.length > 0 ? (
-                <div className="space-y-0.5 divide-y divide-border">
-                  {upcomingRows.map(({ tx, balance }) => {
-                    const isToday = tx.transactionDate === todayStr;
-                    return (
-                      <div
-                        key={tx.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => navigate(`/forecast?txdate=${tx.transactionDate}&txdesc=${tx.description}`)}
-                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-2.5 px-2 -mx-2 cursor-pointer hover:bg-muted/40 transition-colors rounded-md ${
-                          isToday ? "border-l-4 border-l-amber-500 bg-amber-500/5" : ""
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="text-xs text-muted-foreground w-12 shrink-0">
-                            {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d")}
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium flex items-center gap-1.5">
-                              {isToday && <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">TODAY</span>}
-                              {tx.description}
-                            </div>
-                            <div className="text-xs text-muted-foreground capitalize">
-                              {tx.transactionType}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-0.5 justify-between">
-                          <div className={`text-sm font-mono tabular-nums font-medium ${tx.transactionType === "income" ? "text-emerald-600" : ""}`}>
-                            {tx.transactionType === "expense" ? "−" : "+"}<FormatCurrency amount={tx.amount} />
-                          </div>
-                          <div className={`text-xs font-mono tabular-nums ${balance < 0 ? "text-destructive font-bold" : "text-muted-foreground"}`}>
-                            {isToday ? "Bal: " : ""}<FormatCurrency amount={balance} />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="py-6 flex items-center justify-center text-muted-foreground text-sm">
-                  No upcoming transactions.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Bills Due Soon */}
-        <div className="flex flex-col gap-6">
-          <Card className={`${cardChrome} flex-1`}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-semibold tracking-tight">Bills Due Soon</CardTitle>
-                <Link
-                  href="/bills"
-                  className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
-                >
-                  All bills <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-              <CardDescription>Next 30 days</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoadingBills ? (
-                <div className="space-y-4">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="flex justify-between items-center">
-                      <div className="space-y-1.5">
-                        <Skeleton className="h-3.5 w-24" />
-                        <Skeleton className="h-3 w-16" />
-                      </div>
-                      <Skeleton className="h-3.5 w-14" />
-                    </div>
-                  ))}
-                </div>
-              ) : upcomingBills?.length ? (
-                <div className="space-y-1">
-                  {upcomingBills.slice(0, 4).map((bill) => (
-                    <div
-                      key={bill.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate(billForecastHref(bill))}
-                      onKeyDown={(e) => e.key === "Enter" && navigate(billForecastHref(bill))}
-                      className="flex items-start justify-between gap-3 rounded-md cursor-pointer hover:bg-muted/40 transition-colors py-2 px-1.5 -mx-1.5"
-                    >
-                      <span
-                        className="h-2 w-2 rounded-full shrink-0 mt-1.5"
-                        style={{ backgroundColor: urgencyColor(bill.daysUntilDue) }}
-                        title={`${bill.category} — due in ${bill.daysUntilDue}d`}
-                      />
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <span className="text-sm font-medium truncate flex items-center gap-1.5">
-                          <span
-                            className="shrink-0"
-                            style={{ fontSize: "16px", lineHeight: 1 }}
-                            aria-label={bill.category}
-                          >
-                            {getCategoryEmoji(bill.category, bill.billName)}
-                          </span>
-                          <span className="truncate">{bill.billName}</span>
-                        </span>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                          {bill.daysUntilDue === 0 ? (
-                            <span className="text-destructive font-medium">Due today</span>
-                          ) : bill.daysUntilDue === 1 ? (
-                            <span className="text-orange-600 font-medium">Due tomorrow</span>
-                          ) : (
-                            <span className={bill.daysUntilDue <= 7 ? "text-orange-600" : ""}>
-                              Due in {bill.daysUntilDue}d
-                            </span>
-                          )}
-                          <span className="opacity-40">·</span>
-                          <span>{format(new Date(bill.dueDate + "T00:00:00"), "MMM d")}</span>
-                        </span>
-                        <span className="mt-1.5 block h-1 w-full max-w-[120px] rounded-full bg-muted overflow-hidden">
-                          <span
-                            className="block h-full rounded-full"
-                            style={{
-                              width: urgencyFill(bill.daysUntilDue),
-                              backgroundColor: urgencyColor(bill.daysUntilDue),
-                            }}
-                          />
-                        </span>
-                      </div>
-                      <span className="text-sm font-mono tabular-nums font-medium shrink-0">
-                        <FormatCurrency amount={bill.amount} />
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-6 flex items-center justify-center text-muted-foreground text-sm">
-                  No bills due soon.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Row 3 */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Monthly Snapshot */}
-        <Card className={cardChrome}>
+        {/* 6 Month View */}
+        <Card className={`${cardChrome} col-span-1 lg:col-span-2`}>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold tracking-tight">Monthly Snapshot</CardTitle>
-            <CardDescription>{format(today, "MMMM yyyy")}</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg font-semibold tracking-tight">6 Month View</CardTitle>
+                <CardDescription>How your income covers your bills</CardDescription>
+              </div>
+              <Link
+                href="/budget"
+                className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
+              >
+                View budget <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
           </CardHeader>
           <CardContent>
-            {isLoadingTxs || isLoadingBills ? (
-              <div className="grid grid-cols-2 gap-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} className="h-16 w-full" />
-                ))}
+            {isLoadingBills ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : payMonthly === 0 && chartCategories.length === 0 ? (
+              <div className="py-16 flex items-center justify-center text-muted-foreground text-sm">
+                Add pay schedules and bills to see your 6 month view.
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-lg border border-border p-4 text-center">
-                  <p className="text-2xl font-bold font-mono tabular-nums text-emerald-600">
-                    {billsPaidThisMonth}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider font-medium">
-                    Bills Paid
-                  </p>
+              <>
+                <div className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={sixMonthData} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
+                      <XAxis
+                        dataKey="month"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fontSize: 12 }}
+                        className="text-muted-foreground"
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(v: number) => fmt(v)}
+                        width={64}
+                        className="text-muted-foreground"
+                      />
+                      <Tooltip
+                        content={(props) => (
+                          <SixMonthTooltip {...(props as any)} categories={chartCategories} />
+                        )}
+                      />
+                      {chartCategories.map((cat) => (
+                        <Area
+                          key={cat}
+                          type="monotone"
+                          dataKey={cat}
+                          stackId="1"
+                          stroke={categoryMeta(cat).color}
+                          fill={categoryMeta(cat).color}
+                          fillOpacity={0.85}
+                        />
+                      ))}
+                      <Area
+                        type="monotone"
+                        dataKey="remaining"
+                        stackId="1"
+                        stroke="#059669"
+                        fill="#059669"
+                        fillOpacity={0.85}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
-                <div className="rounded-lg border border-border p-4 text-center">
-                  <p className="text-2xl font-bold font-mono tabular-nums text-orange-600">
-                    {billsRemainingThisMonth}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider font-medium">
-                    Bills Remaining
-                  </p>
+                {/* Legend */}
+                <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5">
+                  {chartCategories.map((cat) => (
+                    <span key={cat} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span
+                        className="h-2.5 w-2.5 rounded-sm shrink-0"
+                        style={{ backgroundColor: categoryMeta(cat).color }}
+                      />
+                      {categoryMeta(cat).label}
+                    </span>
+                  ))}
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: "#059669" }} />
+                    Cash flow
+                  </span>
                 </div>
-                <div className="rounded-lg border border-border p-4 text-center">
-                  <p className="text-2xl font-bold font-mono tabular-nums text-primary">
-                    {daysUntilPaycheck === null
-                      ? "—"
-                      : daysUntilPaycheck === 0
-                        ? "Today"
-                        : daysUntilPaycheck}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider font-medium">
-                    Days To Paycheck
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border p-4 text-center">
-                  <p className="text-2xl font-bold font-mono tabular-nums text-destructive">
-                    {upcomingBills?.filter(b => b.daysUntilDue <= 3).length ?? 0}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider font-medium">
-                    Critical Bills
-                  </p>
-                </div>
-              </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -779,6 +634,137 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* Row 3: Cash Flow Trend + Connected Accounts */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Cash Flow Trend */}
+        <Card className={cardChrome}>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg font-semibold tracking-tight">Cash Flow Trend</CardTitle>
+                <CardDescription>Income vs. expenses</CardDescription>
+              </div>
+              <Link
+                href="/forecast"
+                className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
+              >
+                View ledger <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoadingForecast ? (
+              <Skeleton className="h-[240px] w-full" />
+            ) : cashFlowData.length > 0 ? (
+              <div className="h-[240px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={cashFlowData} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
+                    <XAxis
+                      dataKey="month"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 12 }}
+                      className="text-muted-foreground"
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(v: number) => fmt(v)}
+                      width={64}
+                      className="text-muted-foreground"
+                    />
+                    <Tooltip
+                      formatter={(v: number, name: string) => [fmt(v), name]}
+                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                    />
+                    <Bar dataKey="income" name="Income" fill="#059669" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="expenses" name="Expenses" fill="#dc2626" radius={[3, 3, 0, 0]} />
+                    <Area
+                      type="monotone"
+                      dataKey="net"
+                      name="Net"
+                      stroke="var(--color-navy)"
+                      fill="var(--color-navy)"
+                      fillOpacity={0.1}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="py-16 flex items-center justify-center text-muted-foreground text-sm">
+                No forecast data yet.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Connected Accounts */}
+        <Card className={cardChrome}>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-semibold tracking-tight">Connected Accounts</CardTitle>
+              <Link
+                href="/accounts"
+                className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
+              >
+                All accounts <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            <CardDescription>By account type</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingAccounts ? (
+              <div className="space-y-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex justify-between items-center">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                ))}
+              </div>
+            ) : sortedAccountTypes.length > 0 ? (
+              <div className="space-y-3">
+                {sortedAccountTypes.map(([type, bal]) => {
+                  const meta = accountTypeMeta(type);
+                  const Icon = meta?.icon;
+                  const color = meta?.color ?? "#888780";
+                  const width = `${Math.max(4, Math.round((Math.abs(bal) / maxTypeAbs) * 100))}%`;
+                  return (
+                    <div key={type}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="flex items-center gap-2 text-sm font-medium">
+                          {Icon && <Icon className="h-4 w-4 shrink-0" style={{ color }} strokeWidth={1.5} />}
+                          {typeLabel(type)}
+                        </span>
+                        <span
+                          className={`text-sm font-mono tabular-nums font-medium ${
+                            bal < 0 ? "text-destructive" : ""
+                          }`}
+                        >
+                          <FormatCurrency amount={bal} />
+                        </span>
+                      </div>
+                      <span className="block h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                        <span
+                          className="block h-full rounded-full"
+                          style={{ width, backgroundColor: bal < 0 ? "#dc2626" : color }}
+                        />
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-6 flex items-center justify-center text-muted-foreground text-sm">
+                No accounts connected.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <NetWorthModal
         open={netWorthOpen}
         onOpenChange={setNetWorthOpen}
@@ -792,11 +778,18 @@ export default function Dashboard() {
         paySchedules={paySchedules ?? []}
         bills={bills ?? []}
       />
-      <LiabilitiesModal
-        open={liabilitiesOpen}
-        onOpenChange={setLiabilitiesOpen}
+      <SavingsInvestmentsModal
+        open={savingsOpen}
+        onOpenChange={setSavingsOpen}
         accounts={accounts ?? []}
-        loans={loans ?? []}
+      />
+      <BillsSnapshotModal
+        open={billsSnapshotOpen}
+        onOpenChange={setBillsSnapshotOpen}
+        takeHomePay={payMonthly}
+        totalBills={billsMonthlyTotal}
+        netCashFlow={avgMonthlyCashFlow}
+        daysUntilPaycheck={daysUntilPaycheck}
       />
     </div>
   );
