@@ -87,7 +87,11 @@ export function Shell({ children }: ShellProps) {
           <SidebarContent onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div
+        className={`flex flex-1 flex-col overflow-hidden transition-[margin] duration-200 ${
+          collapsed ? "md:ml-0" : "md:ml-[calc(var(--sidebar-width)+10px)]"
+        }`}
+      >
         {/* Mobile hamburger — opens the nav sheet */}
         <Button
           variant="ghost"

@@ -236,14 +236,24 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
 export function Sidebar({ collapsed }: { collapsed: boolean }) {
   return (
     <div
-      className="hidden md:flex shrink-0 overflow-hidden rounded-[14px] transition-[width,margin] duration-200"
+      className="hidden md:flex overflow-hidden rounded-[14px] transition-[width,margin] duration-200"
       style={
         collapsed
-          ? { width: 0, margin: "10px 0", height: "calc(100vh - 20px)" }
+          ? {
+              width: 0,
+              margin: "10px 0",
+              height: "calc(100vh - 20px)",
+              position: "fixed",
+              top: 0,
+              left: 0,
+            }
           : {
               width: "var(--sidebar-width)",
               margin: "10px 0 10px 10px",
               height: "calc(100vh - 20px)",
+              position: "fixed",
+              top: 0,
+              left: 0,
             }
       }
     >

@@ -695,8 +695,8 @@ export default function Dashboard() {
                       formatter={(v: number, name: string) => [fmt(v), name]}
                       contentStyle={{ fontSize: 12, borderRadius: 8 }}
                     />
-                    <Bar dataKey="income" name="Income" fill="#059669" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="expenses" name="Expenses" fill="#dc2626" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="income" name="Income" fill={softenColor("#059669")} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="expenses" name="Expenses" fill={softenColor("#dc2626")} radius={[3, 3, 0, 0]} />
                     <Area
                       type="monotone"
                       dataKey="net"
