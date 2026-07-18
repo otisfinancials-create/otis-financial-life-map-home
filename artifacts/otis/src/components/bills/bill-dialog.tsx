@@ -88,6 +88,7 @@ const billSchema = z
         message: "Amount is limited to 9 digits before the decimal point and 2 decimal places.",
       }),
     frequency: z.string().min(1, { message: "Please select a frequency." }),
+    amountType: z.enum(["positive", "negative"]).default("negative"),
     dueDay: z.preprocess(
       (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
       z.number().int().min(1).max(31).optional(),
@@ -259,6 +260,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       category: bill?.category || "",
       amount: bill?.amount || 0,
       frequency: bill?.frequency || "monthly",
+      amountType: (bill?.amountType as "positive" | "negative") || "negative",
       dueDay: bill?.dueDay,
       paymentMethod: parsedMethod,
       creditCardName: parsedCard,
@@ -278,6 +280,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       category: bill?.category || "",
       amount: bill?.amount || 0,
       frequency: bill?.frequency || "monthly",
+      amountType: (bill?.amountType as "positive" | "negative") || "negative",
       dueDay: bill?.dueDay,
       paymentMethod: parsed.paymentMethod,
       creditCardName: parsed.creditCardName,
@@ -329,6 +332,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       category: data.category,
       amount: data.amount,
       frequency: data.frequency,
+      amountType: data.amountType,
       dueDay: dueDay ?? 1,
       paymentMethod: buildPaymentMethod(data),
       companyUrl: normalizeCompanyUrl(data.companyUrl),
@@ -465,6 +469,31 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
                         Estimate — actual amount may vary
                       </FormDescription>
                     )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="amountType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Amount Type</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="negative">Negative (money out)</SelectItem>
+                        <SelectItem value="positive">Positive (money in)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription className="text-[10px]">
+                      Positive amounts add to your cash flow (e.g. a recurring reimbursement)
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

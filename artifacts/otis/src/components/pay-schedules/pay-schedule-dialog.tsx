@@ -48,12 +48,23 @@ const FREQUENCIES = [
   { value: "monthly", label: "Monthly" },
 ];
 
+const MAX_NAME = 100;
+const MAX_NOTES = 100;
+
 const schema = z.object({
-  employerName: z.string().min(2, { message: "Employer name must be at least 2 characters." }),
-  amount: z.coerce.number().positive({ message: "Amount must be greater than 0." }),
+  employerName: z
+    .string()
+    .min(2, { message: "Employer name must be at least 2 characters." })
+    .max(MAX_NAME, { message: `Name must be ${MAX_NAME} characters or fewer.` }),
+  amount: z.coerce
+    .number({ message: "Amount must be a number." })
+    .positive({ message: "Amount must be greater than 0." })
+    .refine((v) => /^\d{1,9}(\.\d{1,2})?$/.test(String(v)), {
+      message: "Amount is limited to 9 digits before the decimal point and 2 decimal places.",
+    }),
   frequency: z.string().min(1, { message: "Please select a frequency." }),
   nextPayDate: z.string().min(1, { message: "Please enter the next pay date." }),
-  notes: z.string().optional(),
+  notes: z.string().max(MAX_NOTES, { message: `Notes must be ${MAX_NOTES} characters or fewer.` }).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -163,7 +174,7 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
                 <FormItem>
                   <FormLabel>Employer / Income Source</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Acme Corp, Freelance Clients" {...field} />
+                    <Input placeholder="e.g. Acme Corp, Freelance Clients" maxLength={MAX_NAME} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -233,9 +244,15 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
                       placeholder="e.g. base salary only, bonuses separate..."
                       className="resize-none"
                       rows={2}
+                      maxLength={MAX_NOTES}
                       {...field}
                     />
                   </FormControl>
+                  <div className="flex justify-end">
+                    <span className={`text-[10px] font-mono ${(field.value?.length ?? 0) > MAX_NOTES ? "text-destructive" : "text-muted-foreground"}`}>
+                      {field.value?.length ?? 0}/{MAX_NOTES}
+                    </span>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}

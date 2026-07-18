@@ -22,12 +22,13 @@ function normalizeTimingFields(row: {
   startDate?: string | null;
   endDate?: string | null;
   frequency?: string | null;
-}): { eventDate: string | null; startDate: string | null; endDate: string | null; frequency: string | null } {
+  customIntervalDays?: number | null;
+}): { eventDate: string | null; startDate: string | null; endDate: string | null; frequency: string | null; customIntervalDays: number | null } {
   if (row.timingType === "one_time") {
-    return { eventDate: row.eventDate ?? null, startDate: null, endDate: null, frequency: null };
+    return { eventDate: row.eventDate ?? null, startDate: null, endDate: null, frequency: null, customIntervalDays: null };
   }
   if (row.timingType === "spread") {
-    return { eventDate: null, startDate: row.startDate ?? null, endDate: row.endDate ?? null, frequency: null };
+    return { eventDate: null, startDate: row.startDate ?? null, endDate: row.endDate ?? null, frequency: null, customIntervalDays: null };
   }
   // recurring
   return {
@@ -35,6 +36,7 @@ function normalizeTimingFields(row: {
     startDate: row.startDate ?? null,
     endDate: row.endDate ?? null,
     frequency: row.frequency ?? null,
+    customIntervalDays: row.frequency === "custom" ? row.customIntervalDays ?? null : null,
   };
 }
 

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, boolean, timestamp, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, boolean, timestamp, date, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -14,6 +14,7 @@ export const lifeEventsTable = pgTable("life_events", {
   startDate: date("start_date", { mode: "string" }),
   endDate: date("end_date", { mode: "string" }),
   frequency: text("frequency"),
+  customIntervalDays: integer("custom_interval_days"),
   priority: text("priority").notNull().default("planning_to"),
   notes: text("notes"),
   isActive: boolean("is_active").notNull().default(true),

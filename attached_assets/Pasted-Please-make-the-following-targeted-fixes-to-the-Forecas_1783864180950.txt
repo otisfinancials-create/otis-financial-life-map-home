@@ -1,0 +1,76 @@
+Please make the following targeted fixes to the Forecast ledger design. Do not change any data logic — visual fixes only.
+1. Category icons — Replace the current generic gray circle icons with meaningful Tabler icons that match each category. Use these specific mappings:
+Income/Salary: ti-briefcase in color #2D9B6F
+Housing/Mortgage: ti-home in color #185FA5
+Insurance: ti-shield in color #D85A30
+Subscriptions: ti-device-tv in color #534AB7
+Auto/Gas/Car: ti-car in color #BA7517
+Utilities/Electric/Water: ti-bolt in color #0F6E56
+Food: ti-tools-kitchen in color #D85A30
+Vacation/Travel: ti-plane in color #1D9E75
+Medical: ti-heart-rate-monitor in color #993556
+Savings: ti-pig-money in color #E24B4A
+Life Events: ti-star in color #1D9E75
+Balance Update: ti-refresh in color #185FA5
+Manual/Other: ti-pencil in color #888780
+ Make the icons 16px, vertically centered in their cell.
+2. Category badge colors — Give each category badge a colored background matching its category color family instead of the current plain gray. Use these background and text color combinations:
+Income: background #E1F5EE, text #085041
+Housing: background #E6F1FB, text #0C447C
+Insurance: background #FAECE7, text #712B13
+Subscriptions: background #EEEDFE, text #3C3489
+Auto: background #FAEEDA, text #633806
+Utilities: background #E1F5EE, text #085041
+Food: background #FAECE7, text #712B13
+Vacation: background #E1F5EE, text #085041
+Savings: background #FCEBEB, text #791F1F
+Medical: background #FBEAF0, text #72243E
+Other: background #F1EFE8, text #444441
+Balance Update: background #E6F1FB, text #0C447C
+ Badge style: font-size 10px, font-weight 500, padding 2px 8px, border-radius 10px.
+3. Balance column — Increase the running balance font size to 14px and font-weight to 600. Color: #0F6E56 green when balance is above $1,000, default #0D2B45 when between $0-$1,000, #A32D2D red when negative.
+4. Negative balance row — When any row has a negative running balance, apply a light red background tint (#FFF5F5) to the ENTIRE row, not just the balance cell. On hover the row should show #FFECEC.
+5. Row height and breathing room — Increase cell padding to 11px top and bottom (currently feels too tight). Minimum row height 44px.
+6. Past rows opacity — All rows with a date before today should render at opacity 0.72 to visually distinguish history from future forecast.
+7. Description column — Make the description text font-size 13px and font-weight 500 (currently too light). Ensure the description column takes up the full remaining width — it should be the widest column by far using 1fr.
+8. Otis insight row — After any month section that contains a negative balance row, insert an Otis insight row with:
+Layout: flex row, 28px circular #0D2B45 avatar with 🐾 on the left
+Background: linear-gradient(to right, #EDFAF4, #ffffff)
+Border top and bottom: 1px solid #E1F5EE
+Message dynamically generated based on the issue — for negative balance: "Heads up — your [bill name] on [date] pushes your balance to -$[amount]. Consider [specific suggestion based on next paycheck date]."
+Below message: small teal link "Ask Otis about this →" that opens the Otis chat pre-filled with the issue
+9. Milestone row — When a loan's final payment appears in the ledger (balance reaches $0), automatically insert a milestone celebration row below it:
+Background: #FFFBEB, borders: 1px solid #FDE68A
+Content: 🎉 emoji + bold text "[Loan name] fully paid off!" + lighter text "You've freed up $[monthly payment]/month going forward."
+10. Category legend — Add a thin legend bar directly above the sticky footer totals showing colored dots and category names for every category currently visible in the ledger. Update dynamically when the category filter changes.
+11. Sticky footer — Verify the 4-column totals footer (Monthly income | Monthly bills | Net this period | Current balance) is showing correct values that match the currently selected time range. The net value should be green when positive, red when negative.
+12. Controls bar layout — Move the "Update Current Balance" and "Regenerate" buttons to be inline with the other controls in a single bar, not on a second line below. The full controls bar should be one row: [time pills] [view pills] [category dropdown] [spacer] [search] [export] [add entry] [update balance]
+
+13. Toggle to show/hide prior 30 days history
+Add a toggle button in the controls bar labeled "Hide history" (when history is showing) and "Show history" (when hidden). Place it after the time range pills.
+When "Hide history" is clicked:
+All rows with a date before today are hidden
+The TODAY divider bar is also hidden
+The first visible row becomes the current balance row followed immediately by all future forecast rows
+The toggle label changes to "Show history"
+A small indicator appears: "Showing from today · [X] past rows hidden"
+When "Show history" is clicked:
+Past 30 days of rows reappear with their muted opacity styling
+TODAY divider reappears
+Toggle label returns to "Hide history"
+Default state: history visible (toggle shows "Hide history")
+Style the toggle as a pill button matching the other control pills — when history is hidden use the navy active style (#0D2B45, white text) so users know it's an active filter.
+14. Replace monthly summary header rows with clean centered month dividers
+Remove the current month header rows that show "In $X · Out $X projected" and the net pill badge — these are confusing and duplicate the footer totals.
+Replace them with a simple centered divider row styled like this:
+Full width row with a horizontal line on each side and the month name centered in the middle
+Example: ────────────── August 2026 ──────────────
+Month label: font-size 12px, font-weight 600, color #0D2B45, letter-spacing 0.04em
+The lines: 1px solid #E2E8F0, extending from the left and right edges to meet the month label
+Background: transparent (inherits page background)
+Padding: 10px 18px
+No background fill, no border box around it — just the clean divider line with centered text
+This should feel like a chapter break in a book — minimal, clean, and clearly marking the transition between months without adding visual noise
+
+After all fixes: verify column alignment is perfect by checking the header labels align exactly with the data below them. Push to GitHub when complete
+

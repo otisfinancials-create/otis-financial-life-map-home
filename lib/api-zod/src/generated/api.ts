@@ -42,6 +42,7 @@ export const ListBillsResponseItem = zod.object({
   "amount": zod.number(),
   "frequency": zod.string(),
   "dueDay": zod.number(),
+  "amountType": zod.enum(['positive', 'negative']),
   "paymentMethod": zod.string().nullish(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
@@ -64,6 +65,7 @@ export const CreateBillBody = zod.object({
   "amount": zod.number(),
   "frequency": zod.string(),
   "dueDay": zod.number(),
+  "amountType": zod.enum(['positive', 'negative']).optional(),
   "paymentMethod": zod.string().optional(),
   "startDate": zod.string().optional(),
   "endDate": zod.string().optional(),
@@ -80,6 +82,7 @@ export const CreateBillResponse = zod.object({
   "amount": zod.number(),
   "frequency": zod.string(),
   "dueDay": zod.number(),
+  "amountType": zod.enum(['positive', 'negative']),
   "paymentMethod": zod.string().nullish(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
@@ -121,6 +124,7 @@ export const GetBillResponse = zod.object({
   "amount": zod.number(),
   "frequency": zod.string(),
   "dueDay": zod.number(),
+  "amountType": zod.enum(['positive', 'negative']),
   "paymentMethod": zod.string().nullish(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
@@ -146,6 +150,7 @@ export const UpdateBillBody = zod.object({
   "amount": zod.number().optional(),
   "frequency": zod.string().optional(),
   "dueDay": zod.number().optional(),
+  "amountType": zod.enum(['positive', 'negative']).optional(),
   "paymentMethod": zod.string().optional(),
   "startDate": zod.string().optional(),
   "endDate": zod.string().nullish(),
@@ -162,6 +167,7 @@ export const UpdateBillResponse = zod.object({
   "amount": zod.number(),
   "frequency": zod.string(),
   "dueDay": zod.number(),
+  "amountType": zod.enum(['positive', 'negative']),
   "paymentMethod": zod.string().nullish(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
@@ -413,6 +419,7 @@ export const ListAccountsResponseItem = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "monthlyContribution": zod.number(),
+  "savingsGoal": zod.number().nullish(),
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),
@@ -446,6 +453,7 @@ export const CreateAccountBody = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "monthlyContribution": zod.number().optional(),
+  "savingsGoal": zod.number().nullish(),
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().regex(createAccountBodyAccountNumberLast4RegExp).nullish(),
@@ -470,6 +478,7 @@ export const CreateAccountResponse = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "monthlyContribution": zod.number(),
+  "savingsGoal": zod.number().nullish(),
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),
@@ -500,6 +509,17 @@ export const GetAccountsSummaryResponse = zod.object({
 
 
 /**
+ * @summary Savings & investments totals with month-over-month change
+ */
+export const GetSavingsSummaryResponse = zod.object({
+  "total": zod.number(),
+  "accountCount": zod.number(),
+  "priorMonthTotal": zod.number().nullable(),
+  "momChange": zod.number().nullable()
+})
+
+
+/**
  * @summary Get an account by ID
  */
 export const GetAccountParams = zod.object({
@@ -521,6 +541,7 @@ export const GetAccountResponse = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "monthlyContribution": zod.number(),
+  "savingsGoal": zod.number().nullish(),
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),
@@ -557,6 +578,7 @@ export const UpdateAccountBody = zod.object({
   "institutionName": zod.string().optional(),
   "currentBalance": zod.number().optional(),
   "monthlyContribution": zod.number().optional(),
+  "savingsGoal": zod.number().nullish(),
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean().optional(),
   "accountNumberLast4": zod.string().regex(updateAccountBodyAccountNumberLast4RegExp).nullish(),
@@ -581,6 +603,7 @@ export const UpdateAccountResponse = zod.object({
   "institutionName": zod.string(),
   "currentBalance": zod.number(),
   "monthlyContribution": zod.number(),
+  "savingsGoal": zod.number().nullish(),
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
   "accountNumberLast4": zod.string().nullish(),

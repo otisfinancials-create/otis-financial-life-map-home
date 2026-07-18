@@ -5,6 +5,7 @@
  * Otis Financial Life Map API
  * OpenAPI spec version: 0.1.0
  */
+import type { BillUpdateAmountType } from './billUpdateAmountType';
 
 export interface BillUpdate {
   billName?: string;
@@ -12,9 +13,11 @@ export interface BillUpdate {
   amount?: number;
   frequency?: string;
   dueDay?: number;
+  amountType?: BillUpdateAmountType;
   paymentMethod?: string;
   startDate?: string;
-  endDate?: string;
+  /** @nullable */
+  endDate?: string | null;
   companyUrl?: string;
   isVariable?: boolean;
   isActive?: boolean;

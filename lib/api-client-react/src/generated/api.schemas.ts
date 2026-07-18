@@ -21,6 +21,14 @@ export interface DashboardSummary {
   billsDueThisWeek: number;
 }
 
+export type BillAmountType = typeof BillAmountType[keyof typeof BillAmountType];
+
+
+export const BillAmountType = {
+  positive: 'positive',
+  negative: 'negative',
+} as const;
+
 export interface Bill {
   id: number;
   billName: string;
@@ -28,6 +36,7 @@ export interface Bill {
   amount: number;
   frequency: string;
   dueDay: number;
+  amountType: BillAmountType;
   /** @nullable */
   paymentMethod?: string | null;
   /** @nullable */
@@ -44,12 +53,21 @@ export interface Bill {
   updatedAt: string;
 }
 
+export type BillInputAmountType = typeof BillInputAmountType[keyof typeof BillInputAmountType];
+
+
+export const BillInputAmountType = {
+  positive: 'positive',
+  negative: 'negative',
+} as const;
+
 export interface BillInput {
   billName: string;
   category: string;
   amount: number;
   frequency: string;
   dueDay: number;
+  amountType?: BillInputAmountType;
   paymentMethod?: string;
   startDate?: string;
   endDate?: string;
@@ -59,12 +77,21 @@ export interface BillInput {
   notes?: string;
 }
 
+export type BillUpdateAmountType = typeof BillUpdateAmountType[keyof typeof BillUpdateAmountType];
+
+
+export const BillUpdateAmountType = {
+  positive: 'positive',
+  negative: 'negative',
+} as const;
+
 export interface BillUpdate {
   billName?: string;
   category?: string;
   amount?: number;
   frequency?: string;
   dueDay?: number;
+  amountType?: BillUpdateAmountType;
   paymentMethod?: string;
   startDate?: string;
   /** @nullable */
@@ -201,6 +228,8 @@ export interface Account {
   currentBalance: number;
   monthlyContribution: number;
   /** @nullable */
+  savingsGoal?: number | null;
+  /** @nullable */
   retirementSubtype?: AccountRetirementSubtype;
   isAsset: boolean;
   /** @nullable */
@@ -254,6 +283,8 @@ export interface AccountInput {
   currentBalance: number;
   monthlyContribution?: number;
   /** @nullable */
+  savingsGoal?: number | null;
+  /** @nullable */
   retirementSubtype?: AccountInputRetirementSubtype;
   isAsset: boolean;
   /**
@@ -304,6 +335,8 @@ export interface AccountUpdate {
   currentBalance?: number;
   monthlyContribution?: number;
   /** @nullable */
+  savingsGoal?: number | null;
+  /** @nullable */
   retirementSubtype?: AccountUpdateRetirementSubtype;
   isAsset?: boolean;
   /**
@@ -331,6 +364,15 @@ export interface AccountUpdate {
      * @nullable
      */
   ccPaymentDueDate?: number | null;
+}
+
+export interface SavingsSummary {
+  total: number;
+  accountCount: number;
+  /** @nullable */
+  priorMonthTotal: number | null;
+  /** @nullable */
+  momChange: number | null;
 }
 
 export interface AccountTypeGroup {

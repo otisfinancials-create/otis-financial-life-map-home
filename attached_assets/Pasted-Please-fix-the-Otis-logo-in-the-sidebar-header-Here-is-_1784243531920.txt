@@ -1,0 +1,63 @@
+Please fix the Otis logo in the sidebar header. Here is exactly what it must look like:
+- The word is "Otis" — capital O, lowercase tis
+- Font: Georgia, bold serif — NOT rounded sans-serif
+- Color: navy #0D2B45
+- Font size: 36px in the sidebar
+- The dot on the lowercase 'i' must be hidden
+- A Carolina blue #56A0D3 paw print sits exactly where the 'i' dot would be
+THE PAW PRINT MUST LOOK LIKE A REAL DOG PAW. It has five parts:
+1. One large central pad (the main oval at the bottom)
+2. Four smaller toe pads arranged in an arc above the central pad
+Each pad is a rounded ellipse. The overall shape is immediately recognizable as a dog or cat paw print. It must NOT look like a tiny icon, a blob, or random dots. If it does not look like a paw print, try again.
+Use this exact SVG for the paw — it is tested and correct:
+html<div class="otis-logo">
+  <span class="logo-text">Otis</span>
+  <svg class="logo-paw" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <!-- Central large pad -->
+    <ellipse cx="50" cy="68" rx="26" ry="22" fill="#56A0D3"/>
+    <!-- Top left toe -->
+    <ellipse cx="20" cy="38" rx="12" ry="10" fill="#56A0D3" transform="rotate(-20 20 38)"/>
+    <!-- Top right toe -->
+    <ellipse cx="80" cy="38" rx="12" ry="10" fill="#56A0D3" transform="rotate(20 80 38)"/>
+    <!-- Middle left toe -->
+    <ellipse cx="34" cy="26" rx="11" ry="9" fill="#56A0D3" transform="rotate(-10 34 26)"/>
+    <!-- Middle right toe -->
+    <ellipse cx="66" cy="26" rx="11" ry="9" fill="#56A0D3" transform="rotate(10 66 26)"/>
+  </svg>
+</div>
+css.otis-logo {
+  position: relative;
+  display: inline-block;
+  line-height: 1;
+}
+.logo-text {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 36px;
+  font-weight: bold;
+  color: #0D2B45;
+  letter-spacing: -1px;
+}
+.otis-logo::before {
+  content: '';
+  position: absolute;
+  background: #eef2f6;
+  width: 7px;
+  height: 7px;
+  top: 4px;
+  left: 57px;
+  border-radius: 50%;
+}
+.logo-paw {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  top: -4px;
+  left: 50px;
+}
+After implementing:
+1. Confirm the paw has one large central oval pad and four smaller toe pads above it
+2. Confirm it is clearly recognizable as a dog paw print
+3. Confirm it sits centered directly above the i
+4. Confirm the font is Georgia serif with capital O
+5. Fine-tune the left and top pixel values until the paw sits perfectly on the i dot
+6. If the paw does not look correct repeat the SVG implementation until it does

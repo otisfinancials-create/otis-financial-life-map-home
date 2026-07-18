@@ -44,10 +44,12 @@ import type {
   Loan,
   LoanAmortization,
   LoanInput,
+  LoanMutationResult,
   LoanUpdate,
   LoansSummary,
   MonthlyForecast,
   OtisChatRequest,
+  OtisHistoryMessage,
   PaySchedule,
   PayScheduleInput,
   PayScheduleUpdate,
@@ -61,6 +63,7 @@ import type {
   RunScenarioRequest,
   SavedScenario,
   SavedScenarioInput,
+  SavingsSummary,
   ScenarioResult,
   SyncBalanceInput,
   UpcomingBill,
@@ -1568,6 +1571,83 @@ export function useGetAccountsSummary<TData = Awaited<ReturnType<typeof getAccou
 
 
 
+export const getGetSavingsSummaryUrl = () => {
+
+
+
+
+  return `/api/savings/summary`
+}
+
+/**
+ * @summary Savings & investments totals with month-over-month change
+ */
+export const getSavingsSummary = async ( options?: RequestInit): Promise<SavingsSummary> => {
+
+  return customFetch<SavingsSummary>(getGetSavingsSummaryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSavingsSummaryQueryKey = () => {
+    return [
+    `/api/savings/summary`
+    ] as const;
+    }
+
+
+export const getGetSavingsSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getSavingsSummary>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSavingsSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSavingsSummaryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSavingsSummary>>> = ({ signal }) => getSavingsSummary({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSavingsSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSavingsSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getSavingsSummary>>>
+export type GetSavingsSummaryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Savings & investments totals with month-over-month change
+ */
+
+export function useGetSavingsSummary<TData = Awaited<ReturnType<typeof getSavingsSummary>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSavingsSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSavingsSummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getGetAccountUrl = (id: number,) => {
 
 
@@ -2316,9 +2396,9 @@ export const getCreateLoanUrl = () => {
 /**
  * @summary Create a loan
  */
-export const createLoan = async (loanInput: LoanInput, options?: RequestInit): Promise<Loan> => {
+export const createLoan = async (loanInput: LoanInput, options?: RequestInit): Promise<LoanMutationResult> => {
 
-  return customFetch<Loan>(getCreateLoanUrl(),
+  return customFetch<LoanMutationResult>(getCreateLoanUrl(),
   {
     ...options,
     method: 'POST',
@@ -2541,9 +2621,9 @@ export const getUpdateLoanUrl = (id: number,) => {
  * @summary Update a loan
  */
 export const updateLoan = async (id: number,
-    loanUpdate: LoanUpdate, options?: RequestInit): Promise<Loan> => {
+    loanUpdate: LoanUpdate, options?: RequestInit): Promise<LoanMutationResult> => {
 
-  return customFetch<Loan>(getUpdateLoanUrl(id),
+  return customFetch<LoanMutationResult>(getUpdateLoanUrl(id),
   {
     ...options,
     method: 'PATCH',
@@ -3923,6 +4003,83 @@ export const useSendOtisChat = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getSendOtisChatMutationOptions(options));
     }
+
+export const getGetOtisHistoryUrl = () => {
+
+
+
+
+  return `/api/otis/history`
+}
+
+/**
+ * @summary Load the user's recent Otis conversation history
+ */
+export const getOtisHistory = async ( options?: RequestInit): Promise<OtisHistoryMessage[]> => {
+
+  return customFetch<OtisHistoryMessage[]>(getGetOtisHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOtisHistoryQueryKey = () => {
+    return [
+    `/api/otis/history`
+    ] as const;
+    }
+
+
+export const getGetOtisHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getOtisHistory>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOtisHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOtisHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOtisHistory>>> = ({ signal }) => getOtisHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOtisHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOtisHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getOtisHistory>>>
+export type GetOtisHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Load the user's recent Otis conversation history
+ */
+
+export function useGetOtisHistory<TData = Awaited<ReturnType<typeof getOtisHistory>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOtisHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOtisHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getRunOtisScenarioUrl = () => {
 

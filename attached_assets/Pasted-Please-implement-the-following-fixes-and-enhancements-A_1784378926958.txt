@@ -1,0 +1,144 @@
+Please implement the following fixes and enhancements. Address every item completely.
+---
+### FIXES — Do these first
+1. Forecast rows not saving (FAIL)
+When a user updates or adds a row in the forecast ledger, the change is not persisting after navigating away and returning. Fix: every forecast row edit and new row addition must immediately write to the database via an API call. Do not rely on local state only. On save confirm with a brief "Saved ✓" indicator on the row. On return to the page, reload all forecast rows from the database so edits are always reflected.
+*2. Credit Card Payment row — two bugs (FAIL)
+Bug 1 — When an indented child row is marked paid:
+
+The child row amount must zero out (show $0.00, struck through or grayed)
+That amount must be added to the parent "Credit Card Payment" row total
+Example: child row "Netflix $15.99" marked paid → child shows $0.00 → parent "Credit Card Payment" increases by $15.99
+
+Bug 2 — Balance calculation not including CC rows:
+
+Currently the parent CC Payment row and all child rows are excluded from the running balance calculation
+Fix: the total of the CC group (parent row amount, which equals the sum of all paid child rows) must be subtracted from the running balance on the payment due date
+The running balance should decrease by the full CC group total on the CC payment due date, not on individual item dates
+Before any items are marked paid, the CC group shows $0 impact on balance (nothing paid yet)
+As items are marked paid the parent row increases and the balance impact on that date increases accordingly
+
+3. Bills inline edit — columns cut off (FAIL)
+When the edit panel opens on the right side, the bills list is resizing but cutting off columns. Fix:
+
+Reduce the edit panel width from its current size to a maximum of 320px
+The edit panel font size should be 12px for labels and 13px for input fields
+All bills list columns must remain visible — if needed, reduce the bills list font size to 12px when the edit panel is open
+The edit panel should have a minimum width of 280px and a maximum of 320px regardless of screen size
+
+4. UI — Sidebar rounded corners on ALL four corners (FAIL)
+The sidebar currently does not have all four corners rounded. Fix:
+css.sidebar {
+  border-radius: 16px;
+  margin: 12px 0 12px 12px;
+  height: calc(100vh - 24px);
+  position: fixed;
+}
+Verify all four corners are visibly rounded against the soft gray background. If any corner appears square or clipped, adjust the margin and border-radius until all four corners are fully rounded and visible.
+5. UI — Logo area as separate rounded section (FAIL)
+The Otis logo and tagline area at the top of the sidebar must be its own visually distinct section with four rounded corners:
+css.sidebar-logo-area {
+  background: #F8F6F1;
+  border-radius: 12px;
+  margin: 10px 10px 0 10px;
+  padding: 16px;
+}
+Insert a small gap (8px) between the logo section and the Carolina blue nav section below it:
+css.sidebar-nav-section {
+  margin-top: 8px;
+}
+The result: the logo sits in its own floating off-white rounded box, then an 8px gap, then the Carolina blue nav area below it.
+---
+### ENHANCEMENTS
+6. Dashboard — Savings & Investments pill — exclude Retirement
+Update the Savings & Investments pill on the dashboard to only total accounts where type = Savings, Investment, or Brokerage. Retirement accounts must be excluded from this total. Retirement is shown separately in the Retirement section.
+7. My Assets — Add Cryptocurrency asset type
+Add "Cryptocurrency 🪙" as an asset type option in the Asset Type dropdown in My Assets. Position it between "Investment Account" and "Other". Apply amber color #F59E0B as the category color throughout the app — category bar, badge, emoji icon — consistent with the existing category system.
+8. Bills — Add Positive/Negative Amount type
+Add two new options to the Bill "Type" dropdown:
+
+"Positive Amount" — when selected this bill row adds to the running balance instead of subtracting from it. Use case: a regular income that isn't a paycheck (rental income, side income, reimbursements)
+"Negative Amount" — the default behavior, subtracts from the running balance
+In the forecast, positive amount bills display in green like income rows. Negative amount bills display in red like expense rows.
+
+9. UI — Sidebar bottom icons (placeholder)
+Just below the user account information at the bottom of the sidebar, add a row of 4 placeholder icon buttons:
+html<div class="sidebar-icon-row">
+  <button class="sb-icon-btn" title="Search">🔍</button>
+  <button class="sb-icon-btn" title="Alerts">🔔</button>
+  <button class="sb-icon-btn" title="Settings">⚙️</button>
+  <button class="sb-icon-btn" title="Hide sidebar">◀</button>
+</div>
+css.sidebar-icon-row {
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 10px 4px;
+  margin-top: 8px;
+}
+.sb-icon-btn {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sb-icon-btn:hover {
+  background: rgba(255,255,255,0.25);
+}
+These are placeholders only — no functionality needed yet except the hide/show icon which can toggle a CSS class that collapses the sidebar to 0 width.
+Also add a "Help & Support" placeholder just above the divider line above the user account information:
+html<div class="sidebar-help">
+  <span>❓</span>
+  <span>Help & Support</span>
+</div>
+css.sidebar-help {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  border-radius: 8px;
+}
+.sidebar-help:hover {
+  background: rgba(255,255,255,0.1);
+}
+10. New Section — Savings & Investments
+Add a new "Savings & Investments" page to the sidebar navigation, positioned between Assets and Loans.
+Sidebar label: "Savings & Investments"
+Page title: "Savings & Investments"
+Page subtitle: "Track your savings and investment balances"
+Page content:
+Summary card at top:
+
+Total Savings & Investments — sum of all Connected Accounts where type = Savings, Investment, or Brokerage
+Show count of accounts
+Show month over month change if prior month data exists
+
+Account cards below — one card per account:
+
+Account name, institution, type badge, current balance
+A goal field: "Set a goal for this account ($)" — optional, user can enter a target balance
+If a goal is set, show a progress bar: current balance ÷ goal = percentage, Carolina blue progress bar
+Progress label: "$X of $Y goal — Z% there"
+
+Data source: pull all accounts from Connected Accounts where type = Savings, Investment, or Brokerage. If no accounts exist show an empty state: "Add savings or investment accounts in Connected Accounts to see them here."
+Use the same card styles, colors, and typography as the rest of the application.
+---
+After all changes verify:
+1. Forecast edits persist after navigating away and returning — test by editing a row, leaving, coming back
+2. CC Payment parent row increments when child rows are marked paid
+3. CC group total correctly impacts running balance
+4. Bills list columns all visible when edit panel is open
+5. Sidebar has all four corners visibly rounded
+6. Logo area is its own separate rounded box with gap below it
+7. Savings & Investments pill excludes retirement accounts
+8. Cryptocurrency appears in My Assets type dropdown
+9. Savings & Investments page loads with correct account data
+10. Push to GitHub with commit message: "Round 2 part 3 — forecast save fix, CC payment logic, sidebar UI, savings investments section

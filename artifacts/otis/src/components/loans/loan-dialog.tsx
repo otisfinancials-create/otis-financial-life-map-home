@@ -40,6 +40,7 @@ import {
   getGetLoansSummaryQueryKey,
   getGetLoanAmortizationQueryKey,
   getGetDashboardSummaryQueryKey,
+  getListBillsQueryKey,
 } from "@workspace/api-client-react";
 import type { Loan } from "@workspace/api-client-react";
 
@@ -62,9 +63,15 @@ const loanSchema = z.object({
   interestRate: z.coerce.number().min(0, { message: "Rate cannot be negative." }),
   monthlyPayment: z.coerce.number().positive({ message: "Enter a payment greater than 0." }),
   startDate: z.string().min(1, { message: "Please select a start date." }),
-  termMonths: z.coerce.number().int().positive({ message: "Please select a term." }),
+  termMonths: z.coerce
+    .number({ message: "Enter the term in months." })
+    .int({ message: "Term must be a whole number of months." })
+    .positive({ message: "Term must be a positive number of months." }),
   nextPaymentDate: z.string().min(1, { message: "Please select a due date." }),
   notes: z.string(),
+}).refine((v) => !v.startDate || !v.nextPaymentDate || v.nextPaymentDate >= v.startDate, {
+  message: "Next payment date must be on or after the loan start date.",
+  path: ["nextPaymentDate"],
 });
 
 type LoanFormValues = z.infer<typeof loanSchema>;
@@ -90,6 +97,12 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
   const updateLoan = useUpdateLoan();
   const isEditing = !!loan;
 
+  // "Custom" loan term: when the saved term isn't one of the presets (or the
+  // user picks Custom), show a free-form months input instead of the dropdown.
+  const isPresetTerm = (months: number | undefined) =>
+    months !== undefined && (LOAN_TERM_OPTIONS as readonly number[]).includes(months);
+  const [customTerm, setCustomTerm] = useState(false);
+
   const defaults = (): LoanFormValues => ({
     loanName: loan?.loanName || "",
     lenderName: loan?.lenderName || "",
@@ -112,6 +125,7 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
   useEffect(() => {
     if (isOpen) {
       form.reset(defaults());
+      setCustomTerm(loan ? !isPresetTerm(loan.termMonths) : false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, loan?.id]);
@@ -134,15 +148,30 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
       queryClient.invalidateQueries({ queryKey: getListLoansQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetLoansSummaryQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
       if (isEditing) {
         queryClient.invalidateQueries({ queryKey: getGetLoanAmortizationQueryKey(loan.id) });
       }
     };
+    const billSyncToast = (
+      billSync: { matched: boolean; billName: string } | undefined,
+      fallback: string,
+    ) => {
+      if (billSync) {
+        toast({
+          title: billSync.matched
+            ? `This loan payment matches your existing ${billSync.billName} bill — no duplicate created.`
+            : `We've added ${billSync.billName} to your Bills to keep your forecast accurate.`,
+        });
+      } else {
+        toast({ title: fallback });
+      }
+    };
     if (isEditing) {
       updateLoan.mutate({ id: loan.id, data }, {
-        onSuccess: () => {
+        onSuccess: (result) => {
           invalidate();
-          toast({ title: "Loan updated successfully" });
+          billSyncToast(result?.billSync, "Loan updated successfully");
           setIsOpen(false);
           if (!isControlled) form.reset();
         },
@@ -152,9 +181,9 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
       });
     } else {
       createLoan.mutate({ data }, {
-        onSuccess: () => {
+        onSuccess: (result) => {
           invalidate();
-          toast({ title: "Loan created successfully" });
+          billSyncToast(result?.billSync, "Loan created successfully");
           setIsOpen(false);
           if (!isControlled) form.reset();
         },
@@ -241,7 +270,18 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Loan Term</FormLabel>
-                    <Select onValueChange={field.onChange} value={String(field.value)}>
+                    <Select
+                      onValueChange={(v) => {
+                        if (v === "custom") {
+                          setCustomTerm(true);
+                          field.onChange("");
+                        } else {
+                          setCustomTerm(false);
+                          field.onChange(v);
+                        }
+                      }}
+                      value={customTerm ? "custom" : String(field.value)}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select term" />
@@ -251,8 +291,22 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
                         {LOAN_TERM_OPTIONS.map((months) => (
                           <SelectItem key={months} value={String(months)}>{months} months</SelectItem>
                         ))}
+                        <SelectItem value="custom">Custom…</SelectItem>
                       </SelectContent>
                     </Select>
+                    {customTerm && (
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="1"
+                          step="1"
+                          inputMode="numeric"
+                          placeholder="Number of months"
+                          value={field.value || ""}
+                          onChange={(e) => field.onChange(e.target.value)}
+                        />
+                      </FormControl>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

@@ -1,0 +1,61 @@
+Please make the following UI updates across the entire application:
+1. Sidebar rounded corners
+Add rounded corners to the sidebar panel itself:
+css.sidebar {
+  border-radius: 0 16px 16px 0;
+  /* or if it looks better fully rounded on all sides: */
+  border-radius: 16px;
+  margin: 12px 0 12px 12px;
+  height: calc(100vh - 24px);
+}
+Try the margin + border-radius approach so the sidebar floats with rounded corners against the soft gray page background. Adjust margin and height values until it looks clean and balanced.
+2. Page background soft gray everywhere
+Set the page background color to #f0f4f8 on every page — not just the dashboard. This is the background behind the sidebar and behind all page content. Apply globally:
+cssbody, #root, .app-container {
+  background: #f0f4f8;
+}
+Every page must show the soft gray background — Bills, Pay Schedules, Forecast, Connected Accounts, Assets, Loans, Life Events, Retirement, Otis AI. No white or other background colors on any page.
+3. Move tagline below the Otis logo
+The tagline "Organize · Track · Inform · Simulate" currently appears in the main content area topbar. Move it to sit directly below the Otis logo image in the sidebar logo area. Style it so it fits on one line without wrapping:
+css.sidebar-tagline {
+  font-size: 8px;
+  color: #6b7280;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  margin-top: 4px;
+  font-weight: 500;
+}
+The logo area structure should now be:
+html<div class="sidebar-logo-area">
+  <img src="/assets/otis_logo.png" alt="Otis Financial" class="sidebar-logo-img" />
+  <div class="sidebar-tagline">Organize · Track · Inform · Simulate</div>
+</div>
+Remove the tagline from the topbar/header area entirely — it should only appear in the sidebar logo area.
+4. Remove the Ask Otis button from the sidebar bottom
+Delete the "Ask Otis anything" button from the bottom of the sidebar completely. The user profile (initials, name, plan) moves up to fill that space. Otis AI is already accessible via the sidebar navigation item — the button is duplicative.
+The sidebar bottom section should now only contain:
+html<div class="sidebar-bottom">
+  <div class="sidebar-user">
+    <div class="sidebar-avatar">CH</div>
+    <div class="sidebar-user-info">
+      <p class="sidebar-user-name">Charles Haberman</p>
+      <span class="sidebar-user-plan">Pro plan</span>
+    </div>
+  </div>
+</div>
+5. Add page name heading to Forecast page
+The Forecast page is missing its page title. Add it to match all other pages:
+html<div class="page-header">
+  <h1 class="page-title">Forecast</h1>
+  <p class="page-subtitle">Your complete financial picture, month by month</p>
+</div>
+Style to match the heading style used on Bills, Dashboard, and all other pages.
+---
+After all changes verify:
+1. Sidebar has rounded corners and floats against the soft gray background
+2. Every single page shows soft gray #f0f4f8 as the background — click through all pages to confirm
+3. Tagline "Organize · Track · Inform · Simulate" appears below the logo in the sidebar on one line without wrapping
+4. Ask Otis button is completely gone from the sidebar bottom
+5. Forecast page now shows "Forecast" as its page heading
+6. Push to GitHub with commit message: "UI polish — sidebar rounded corners, soft gray bg, tagline moved, Ask Otis btn removed, Forecast page title added

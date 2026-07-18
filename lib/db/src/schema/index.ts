@@ -8,3 +8,5 @@ export * from "./life_events";
 export * from "./scenarios";
 export * from "./user_settings";
 export * from "./balance_syncs";
+export * from "./savings_snapshots";
+export * from "./otis_conversations";

@@ -1,0 +1,184 @@
+Please redesign the Forecast / Cash Flow Ledger page to match the following design specification. This is a visual and UX overhaul only — do not change any underlying data logic, API routes, or forecast generation engine. Only the presentation layer changes.
+### Part A: Layout & Grid
+Replace the current table with a CSS grid-based layout where every row — header, data rows, and month headers — shares the exact same column definition:
+grid-template-columns: 3px 80px 32px 1fr 100px 120px 120px 110px
+The columns are:
+
+3px — category color bar (left edge accent)
+80px — date
+32px — category icon
+1fr — description (fills remaining space)
+100px — amount (right aligned)
+120px — category badge (right aligned)
+120px — running balance (right aligned)
+110px — action buttons (right aligned)
+
+Apply this same grid to the table header row and every data row so columns align perfectly at all times.
+---
+### Part B: Controls Bar
+Redesign the controls bar at the top of the forecast page with these elements in order left to right:
+
+Time range pill group: 1mo | 3mo (default active, navy fill) | 6mo | 12mo
+View toggle pill group: Ledger (active, teal fill) | Monthly summary
+Category dropdown select
+Flex spacer
+Search input with magnifier icon and placeholder "Search transactions…"
+Export button (outline style, with download icon)
+Add entry button (teal fill, white text, plus icon)
+Update Current Balance button (outline style, with refresh icon)
+
+Style: pills have 20px border radius, 5px vertical padding, 13px horizontal padding. Active navy pill: background #0D2B45, white text. Active teal pill: background #2D9B6F, white text. Inactive pills: white background, light border, gray text.
+---
+### Part C: Category Color System
+Every transaction row must have a 3px colored left border accent based on its category. Use this color mapping consistently throughout:
+
+Income / Salary: #2D9B6F (teal)
+Housing / Mortgage: #185FA5 (blue)
+Insurance: #D85A30 (coral)
+Subscriptions: #534AB7 (purple)
+Auto: #BA7517 (amber)
+Utilities: #0F6E56 (dark teal)
+Life Events / Vacation: #1D9E75 (medium teal)
+Food: #D85A30 (coral)
+Medical: #993556 (pink)
+Savings transfers: #E24B4A (red)
+Other / Manual: #888780 (gray)
+
+Match the category badge background and text to the same color family (light fill + dark text from the same ramp).
+---
+### Part D: Category Icons
+Add a small emoji or Tabler icon in the icon column for each category:
+
+Income: briefcase icon
+Housing / Mortgage: home icon
+Insurance: shield icon
+Subscriptions: device-tv icon
+Auto / Gas: car icon
+Utilities / Electric: bolt icon
+Vacation / Travel: plane icon
+Food: tools-kitchen icon
+Medical: heart-pulse icon
+Savings: pig-money icon
+Other: dots-circle icon
+
+---
+### Part E: Row Styling
+Apply these row styles:
+1. Standard future rows: white background, 1px bottom border #F2F4F7
+2. Hover state: very light blue-gray background #F8FAFE
+3. Past rows (date < today): standard styling but opacity 0.75
+4. Negative balance rows: light red background #FFF5F5, red hover #FFECEC. The entire row including the running balance cell shows this tint
+5. Alternate rows: very subtle #FAFBFC tint on every other row
+Running balance column: font-size 14px, font-weight 600. Green color #0F6E56 when balance is high/healthy, default dark when neutral, red #A32D2D when negative.
+Amount column: income amounts in green #0F6E56 with + prefix. Bill amounts in red #A32D2D with - prefix. Variable bill amounts show ~ prefix.
+---
+### Part F: Badges
+Add inline badges inside the description cell for transaction status:
+
+Paid: green pill — background #E1F5EE, text #085041, checkmark icon, label "✓ Paid"
+Confirmed (income): same green pill, label "✓ Confirmed"
+Missed: amber pill — background #FFF3E0, text #633806, warning icon, label "⚠ Missed"
+Estimated/Variable: purple pill — background #EEEDFE, text #3C3489, label "~ estimated"
+Life Event: teal pill — background #E1F5EE, text #0F6E56, label "Life event"
+Balance Update: blue pill — background #E6F1FB, text #0C447C, label "Balance update"
+
+External link icon (small, muted gray) next to bill names that have a company URL.
+---
+### Part G: Month Group Headers
+Replace plain month text with a styled month header row:
+
+Background: #F8F9FB
+Left side: month name in font-weight 600, color #0D2B45, font-size 12px
+Right side: muted detail text "In $X · Out $X" followed by a net pill badge
+Net positive months: green pill background #E1F5EE, text #085041
+Net negative months: red pill background #FCEBEB, text #791F1F
+Top and bottom border: 1px solid #EEF1F5
+
+---
+### Part H: TODAY Divider
+Replace the simple TODAY line with a full-width accent bar:
+
+Background: #EDFAF4
+Top border: 2px solid #2D9B6F
+Bottom border: 2px solid #2D9B6F
+Left side: small teal filled circle dot + "TODAY — [date]" in uppercase teal font-weight 700, font-size 11px, letter-spacing 0.06em
+Right side: "Current balance $X,XXX" in green font-weight 600
+
+---
+### Part I: Otis Insight Rows
+Between month sections, when Otis detects a financial issue (negative balance, upcoming large expense, etc.), insert an Otis insight row:
+
+Layout: flex row with 28px circular dark navy avatar containing 🐾 on the left, message text on the right
+Background: gradient from #EDFAF4 on the left to white on the right
+Top and bottom border: 1px solid #E1F5EE
+Message text: 13px, color #444, line-height 1.6. Key figures bolded in #085041
+Below message: a small teal underlined "Ask Otis about this →" link that opens the Otis AI chat pre-filled with the issue
+
+Trigger Otis insight rows for:
+
+Any month where running balance goes negative — warn about the specific date and amount
+Any month with 3+ large bills in the same week
+When a life event will significantly impact cash flow
+
+---
+### Part J: Milestone Celebration Rows
+When a loan is fully paid off in a given month, insert a milestone row:
+
+Background: #FFFBEB
+Top and bottom border: 1px solid #FDE68A
+🎉 emoji + bold amber text: "[Loan name] fully paid off!" + lighter text: "You've freed up $X/month going forward."
+
+---
+### Part K: Inline Action Buttons
+Add action buttons in the rightmost column of each row:
+
+Future bill rows: "Mark paid" button (outline style, gray)
+Future income rows: "Confirm ✓" button (green outline, green text)
+Past unpaid bill rows: "Mark paid" button
+Past unconfirmed income rows: "Confirm" button
+Past paid/confirmed rows: no button (already actioned)
+Buttons: 3px 10px padding, 6px border radius, 11px font, font-weight 500
+Confirm button hover: green background tint
+
+---
+### Part L: Category Legend
+Add a thin legend bar above the sticky footer:
+
+Background: #FAFBFC, top border 1px #EEF1F5
+"CATEGORIES" label in uppercase muted gray, then colored dot + category name for each active category in the current view
+Dots: 10px × 10px, border-radius 2px, matching category color
+Font size 11px, gray text
+
+---
+### Part M: Sticky Totals Footer
+Add a sticky footer bar at the bottom of the ledger card with 4 equal columns:
+
+Monthly income (green value)
+Monthly bills (red value)
+Net this period (green if positive, red if negative)
+Current balance (dark navy)
+Each cell: label in 10px uppercase muted gray, value in 15px font-weight 600, tabular-nums
+Background: #F8F9FB, top border 1px #DDE2E8, 1px dividers between cells
+This footer updates as the user changes the time range selector
+
+---
+### Part N: Table Header
+Style the column header row:
+
+Background: #F5F7FA
+Font: 11px, font-weight 600, color #AAB0BB, uppercase, letter-spacing 0.05em
+Bottom border: 1px solid #EEF1F5
+Column labels: [blank] | Date | [blank for icon] | Description | Amount | Category | Balance | Actions
+Amount, Category, Balance, Actions: right-aligned
+
+---
+### General styling notes:
+
+Font: Inter or system-ui, -apple-system fallback
+Card container: white background, 1px border #E8ECF0, border-radius 14px, overflow hidden
+Row height: approximately 42px with 10px vertical padding in cells
+All dollar amounts use tabular-nums font-variant for perfect decimal alignment
+No shadows on rows — flat design only
+Smooth hover transitions: 0.1s ease
+After implementation, verify columns align perfectly between the header and all row types by checking at least 5 consecutive rows
+Push to GitHub when complete

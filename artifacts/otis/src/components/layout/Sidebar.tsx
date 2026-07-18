@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -39,6 +40,7 @@ const sections: { label: string; items: NavItem[] }[] = [
     items: [
       { name: "Connected accounts", href: "/accounts", icon: Landmark },
       { name: "Assets", href: "/assets-liabilities", icon: Scale },
+      { name: "Savings & Investments", href: "/savings-investments", icon: PiggyBank },
       { name: "Loans", href: "/loans", icon: CreditCard },
     ],
   },
@@ -109,9 +111,10 @@ function SectionLabel({ children }: { children: string }) {
 
 interface SidebarContentProps {
   onNavigate?: () => void;
+  onToggleCollapse?: () => void;
 }
 
-export function SidebarContent({ onNavigate }: SidebarContentProps) {
+export function SidebarContent({ onNavigate, onToggleCollapse }: SidebarContentProps) {
   const [location] = useLocation();
   const { signOut } = useClerk();
   const { user } = useUser();
@@ -123,8 +126,11 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
 
   return (
     <div className="flex h-full w-full flex-col bg-[var(--color-sidebar-bg)]">
-      {/* Logo area */}
-      <div className="shrink-0 bg-[var(--color-logo-bg)] px-4 py-5 flex flex-col items-center">
+      {/* Logo area — its own floating off-white rounded box (#R3-5) */}
+      <div
+        className="shrink-0 flex flex-col items-center"
+        style={{ background: "#F8F6F1", borderRadius: 12, margin: "10px 10px 0 10px", padding: 16 }}
+      >
         <OtisLogo />
         <div
           className="sidebar-tagline"
@@ -142,8 +148,8 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-2.5 py-3.5">
+      {/* Nav — 8px gap below the logo box (#R3-5) */}
+      <nav className="flex-1 overflow-y-auto px-2.5 pb-3.5 pt-3.5" style={{ marginTop: 8 }}>
         {sections.map((section) => (
           <div key={section.label}>
             <SectionLabel>{section.label}</SectionLabel>
@@ -186,6 +192,18 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
         </Link>
       </nav>
 
+      {/* Help & Support (placeholder) — sits just above the divider (#R3-9) */}
+      <div className="shrink-0 px-2.5 pb-2">
+        <div
+          className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12px] text-white/70 cursor-pointer hover:bg-white/10 transition-colors"
+          role="button"
+          tabIndex={0}
+        >
+          <span aria-hidden>❓</span>
+          <span>Help &amp; Support</span>
+        </div>
+      </div>
+
       {/* Bottom area */}
       <div className="shrink-0 border-t border-white/20 px-2.5 pt-3 pb-4">
         <div className="flex items-center justify-between gap-2 px-2 py-1">
@@ -207,18 +225,62 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
             <LogOut className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Placeholder icon row (#R3-9) — only the hide toggle does anything yet */}
+        <div className="flex justify-around" style={{ padding: "8px 10px 4px", marginTop: 8 }}>
+          {[
+            { title: "Search", glyph: "🔍" },
+            { title: "Alerts", glyph: "🔔" },
+            { title: "Settings", glyph: "⚙️" },
+          ].map((b) => (
+            <button
+              key={b.title}
+              type="button"
+              title={b.title}
+              className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-[14px] hover:bg-white/25 transition-colors"
+            >
+              <span aria-hidden>{b.glyph}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            title="Hide sidebar"
+            onClick={onToggleCollapse}
+            className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-[14px] text-white/80 hover:bg-white/25 transition-colors"
+          >
+            <span aria-hidden>◀</span>
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 export function Sidebar() {
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
-    <div
-      className="hidden md:flex w-[var(--sidebar-width)] shrink-0 overflow-hidden rounded-2xl"
-      style={{ margin: "12px 0 12px 12px", height: "calc(100vh - 24px)" }}
-    >
-      <SidebarContent />
-    </div>
+    <>
+      <div
+        className="hidden md:flex shrink-0 overflow-hidden rounded-2xl transition-[width,margin] duration-200"
+        style={
+          collapsed
+            ? { width: 0, margin: "12px 0", height: "calc(100vh - 24px)" }
+            : { width: "var(--sidebar-width)", margin: "12px 0 12px 12px", height: "calc(100vh - 24px)" }
+        }
+      >
+        <SidebarContent onToggleCollapse={() => setCollapsed(true)} />
+      </div>
+      {collapsed && (
+        <button
+          type="button"
+          title="Show sidebar"
+          onClick={() => setCollapsed(false)}
+          className="hidden md:flex fixed left-2 top-4 z-40 h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-navy)] text-[14px] text-white shadow-md hover:opacity-90 transition-opacity"
+        >
+          <span aria-hidden>▶</span>
+        </button>
+      )}
+    </>
   );
 }

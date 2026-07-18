@@ -11,6 +11,7 @@ export const billsTable = pgTable("bills", {
   frequency: text("frequency").notNull(),
   dueDay: integer("due_day").notNull(),
   paymentMethod: text("payment_method"),
+  amountType: text("amount_type").notNull().default("negative"),
   startDate: date("start_date", { mode: "string" }),
   endDate: date("end_date", { mode: "string" }),
   companyUrl: text("company_url"),

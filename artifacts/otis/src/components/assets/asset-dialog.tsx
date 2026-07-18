@@ -41,18 +41,30 @@ export const ASSET_TYPE_OPTIONS = [
   { value: "vehicle", label: "Vehicle" },
   { value: "personal_property", label: "Personal Property" },
   { value: "business_interest", label: "Business Interest" },
+  { value: "cryptocurrency", label: "Cryptocurrency 🪙" },
   { value: "other", label: "Other" },
 ] as const;
 
 const assetSchema = z.object({
-  assetName: z.string().min(2, { message: "Name must be at least 2 characters." }),
+  assetName: z
+    .string()
+    .min(2, { message: "Name must be at least 2 characters." })
+    .max(100, { message: "Name is limited to 100 characters." }),
   assetType: z.string().min(1, { message: "Please select a type." }),
-  currentBalance: z.coerce.number(),
+  currentBalance: z.coerce
+    .number({ message: "Estimated value must be a number." })
+    .refine((v) => Number.isFinite(v), { message: "Estimated value must be a number." })
+    .refine((v) => v >= 0, {
+      message: "Asset values must be positive. Enter the estimated value of what this asset is worth.",
+    })
+    .refine((v) => /^\d{1,9}(\.\d{1,2})?$/.test(String(Math.abs(v))), {
+      message: "Value is limited to 9 digits before the decimal point and 2 decimal places.",
+    }),
   purchasePrice: z
     .string()
     .refine((v) => v === "" || (!isNaN(parseFloat(v)) && parseFloat(v) >= 0), { message: "Enter a valid amount." }),
   purchaseDate: z.string(),
-  notes: z.string(),
+  notes: z.string().max(200, { message: "Notes are limited to 200 characters." }),
 });
 
 type AssetFormValues = z.infer<typeof assetSchema>;
@@ -164,8 +176,9 @@ export function AssetDialog({ asset, trigger, open, onOpenChange }: AssetDialogP
                 <FormItem>
                   <FormLabel>Asset Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Primary Residence, 2022 Tesla" {...field} />
+                    <Input placeholder="e.g. Primary Residence, 2022 Tesla" maxLength={100} {...field} />
                   </FormControl>
+                  <div className="text-right text-xs text-muted-foreground">{field.value.length}/100</div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -242,8 +255,9 @@ export function AssetDialog({ asset, trigger, open, onOpenChange }: AssetDialogP
                 <FormItem>
                   <FormLabel>Notes</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Optional notes about this asset" rows={2} {...field} />
+                    <Textarea placeholder="Optional notes about this asset" rows={2} maxLength={200} {...field} />
                   </FormControl>
+                  <div className="text-right text-xs text-muted-foreground">{field.value.length}/200</div>
                   <FormMessage />
                 </FormItem>
               )}

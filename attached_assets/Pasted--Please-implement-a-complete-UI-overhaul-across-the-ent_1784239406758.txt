@@ -1,0 +1,425 @@
+"Please implement a complete UI overhaul across the entire application. This covers the color system, sidebar, dashboard layout, and all pages. Do not change any functionality — this is visual and layout only.
+---
+### 1. COLOR SYSTEM — CSS VARIABLES
+Add these CSS variables to the root of the app (index.css or equivalent global stylesheet). Every color reference throughout the app must use these variables — no hardcoded hex values:
+css
+:root {
+  --color-navy:         #0D2B45;
+  --color-carolina:     #56A0D3;
+  --color-carolina-light: #e8f4fd;
+  --color-carolina-muted: rgba(86,160,211,0.18);
+  --color-page-bg:      #f0f4f8;
+  --color-logo-bg:      #eef2f6;
+  --color-card-bg:      #ffffff;
+  --color-card-border:  #eaecf0;
+  --color-text-primary: #0D2B45;
+  --color-text-secondary: #6b7280;
+  --color-text-muted:   #9ca3af;
+  --color-positive:     #059669;
+  --color-negative:     #dc2626;
+  --color-warning:      #d97706;
+  --color-sidebar-bg:   #56A0D3;
+  --color-sidebar-text: rgba(255,255,255,0.85);
+  --color-sidebar-muted: rgba(255,255,255,0.5);
+  --color-active-bg:    #0D2B45;
+  --color-active-text:  #ffffff;
+  --sidebar-width:      220px;
+}
+---
+### 2. OTIS LOGO
+Replace the current logo in the sidebar with this exact SVG. The logo area has a soft gray background (#eef2f6) and sits at the very top of the sidebar above the navigation:
+svg
+<svg viewBox="0 0 680 280" xmlns="http://www.w3.org/2000/svg" style="width:140px;height:auto">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@800&display=swap');
+      .wordmark { font-family: 'Nunito', 'Arial Rounded MT Bold', Arial, sans-serif; font-weight: 800; fill: #0D2B45; }
+    </style>
+  </defs>
+  <text x="340" y="210" text-anchor="middle" class="wordmark" font-size="195" letter-spacing="-4">otis</text>
+  <rect x="316" y="24" width="52" height="52" fill="#eef2f6" rx="4"/>
+  <g transform="translate(342, 50)">
+    <ellipse cx="0" cy="0" rx="16" ry="13" fill="#56A0D3"/>
+    <ellipse cx="-19" cy="-12" rx="9" ry="7.5" fill="#56A0D3" transform="rotate(-20)"/>
+    <ellipse cx="19" cy="-12" rx="9" ry="7.5" fill="#56A0D3" transform="rotate(20)"/>
+    <ellipse cx="-30" cy="2" rx="7.5" ry="6" fill="#56A0D3" transform="rotate(-35)"/>
+    <ellipse cx="30" cy="2" rx="7.5" ry="6" fill="#56A0D3" transform="rotate(35)"/>
+  </g>
+</svg>
+---
+### 3. SIDEBAR
+Completely rebuild the sidebar with this structure and styling:
+┌─────────────────────┐
+│  [SOFT GRAY #eef2f6]│  ← Logo area, full width, padding 20px 16px
+│  [otis logo SVG]    │
+├─────────────────────┤
+│  [CAROLINA BLUE     │  ← Nav area, flex:1, padding 14px 10px
+│   #56A0D3]          │
+│                     │
+│  PLANNING           │  ← Section label: 10px, uppercase, rgba(255,255,255,0.5)
+│  ▣ Dashboard        │  ← Active: navy #0D2B45 background pill, white text
+│  ◻ Bills            │  ← Inactive: transparent bg, rgba(255,255,255,0.85) text
+│  ◻ Pay schedules    │
+│  ◻ Forecast         │
+│                     │
+│  ACCOUNTS           │
+│  ◻ Connected accounts│
+│  ◻ Assets           │
+│  ◻ Loans            │
+│                     │
+│  LIFE               │
+│  ◻ Life events      │
+│  ◻ Retirement       │
+│                     │
+│  INTELLIGENCE       │
+│  ◻ Otis AI          │
+├─────────────────────┤
+│  [CAROLINA BLUE]    │  ← Bottom area, border-top rgba(255,255,255,0.2)
+│  [Ask Otis btn]     │  ← Carolina muted bg, white border, white text + dot
+│  [CH] Charles H.    │  ← Avatar navy bg, name white, plan muted white
+│       Pro plan      │
+└─────────────────────┘
+Sidebar CSS rules:
+css
+.sidebar {
+  width: var(--sidebar-width);
+  background: var(--color-sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+.sidebar-logo-area {
+  background: var(--color-logo-bg);
+  padding: 20px 16px;
+  flex-shrink: 0;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 14px 10px;
+  overflow-y: auto;
+}
+
+.sidebar-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-sidebar-muted);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 12px 8px 6px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 2px;
+  transition: background 0.15s;
+  text-decoration: none;
+}
+
+.sidebar-item:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+.sidebar-item.active {
+  background: var(--color-active-bg);
+}
+
+.sidebar-item .icon {
+  font-size: 16px;
+  color: rgba(255,255,255,0.6);
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.sidebar-item.active .icon {
+  color: var(--color-active-text);
+}
+
+.sidebar-item .label {
+  font-size: 13px;
+  color: var(--color-sidebar-text);
+  font-weight: 400;
+}
+
+.sidebar-item.active .label {
+  color: var(--color-active-text);
+  font-weight: 500;
+}
+
+.sidebar-bottom {
+  padding: 12px 10px 16px;
+  border-top: 1px solid rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+
+.ask-otis-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 10px;
+  cursor: pointer;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.ask-otis-btn .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.ask-otis-btn span {
+  font-size: 13px;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+}
+
+.sidebar-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-navy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.sidebar-user-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.9);
+}
+
+.sidebar-user-plan {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+}
+---
+### 4. MAIN LAYOUT
+The main content area sits to the right of the fixed sidebar:
+css
+.main-content {
+  margin-left: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--color-page-bg);
+}
+
+.topbar {
+  background: var(--color-card-bg);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--color-card-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbar-greeting h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.topbar-greeting p {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.page-content {
+  padding: 20px 24px;
+  flex: 1;
+}
+---
+### 5. CARD SYSTEM
+All cards throughout the app use this consistent style:
+css
+.card {
+  background: var(--color-card-bg);
+  border-radius: 12px;
+  border: 1px solid var(--color-card-border);
+  padding: 18px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.card-link {
+  font-size: 11px;
+  color: var(--color-carolina);
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+}
+---
+### 6. DASHBOARD LAYOUT
+Rebuild the dashboard page with this exact layout:
+Row 1 — Four summary stat cards in a grid:
+css
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.stat-card {
+  background: var(--color-card-bg);
+  border-radius: 12px;
+  border: 1px solid var(--color-card-border);
+  padding: 16px 18px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.5px;
+}
+
+.stat-positive { color: var(--color-positive); font-size: 11px; margin-top: 4px; }
+.stat-negative { color: var(--color-negative); font-size: 11px; margin-top: 4px; }
+.stat-neutral  { color: var(--color-text-secondary); font-size: 11px; margin-top: 4px; }
+Four stat cards in order:
+Net Worth — value from net worth calculation — subtitle: monthly change
+Monthly Cash Flow — net income minus bills — subtitle: savings rate percentage
+Total Liabilities — all debts — subtitle: monthly change
+Bills This Month — total bill amount — subtitle: count of bills + count due soon
+Row 2 — Two column layout (forecast left, bills right):
+css
+.row-two {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+Left card: "Upcoming forecast" — show next 8 forecast rows with date, name, amount, running balance. Include a TODAY bar at the top showing current running balance in amber. Negative running balances display in red.
+Right card: "Bills due soon" — show next 4 upcoming bills with category icon, name, due date with urgency dot (red = within 3 days, amber = within 7 days, gray = later), and amount.
+Row 3 — Two column layout (snapshot left, retirement right):
+css
+.row-three {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+Left card: "Monthly snapshot" — 2×2 grid of mini stat items: Take-home pay, Total bills, Net cash flow, Next paycheck (days + date + amount). Each mini item has a label, value, and a mini progress bar where relevant.
+Right card: "Retirement progress" — large current balance, progress bar to goal, percentage funded, projected value at retirement age, monthly contribution. Progress bar color: Carolina blue #56A0D3.
+---
+### 7. GLOBAL TYPOGRAPHY
+css
+body {
+  font-family: -apple-system, 'Inter', 'Segoe UI', Arial, sans-serif;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  background: var(--color-page-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 { font-size: 22px; font-weight: 600; }
+h2 { font-size: 18px; font-weight: 600; }
+h3 { font-size: 15px; font-weight: 600; }
+
+.text-secondary { color: var(--color-text-secondary); }
+.text-muted     { color: var(--color-text-muted); }
+.text-positive  { color: var(--color-positive); }
+.text-negative  { color: var(--color-negative); }
+.text-warning   { color: var(--color-warning); }
+---
+### 8. MOBILE RESPONSIVE
+At screen widths below 768px:
+css
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 100;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .main-content {
+    margin-left: 0;
+  }
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .row-two, .row-three {
+    grid-template-columns: 1fr;
+  }
+  .hamburger-btn {
+    display: flex;
+  }
+}
+Add a hamburger button in the topbar that toggles .sidebar.open on mobile.
+---
+### 9. APPLY TO ALL PAGES
+Apply the new color system, card styles, and typography to every page in the app — not just the dashboard:
+Bills page
+Pay Schedules page
+Forecast page
+Connected Accounts page
+Assets page
+Loans page
+Life Events page
+Retirement page
+Otis AI page
+Every page should use var(--color-carolina) as the primary accent color for buttons, links, active states, highlights, and progress indicators. Replace any existing teal or green accent colors with Carolina blue #56A0D3 throughout.
+---
+### 10. AFTER IMPLEMENTATION
+1. Verify the sidebar logo area is soft gray with the Otis logo clearly visible
+ 2. Verify the sidebar background is Carolina blue with navy active item
+ 3. Verify the user profile (initials, name, plan) is at the very bottom of the sidebar below Ask Otis
+ 4. Verify all four dashboard rows render correctly
+ 5. Verify the app is responsive at 375px — sidebar collapses, content stacks
+ 6. Push to GitHub with commit message: "UI overhaul — Carolina blue palette, new sidebar, dashboard redesign
+

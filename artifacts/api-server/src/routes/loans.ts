@@ -1,6 +1,7 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, loansTable } from "@workspace/db";
+import { db, loansTable, billsTable } from "@workspace/db";
+import { loanMatchesBill } from "../lib/financial-dedup";
 import {
   CreateLoanBody,
   UpdateLoanBody,
@@ -97,6 +98,41 @@ function computeAmortization(loan: LoanRow, extraPayment = 0): AmortizationResul
   return { totalInterest, totalPaid, payoffDate, numberOfPayments: schedule.length, schedule };
 }
 
+interface BillSyncResult {
+  matched: boolean;
+  billName: string;
+}
+
+// Keeps the forecast accurate: on loan create/edit, either match an existing
+// bill (via loanMatchesBill) or auto-create a monthly "[Loan Name] Payment" bill.
+async function syncLoanBill(req: Request, loan: LoanRow): Promise<BillSyncResult> {
+  const bills = await db
+    .select()
+    .from(billsTable)
+    .where(eq(billsTable.userId, req.userId));
+
+  const loanForMatch = { loanName: loan.loanName, monthlyPayment: loan.monthlyPayment };
+  const match = bills.find((b) =>
+    loanMatchesBill(loanForMatch, { billName: b.billName, amount: b.amount }),
+  );
+  if (match) {
+    return { matched: true, billName: match.billName };
+  }
+
+  const billName = `${loan.loanName} Payment`;
+  const dueDay = Number(loan.nextPaymentDate.slice(8, 10)) || 1;
+  await db.insert(billsTable).values({
+    userId: req.userId,
+    billName,
+    amount: String(loan.monthlyPayment),
+    frequency: "monthly",
+    category: "Debt Payments",
+    dueDay,
+    isActive: true,
+  });
+  return { matched: false, billName };
+}
+
 router.get("/loans", async (req, res): Promise<void> => {
   req.log.info("Fetching loans");
   const loans = await db
@@ -122,7 +158,8 @@ router.post("/loans", async (req, res): Promise<void> => {
     interestRate: String(interestRate),
     monthlyPayment: String(monthlyPayment),
   }).returning();
-  res.status(201).json(CreateLoanResponse.parse(serialize(loan)));
+  const billSync = await syncLoanBill(req, loan);
+  res.status(201).json(CreateLoanResponse.parse({ ...serialize(loan), billSync }));
 });
 
 router.get("/loans/summary", async (req, res): Promise<void> => {
@@ -220,7 +257,8 @@ router.patch("/loans/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Loan not found" });
     return;
   }
-  res.json(UpdateLoanResponse.parse(serialize(loan)));
+  const billSync = await syncLoanBill(req, loan);
+  res.json(UpdateLoanResponse.parse({ ...serialize(loan), billSync }));
 });
 
 router.delete("/loans/:id", async (req, res): Promise<void> => {

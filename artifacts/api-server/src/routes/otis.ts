@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import {
   db,
   accountsTable,
@@ -9,9 +9,12 @@ import {
   loansTable,
   lifeEventsTable,
   userSettingsTable,
+  otisConversationsTable,
 } from "@workspace/db";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { SendOtisChatBody, RunOtisScenarioBody, RunOtisScenarioResponse } from "@workspace/api-zod";
+import { dedupedLoans, loanMatchesBill } from "../lib/financial-dedup";
+import { getOtisCachedResponse, setOtisCachedResponse, type OtisCacheKey } from "../lib/otis-cache";
 
 const MODEL = "claude-sonnet-4-6";
 const HORIZON_MONTHS = 60;
@@ -69,20 +72,30 @@ async function buildFinancialContext(userId: string): Promise<FinancialContext> 
   const totalAssets = holdings
     .filter((h) => h.isAsset)
     .reduce((s, h) => s + num(h.currentBalance), 0);
-  const loanBalances = loans.reduce((s, l) => s + num(l.currentBalance), 0);
+  const liabilityAccounts = accounts.filter((a) => !a.isAsset);
+  const accountLiabilities = holdings
+    .filter((h) => !h.isAsset)
+    .reduce((s, h) => s + Math.abs(num(h.currentBalance)), 0);
+  // Loans already represented as a liability Connected Account are not
+  // double-counted — the account balance is the source of truth.
+  const uniqueLoans = dedupedLoans(loans, liabilityAccounts);
   const totalLiabilities =
-    holdings.filter((h) => !h.isAsset).reduce((s, h) => s + num(h.currentBalance), 0) +
-    loanBalances;
+    accountLiabilities + uniqueLoans.reduce((s, l) => s + Math.abs(num(l.currentBalance)), 0);
   const netWorth = totalAssets - totalLiabilities;
 
   const monthlyIncome = paySchedules.reduce(
     (s, p) => s + num(p.amount) * (FREQ_TO_MONTHLY[p.frequency.toLowerCase()] ?? 1),
     0,
   );
-  const billsMonthly = bills
-    .filter((b) => b.isActive)
-    .reduce((s, b) => s + num(b.amount) * (FREQ_TO_MONTHLY[b.frequency.toLowerCase()] ?? 1), 0);
-  const loanPaymentsMonthly = loans.reduce((s, l) => s + num(l.monthlyPayment), 0);
+  const activeBills = bills.filter((b) => b.isActive);
+  const billsMonthly = activeBills.reduce(
+    (s, b) => s + num(b.amount) * (FREQ_TO_MONTHLY[b.frequency.toLowerCase()] ?? 1),
+    0,
+  );
+  // A loan whose payment closely matches an existing bill (name or amount
+  // within 5%) is already counted in bills — never count it twice.
+  const loansNotInBills = loans.filter((l) => !activeBills.some((b) => loanMatchesBill(l, b)));
+  const loanPaymentsMonthly = loansNotInBills.reduce((s, l) => s + num(l.monthlyPayment), 0);
   const monthlyExpenses = billsMonthly + loanPaymentsMonthly;
   const monthlyCashFlow = monthlyIncome - monthlyExpenses;
 
@@ -92,31 +105,90 @@ async function buildFinancialContext(userId: string): Promise<FinancialContext> 
   const investedBalance = investedAccounts.reduce((s, a) => s + num(a.currentBalance), 0);
   const monthlyContribution = investedAccounts.reduce((s, a) => s + num(a.monthlyContribution), 0);
 
-  const loanLines = loans.map(
-    (l) =>
-      `- ${l.loanName} (${l.loanType}): balance $${num(l.currentBalance).toLocaleString()}, rate ${num(l.interestRate)}%, payment $${num(l.monthlyPayment).toLocaleString()}/mo`,
-  );
-  const accountLines = accounts.map(
-    (a) =>
-      `- ${a.accountName} (${a.accountType}${a.isAsset ? "" : ", liability"}): $${num(a.currentBalance).toLocaleString()}`,
-  );
-  const lifeEventLines = lifeEvents
-    .filter((e) => e.isActive)
-    .map((e) => `- ${e.eventName} (${e.category}): $${num(e.amount).toLocaleString()}, ${e.timingType}`);
+  // Compressed structured context (never raw rows). Next 5 upcoming bills only.
+  const today = new Date();
+  const upcomingBills = activeBills
+    .map((b) => {
+      let due = new Date(today.getFullYear(), today.getMonth(), b.dueDay);
+      if (due < today) due = new Date(today.getFullYear(), today.getMonth() + 1, b.dueDay);
+      return { name: b.billName, amount: num(b.amount), dueDate: due.toISOString().slice(0, 10) };
+    })
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 5);
 
-  const summaryText = [
-    `Monthly income: $${Math.round(monthlyIncome).toLocaleString()}`,
-    `Monthly expenses (bills + loan payments): $${Math.round(monthlyExpenses).toLocaleString()}`,
-    `Monthly cash flow: $${Math.round(monthlyCashFlow).toLocaleString()}`,
-    `Net worth: $${Math.round(netWorth).toLocaleString()} (assets $${Math.round(totalAssets).toLocaleString()}, liabilities $${Math.round(totalLiabilities).toLocaleString()})`,
-    `Retirement/investment balance: $${Math.round(investedBalance).toLocaleString()}, contributing $${Math.round(monthlyContribution).toLocaleString()}/mo`,
-    settings?.currentAge != null
-      ? `Age ${settings.currentAge}, planning to retire at ${settings.retirementAge}${settings.retirementGoal ? `, goal $${num(settings.retirementGoal).toLocaleString()}` : ""}, expected return ${num(settings.expectedReturnRate ?? 7)}%`
-      : `Retirement settings not yet configured (assume retirement age 65, 7% return)`,
-    accountLines.length ? `Accounts:\n${accountLines.join("\n")}` : "No accounts on file.",
-    loanLines.length ? `Loans:\n${loanLines.join("\n")}` : "No loans on file.",
-    lifeEventLines.length ? `Planned life events:\n${lifeEventLines.join("\n")}` : "No planned life events.",
-  ].join("\n");
+  const billsByCategoryMap = new Map<string, number>();
+  for (const b of activeBills) {
+    const monthly = num(b.amount) * (FREQ_TO_MONTHLY[b.frequency.toLowerCase()] ?? 1);
+    billsByCategoryMap.set(b.category, (billsByCategoryMap.get(b.category) ?? 0) + monthly);
+  }
+
+  const retirementAge = settings?.retirementAge ?? 65;
+  const currentAge = settings?.currentAge ?? null;
+  const returnRate = settings?.expectedReturnRate != null ? num(settings.expectedReturnRate) : 7;
+  const retirementGoal = settings?.retirementGoal != null ? num(settings.retirementGoal) : null;
+  const monthsToRetirement = currentAge != null ? Math.max(0, (retirementAge - currentAge) * 12) : 300;
+  let projectedValue = investedBalance;
+  const mr = returnRate / 100 / 12;
+  for (let i = 0; i < monthsToRetirement; i++) projectedValue = projectedValue * (1 + mr) + monthlyContribution;
+  const readinessScore =
+    retirementGoal == null || retirementGoal === 0
+      ? 100
+      : Math.min(100, Math.round((projectedValue / retirementGoal) * 100));
+
+  const payoffDate = (l: (typeof loans)[number]) => {
+    const bal = num(l.currentBalance);
+    const pay = num(l.monthlyPayment);
+    const r = num(l.interestRate) / 100 / 12;
+    if (pay <= 0 || bal <= 0) return null;
+    if (pay <= bal * r) return null;
+    const n = r === 0 ? bal / pay : -Math.log(1 - (r * bal) / pay) / Math.log(1 + r);
+    const d = new Date();
+    d.setMonth(d.getMonth() + Math.ceil(n));
+    return d.toISOString().slice(0, 7);
+  };
+
+  const contextObject = {
+    summary: {
+      netWorth: Math.round(netWorth),
+      totalAssets: Math.round(totalAssets),
+      totalLiabilities: Math.round(totalLiabilities),
+      monthlyCashFlow: Math.round(monthlyCashFlow),
+      monthlyIncome: Math.round(monthlyIncome),
+      monthlyExpenses: Math.round(monthlyExpenses),
+    },
+    income: paySchedules.map((p) => ({
+      name: p.employerName,
+      monthlyAmount: Math.round(num(p.amount) * (FREQ_TO_MONTHLY[p.frequency.toLowerCase()] ?? 1)),
+    })),
+    billsByCategory: [...billsByCategoryMap.entries()].map(([category, monthlyTotal]) => ({
+      category,
+      monthlyTotal: Math.round(monthlyTotal),
+    })),
+    loans: loans.map((l) => ({
+      name: l.loanName,
+      balance: num(l.currentBalance),
+      rate: num(l.interestRate),
+      monthlyPayment: num(l.monthlyPayment),
+      payoffDate: payoffDate(l),
+    })),
+    retirement: {
+      currentSavings: Math.round(investedBalance),
+      monthlyContribution: Math.round(monthlyContribution),
+      projectedValue: Math.round(projectedValue),
+      readinessScore,
+    },
+    upcomingBills,
+    lifeEvents: lifeEvents
+      .filter((e) => e.isActive)
+      .map((e) => ({
+        name: e.eventName,
+        amount: num(e.amount),
+        date: e.eventDate || e.startDate || null,
+        priority: e.priority,
+      })),
+  };
+
+  const summaryText = JSON.stringify(contextObject);
 
   return {
     monthlyIncome,
@@ -143,9 +215,117 @@ async function buildFinancialContext(userId: string): Promise<FinancialContext> 
   };
 }
 
-const OTIS_SYSTEM_PROMPT = `You are Otis, a warm, smart, and deeply personal financial advisor. You have access to the user's complete financial picture. You give clear, specific, actionable answers based on their real numbers — not generic advice. You are encouraging but honest. You explain things simply without jargon. When running what-if scenarios, always show the specific dollar impact on their monthly cash flow, net worth, and retirement projection. You have the personality of a loyal, intelligent dog who always has their owner's best interests at heart — friendly, attentive, and always making eye contact. Your answers are concise but complete. Never recommend specific investments or give regulated financial advice.`;
+const OTIS_SYSTEM_PROMPT = `You are Otis, the user's personal financial advisor — warm, loyal, and sharp, with the attentive personality of a smart golden-hearted dog. You know their full financial picture (provided as structured JSON below) and answer with their real numbers, never generic advice.
+
+Tone:
+- Never say "I suggest" or "you should". Frame guidance as options: "Here are some options..." or "You could consider...". Never be prescriptive or directive.
+- Always warm, positive, and completely non-judgmental regardless of their situation. Never imply criticism of past decisions. You are a supportive best friend, not a financial critic.
+- Reference earlier conversation naturally when relevant. If asked something outside their finances, gently steer back.
+- Never recommend specific investments or give regulated financial/tax/legal advice; point to a professional for those.
+
+Formatting:
+- Be concise. Simple questions get 1-3 sentences.
+- Plain language, no jargon. All dollar amounts as $X,XXX with commas.
+- Markdown allowed: **bold** key figures, short bullet lists, tables of 2-3 columns max. No emoji in section headers. Single blank line between sections, never double. One sentence of insight per section maximum.
+- Health scores: bold number, then a simple two-column strengths vs opportunities table.
+- No filler phrases like "genuinely strong", "That's not catastrophic", "I want to make sure", "I'm all ears".
+- End every comprehensive response with exactly one follow-up question or offer — never a list of options.
+- When a "Computed facts" block is provided, use those exact numbers — never recompute or estimate loan math.`;
+
+/** Detect a simple cacheable question ("what's my net worth / cash flow"). */
+function detectCacheableQuestion(text: string): OtisCacheKey | null {
+  const t = text.toLowerCase().trim();
+  if (t.length > 80) return null;
+  if (/net\s*worth/.test(t)) return "net_worth";
+  if (/cash\s*flow/.test(t)) return "cash_flow";
+  return null;
+}
+
+function closedFormPayoffMonths(balance: number, annualRatePct: number, payment: number): number | null {
+  if (balance <= 0 || payment <= 0) return null;
+  const r = annualRatePct / 100 / 12;
+  if (r === 0) return Math.ceil(balance / payment);
+  if (payment <= balance * r) return null;
+  return Math.ceil(-Math.log(1 - (r * balance) / payment) / Math.log(1 + r));
+}
+
+/**
+ * Deterministic extra-payment math (#3): if the user's message looks like an
+ * extra-payment question, compute exact payoff/interest deltas server-side
+ * and pass them to the model as facts.
+ */
+function buildExtraPaymentFacts(userText: string, ctx: FinancialContext): string | null {
+  const t = userText.toLowerCase();
+  if (!/(extra|additional|more)\b/.test(t) || !/(pay|payment|loan|mortgage|debt)/.test(t)) return null;
+  const amountMatch = t.match(/\$?\s*([\d][\d,]*(?:\.\d+)?)/);
+  if (!amountMatch?.[1]) return null;
+  const extra = parseFloat(amountMatch[1].replace(/,/g, ""));
+  if (!isFinite(extra) || extra <= 0 || ctx.loans.length === 0) return null;
+
+  // Prefer a loan mentioned by name; otherwise compute for all loans.
+  const mentioned = ctx.loans.filter((l) =>
+    l.loanName
+      .toLowerCase()
+      .split(/\s+/)
+      .some((w) => w.length > 3 && t.includes(w)),
+  );
+  const targets = mentioned.length > 0 ? mentioned : ctx.loans;
+
+  const lines: string[] = [];
+  for (const loan of targets) {
+    const baseMonths = closedFormPayoffMonths(loan.currentBalance, loan.interestRate, loan.monthlyPayment);
+    const newMonths = closedFormPayoffMonths(loan.currentBalance, loan.interestRate, loan.monthlyPayment + extra);
+    if (baseMonths == null || newMonths == null) continue;
+    const baseInterest = baseMonths * loan.monthlyPayment - loan.currentBalance;
+    const newInterest = newMonths * (loan.monthlyPayment + extra) - loan.currentBalance;
+    const monthsSaved = Math.max(0, baseMonths - newMonths);
+    const interestSaved = Math.max(0, baseInterest - newInterest);
+    lines.push(
+      `${loan.loanName}: current payoff ${baseMonths} months; with $${extra.toLocaleString()}/mo extra, payoff ${newMonths} months (${monthsSaved} months sooner), interest saved ~$${Math.round(interestSaved).toLocaleString()}.`,
+    );
+  }
+  if (lines.length === 0) return null;
+  return `Computed facts (exact math for an extra $${extra.toLocaleString()}/month payment — use these numbers):\n${lines.join("\n")}`;
+}
+
+const HISTORY_LIMIT = 20;
+
+async function loadHistory(userId: string) {
+  const rows = await db
+    .select()
+    .from(otisConversationsTable)
+    .where(eq(otisConversationsTable.userId, userId))
+    .orderBy(desc(otisConversationsTable.createdAt), desc(otisConversationsTable.id))
+    .limit(HISTORY_LIMIT);
+  return rows.reverse();
+}
+
+/** Merge consecutive same-role messages (Anthropic requires alternation). */
+function normalizeMessages(msgs: { role: "user" | "assistant"; content: string }[]) {
+  const out: { role: "user" | "assistant"; content: string }[] = [];
+  for (const m of msgs) {
+    if (!m.content.trim()) continue;
+    const last = out[out.length - 1];
+    if (last && last.role === m.role) last.content += `\n\n${m.content}`;
+    else out.push({ ...m });
+  }
+  while (out.length > 0 && out[0]!.role !== "user") out.shift();
+  return out;
+}
 
 const router: IRouter = Router();
+
+router.get("/otis/history", async (req, res): Promise<void> => {
+  const rows = await loadHistory(req.userId);
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      role: r.role,
+      content: r.content,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  );
+});
 
 router.post("/otis/chat", async (req, res): Promise<void> => {
   const parsed = SendOtisChatBody.safeParse(req.body);
@@ -154,27 +334,89 @@ router.post("/otis/chat", async (req, res): Promise<void> => {
     return;
   }
 
-  const ctx = await buildFinancialContext(req.userId);
-  const messages = parsed.data.messages.slice(-10);
+  const incoming = parsed.data.messages;
+  const latestUser = [...incoming].reverse().find((m) => m.role === "user");
+  const userText = latestUser?.content ?? "";
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
 
+  // Cached instant answers for simple repeat questions (net worth / cash flow).
+  const cacheKey = detectCacheableQuestion(userText);
+  if (cacheKey) {
+    const cached = await getOtisCachedResponse(req.userId, cacheKey);
+    if (cached) {
+      try {
+        await db.insert(otisConversationsTable).values([
+          { userId: req.userId, role: "user", content: userText },
+          { userId: req.userId, role: "assistant", content: cached.content },
+        ]);
+      } catch (err) {
+        req.log.error({ err }, "Failed to persist cached Otis exchange");
+      }
+      res.write(`data: ${JSON.stringify({ content: cached.content })}\n\n`);
+      res.write(`data: ${JSON.stringify({ cachedAsOf: cached.lastUpdated.toISOString() })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+      return;
+    }
+  }
+
   try {
+    // Context: persisted history (across sessions) + this session's messages.
+    const [ctx, history] = await Promise.all([
+      buildFinancialContext(req.userId),
+      loadHistory(req.userId),
+    ]);
+    const sessionMsgs = incoming.map((m) => ({ role: m.role, content: m.content }));
+    const historyMsgs = history.map((h) => ({
+      role: h.role as "user" | "assistant",
+      content: h.content,
+    }));
+    // Drop history entries duplicated in the session payload (already persisted turns).
+    const sessionSet = new Set(sessionMsgs.map((m) => `${m.role}:${m.content}`));
+    const priorMsgs = historyMsgs.filter((h) => !sessionSet.has(`${h.role}:${h.content}`));
+    const messages = normalizeMessages([...priorMsgs, ...sessionMsgs].slice(-HISTORY_LIMIT - 2));
+
+    const facts = buildExtraPaymentFacts(userText, ctx);
+    const system = [
+      OTIS_SYSTEM_PROMPT,
+      `\nUser's current financial picture (JSON):\n${ctx.summaryText}`,
+      facts ? `\n${facts}` : "",
+    ].join("\n");
+
     const stream = anthropic.messages.stream({
       model: MODEL,
-      max_tokens: 8192,
-      system: `${OTIS_SYSTEM_PROMPT}\n\nHere is the user's current financial picture:\n${ctx.summaryText}`,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      max_tokens: 2048,
+      system,
+      messages,
     });
 
     stream.on("text", (text) => {
       res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
     });
 
-    await stream.finalMessage();
+    const finalMsg = await stream.finalMessage();
+    const assistantText = finalMsg.content
+      .filter((b): b is Extract<(typeof finalMsg.content)[number], { type: "text" }> => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+
+    if (userText && assistantText) {
+      try {
+        await db.insert(otisConversationsTable).values([
+          { userId: req.userId, role: "user", content: userText },
+          { userId: req.userId, role: "assistant", content: assistantText },
+        ]);
+        if (cacheKey) await setOtisCachedResponse(req.userId, cacheKey, assistantText);
+      } catch (err) {
+        req.log.error({ err }, "Failed to persist Otis exchange");
+      }
+    }
+
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   } catch (err) {

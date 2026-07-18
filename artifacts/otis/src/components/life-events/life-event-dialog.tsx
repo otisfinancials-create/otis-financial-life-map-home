@@ -47,15 +47,22 @@ import { LIFE_EVENT_CATEGORIES, TIMING_TYPES, RECUR_FREQUENCIES, PRIORITIES } fr
 
 const lifeEventSchema = z
   .object({
-    eventName: z.string().min(2, { message: "Name must be at least 2 characters." }),
+    eventName: z
+      .string()
+      .min(2, { message: "Name must be at least 2 characters." })
+      .max(100, { message: "Name must be 100 characters or fewer." }),
     category: z.string().min(1, { message: "Please select a category." }),
     customCategory: z.string().optional(),
-    amount: z.coerce.number().positive({ message: "Amount must be greater than 0." }),
+    amount: z.coerce
+      .number()
+      .positive({ message: "Amount must be greater than 0." })
+      .max(999999999.99, { message: "Amount is too large." }),
     timingType: z.enum(["one_time", "spread", "recurring"]),
     eventDate: z.string().optional(),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
     frequency: z.string().optional(),
+    customIntervalDays: z.coerce.number().optional(),
     priority: z.string().min(1, { message: "Please select a priority." }),
     notes: z.string().optional(),
     isActive: z.boolean().default(true),
@@ -67,6 +74,16 @@ const lifeEventSchema = z
     if (data.timingType === "one_time" && !data.eventDate) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Pick the date this happens.", path: ["eventDate"] });
     }
+    if (data.timingType === "one_time" && data.eventDate) {
+      const todayStr = new Date().toISOString().split("T")[0];
+      if (data.eventDate < todayStr) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Life events must be scheduled for a future date.",
+          path: ["eventDate"],
+        });
+      }
+    }
     if (data.timingType === "spread") {
       if (!data.startDate) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Pick a start date.", path: ["startDate"] });
       if (!data.endDate) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Pick an end date.", path: ["endDate"] });
@@ -77,6 +94,9 @@ const lifeEventSchema = z
     if (data.timingType === "recurring") {
       if (!data.startDate) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Pick a start date.", path: ["startDate"] });
       if (!data.frequency) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Pick a frequency.", path: ["frequency"] });
+      if (data.frequency === "custom" && (!data.customIntervalDays || Number(data.customIntervalDays) < 1)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter an interval of at least 1 day.", path: ["customIntervalDays"] });
+      }
     }
   });
 
@@ -100,7 +120,8 @@ function toDefaults(event?: LifeEvent): LifeEventFormValues {
     startDate: event?.startDate || "",
     endDate: event?.endDate || "",
     frequency: event?.frequency || "annually",
-    priority: event?.priority || "planning_to",
+    customIntervalDays: event?.customIntervalDays ?? undefined,
+    priority: event?.priority === "just_dreaming" ? "planning_to" : event?.priority || "planning_to",
     notes: event?.notes || "",
     isActive: event?.isActive ?? true,
   };
@@ -131,6 +152,7 @@ export function LifeEventDialog({ event, trigger, open, onOpenChange }: LifeEven
 
   const watchedTiming = form.watch("timingType");
   const watchedCategory = form.watch("category");
+  const watchedFrequency = form.watch("frequency");
 
   function onSubmit(data: LifeEventFormValues) {
     const timing = data.timingType;
@@ -149,6 +171,10 @@ export function LifeEventDialog({ event, trigger, open, onOpenChange }: LifeEven
             ? data.endDate || undefined
             : undefined,
       frequency: timing === "recurring" ? data.frequency || undefined : undefined,
+      customIntervalDays:
+        timing === "recurring" && data.frequency === "custom" && data.customIntervalDays
+          ? Number(data.customIntervalDays)
+          : undefined,
       priority: data.priority,
       notes: data.notes?.trim() || undefined,
       isActive: data.isActive,
@@ -208,9 +234,14 @@ export function LifeEventDialog({ event, trigger, open, onOpenChange }: LifeEven
               name="eventName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Event Name</FormLabel>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Event Name</FormLabel>
+                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                      {(field.value ?? "").length}/100
+                    </span>
+                  </div>
                   <FormControl>
-                    <Input placeholder="e.g. European Vacation, Kitchen Remodel" {...field} />
+                    <Input placeholder="e.g. European Vacation, Kitchen Remodel" maxLength={100} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -247,7 +278,19 @@ export function LifeEventDialog({ event, trigger, open, onOpenChange }: LifeEven
                   <FormItem>
                     <FormLabel>Total Amount</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          // Max 9 digits before the decimal, max 2 after.
+                          if (v === "" || /^\d{0,9}(\.\d{0,2})?$/.test(v)) {
+                            field.onChange(v);
+                          }
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -401,6 +444,30 @@ export function LifeEventDialog({ event, trigger, open, onOpenChange }: LifeEven
                   )}
                 />
               </div>
+            )}
+
+            {watchedTiming === "recurring" && watchedFrequency === "custom" && (
+              <FormField
+                control={form.control}
+                name="customIntervalDays"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Custom Interval (days)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        placeholder="e.g. 45"
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormDescription className="text-[10px]">Repeats every N days from the start date</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             )}
 
             <FormField

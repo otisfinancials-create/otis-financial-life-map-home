@@ -381,6 +381,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/AccountsSummary"
 
+  /savings/summary:
+    get:
+      operationId: getSavingsSummary
+      tags: [accounts]
+      summary: Savings & investments totals with month-over-month change
+      responses:
+        "200":
+          description: Savings summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsSummary"
+
   /accounts/{id}:
     get:
       operationId: getAccount
@@ -1059,7 +1072,7 @@ components:
     # ── Bills ────────────────────────────────────────────────────────────────
     Bill:
       type: object
-      required: [id, billName, category, amount, frequency, dueDay, isVariable, isActive, createdAt, updatedAt]
+      required: [id, billName, category, amount, frequency, dueDay, amountType, isVariable, isActive, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -1073,6 +1086,9 @@ components:
           type: string
         dueDay:
           type: integer
+        amountType:
+          type: string
+          enum: [positive, negative]
         paymentMethod:
           type: ["string", "null"]
         startDate:
@@ -1106,6 +1122,9 @@ components:
           type: string
         dueDay:
           type: integer
+        amountType:
+          type: string
+          enum: [positive, negative]
         paymentMethod:
           type: string
         startDate:
@@ -1134,6 +1153,9 @@ components:
           type: string
         dueDay:
           type: integer
+        amountType:
+          type: string
+          enum: [positive, negative]
         paymentMethod:
           type: string
         startDate:
@@ -1335,6 +1357,8 @@ components:
           type: number
         monthlyContribution:
           type: number
+        savingsGoal:
+          type: ["number", "null"]
         retirementSubtype:
           type: ["string", "null"]
           enum: ["401k", "ira", "roth_ira", "pension", "other", null]
@@ -1379,6 +1403,8 @@ components:
           type: number
         monthlyContribution:
           type: number
+        savingsGoal:
+          type: ["number", "null"]
         retirementSubtype:
           type: ["string", "null"]
           enum: ["401k", "ira", "roth_ira", "pension", "other", null]
@@ -1415,6 +1441,8 @@ components:
           type: number
         monthlyContribution:
           type: number
+        savingsGoal:
+          type: ["number", "null"]
         retirementSubtype:
           type: ["string", "null"]
           enum: ["401k", "ira", "roth_ira", "pension", "other", null]
@@ -1437,6 +1465,19 @@ components:
           type: ["integer", "null"]
           minimum: 1
           maximum: 31
+
+    SavingsSummary:
+      type: object
+      required: [total, accountCount, priorMonthTotal, momChange]
+      properties:
+        total:
+          type: number
+        accountCount:
+          type: integer
+        priorMonthTotal:
+          type: ["number", "null"]
+        momChange:
+          type: ["number", "null"]
 
     AccountsSummary:
       type: object

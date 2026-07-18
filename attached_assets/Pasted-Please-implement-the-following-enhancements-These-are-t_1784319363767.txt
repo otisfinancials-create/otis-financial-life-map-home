@@ -1,0 +1,178 @@
+Please implement the following enhancements. These are the most complex items and must be completed fully before moving on.
+---
+### 1. DASHBOARD — Replace Upcoming Forecast with 6-Month Stacked Area Chart
+Remove the "Upcoming Forecast" card from the dashboard entirely. Replace it with a card titled "6 Month View" containing a 100% Stacked Area Chart:
+Chart requirements:
+
+X axis: current month + next 5 months (6 months total, labeled by month name e.g. "Jul", "Aug", "Sep")
+Y axis: dollars
+The chart has stacked area bands in this order from top to bottom:
+
+Top band: Monthly Cash Flow (green) — the remaining income after all bills
+Then each bill category stacked below, largest category at the bottom, smaller categories above. Use the existing category color system for each band
+Bottom band: the pay/income line — this should be the highest value and acts as the total baseline
+
+
+Each band is labeled in a legend below the chart
+On hover, show a tooltip with that month's breakdown: income, each category amount, and net cash flow
+Use Recharts library (already available in the project)
+Data source: Pay Schedules for income, Bills by category for expenses. Use monthly totals for each
+
+---
+### 2. DASHBOARD — Update 4 Summary Pills
+Keep the 4 pills across the top but update as follows:
+Pill 1 — "Net Worth" (keep existing, reformat popup only):
+
+The popup when clicked must match the exact same format as the Monthly Cash Flow popup:
+
+Same card layout, same font sizes, same two-column structure
+Left column: Assets breakdown (each account and asset with value)
+Right column: Liabilities breakdown (each loan and liability)
+Footer: Assets total - Liabilities total = Net Worth
+
+
+
+Pill 2 — Rename "Monthly Cash Flow" to "Average Monthly Cash Flow":
+
+Value = average of the last 3 months of cash flow (income minus bills)
+Keep existing popup format
+
+Pill 3 — Replace with "Savings & Investments":
+
+Value = total of all accounts where type = Savings, Investment, Retirement, or Brokerage
+Popup when clicked shows each account individually: name, type badge, balance
+Same popup format as Net Worth and Cash Flow popups
+Label: "Savings & Investments"
+
+Pill 4 — Replace "Bills This Month" with "Bills Snapshot":
+
+This is the content currently shown in the Monthly Snapshot card at the bottom left of the dashboard
+Show: Take-home pay, Total bills, Net cash flow, Next paycheck
+Remove the Monthly Snapshot card from the bottom row entirely now that it's in the pill
+
+---
+### 3. DASHBOARD — Move Retirement Section
+Remove the "Bills Due Soon" card from the dashboard.
+Move the "Retirement Progress" card to where "Bills Due Soon" was (right column, middle row).
+The bottom row now has: [empty left] [Retirement Progress right] — or if layout allows, center the retirement card.
+---
+### 4. CC BILLING CYCLE — Connected Accounts
+When a user adds or edits a Connected Account and selects Account Type = "Credit Card", show three additional fields under a new heading "Credit Card Billing Cycle":
+
+Start Date (day of month, 1-31)
+End Date (day of month, 1-31)
+Payment Due Date (day of month, 1-31)
+
+Store these three values in the connected_accounts table as:
+
+cc_cycle_start_date (integer)
+cc_cycle_end_date (integer)
+cc_payment_due_date (integer)
+
+Run the database migration to add these three columns.
+---
+### 5. CC BILLING CYCLE — Forecast Module
+This is the most complex item. Implement the credit card billing cycle grouping in the forecast ledger:
+Logic:
+
+Any bill where Payment Method = "Credit Card" should NOT appear in the forecast on its individual due date
+Instead, find which credit card it is paid by (matched to a Connected Account of type Credit Card)
+Group all bills paid by that credit card that fall within the CC billing cycle (between cc_cycle_start_date and cc_cycle_end_date) under a single forecast group
+The group appears in the forecast on the cc_payment_due_date of that credit card
+
+Forecast display format for CC groups:
+[Date] — Credit Card Due — [Card Name]
+  Credit Card Payment         $0.00          [running balance]
+    ↳ Netflix                 $15.99
+    ↳ Spotify                 $9.99
+    ↳ Electric Bill           $187.50
+    ↳ Cell Phone              $291.00
+Behavior:
+
+The "Credit Card Payment" row starts at $0.00
+When a user marks any individual line item below it as "Paid", the Credit Card Payment row increments by that amount
+Example: user marks Netflix as paid → Credit Card Payment becomes $15.99
+The running balance in the forecast only decreases when the Credit Card Payment row itself is updated — not when individual items are marked paid
+Individual items can be expanded/collapsed under the CC Payment row
+Note in a comment: "Plaid will automate this in a future phase — this is the manual version"
+
+---
+### 6. FORECAST — Remove 4 Bottom Boxes
+Remove the 4 summary boxes at the bottom of the Forecast page entirely. They are redundant with the information already shown elsewhere.
+---
+### 7. FORECAST — Locked Layout with Scrollable Ledger
+Redesign the Forecast page layout so vertical scrolling of the entire page never occurs:
+Layout structure:
+┌─────────────────────────────────┐
+│  Page title + summary           │  ← Fixed, does not scroll
+│  Category filter pills          │  ← Fixed, does not scroll
+├─────────────────────────────────┤
+│                                 │
+│  Forecast ledger rows           │  ← Scrollable area only
+│  (overflow-y: auto)             │
+│                                 │
+└─────────────────────────────────┘
+The user should always be able to see the page title, the column headers (Date, Description, Amount, Balance), and the category filter pills. Only the ledger rows scroll. Use:
+css.forecast-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.forecast-ledger {
+  flex: 1;
+  overflow-y: auto;
+}
+---
+### 8. FORECAST — Group by Day, Remove Day Column
+Currently forecast rows show a date column with the day repeated for each row. Change to:
+
+Group all transactions on the same date under a single date header row
+Date header format: "Jul 23, 2026" as a subtle separator row with light background
+Remove the individual date column from each transaction row — the date is shown once in the group header
+Within each date group, rows show: Description, Amount, Running Balance, Paid toggle, Actions
+
+---
+### 9. FORECAST — CC Rows Grouped
+Any forecast rows that are paid via credit card must be grouped under their CC payment date row as described in item 5 above. This applies to the forecast ledger display — clean and consistent with the CC billing cycle logic.
+---
+### 10. ADD BUDGET SECTION
+Add a new "Budget" page to the navigation, positioned after Pay Schedules and before Forecast in the sidebar.
+Page title: "Budget"
+Subtitle: "Your monthly plan, built from your actual data"
+Budget page structure:
+Summary bar at top:
+
+Average Monthly Income (from Pay Schedules)
+Total Budgeted Expenses (sum of all bills)
+Net Budget (income minus expenses)
+
+Main content — category accordion list:
+
+Each bill category appears as a row: Category name, category icon/color, monthly total, percentage of income
+Each category row is expandable — clicking it reveals all individual bills within that category
+Each individual bill row shows: Bill name, amount, frequency, monthly equivalent
+Users can edit any amount inline — clicking the amount makes it editable
+On save, show a notification banner: "Your budget has been updated. All future forecast rows will reflect this change." Then update the corresponding bill amount in the Bills section and recalculate all future forecast rows
+
+The Budget page uses the same card styles, colors, and typography as the rest of the application.
+---
+### 11. ADD GOALS PLACEHOLDER SECTION
+Add a new "Goals" page to the navigation, positioned after Life Events and before Retirement in the sidebar.
+Page title: "Goals"
+Subtitle: "Coming soon — set and track your financial goals"
+Show a simple placeholder card:
+🎯 Goals are coming soon
+Track savings goals, debt payoff targets, and major purchase milestones.
+This feature is in development.
+Use the same card styling as the rest of the app. No functionality needed — placeholder only.
+---
+After all changes:
+1. Verify the 6-month stacked area chart renders with correct data from Pay Schedules and Bills
+2. Verify all 4 dashboard pills show correct values and popups
+3. Verify CC billing cycle fields appear when Credit Card is selected in Connected Accounts
+4. Verify a CC-paid bill groups correctly in the forecast under the payment due date
+5. Verify the forecast page never requires full-page vertical scroll
+6. Verify Budget page loads with correct income and category data
+7. Verify Goals placeholder page loads cleanly
+8. Push to GitHub with commit message: "Round 2 enhancements — dashboard chart, CC billing cycle, budget page, goals placeholder, forecast redesign

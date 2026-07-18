@@ -59,13 +59,17 @@ export const TIMING_LABELS: Record<string, string> = {
 export const RECUR_FREQUENCIES = [
   { value: "monthly", label: "Monthly" },
   { value: "quarterly", label: "Quarterly" },
+  { value: "biannually", label: "Bi-Annually" },
   { value: "annually", label: "Annually" },
+  { value: "custom", label: "Custom" },
 ];
 
 export const FREQUENCY_LABELS: Record<string, string> = {
   monthly: "Monthly",
   quarterly: "Quarterly",
+  biannually: "Bi-Annually",
   annually: "Annually",
+  custom: "Custom",
 };
 
 export interface PriorityMeta {
@@ -75,12 +79,15 @@ export interface PriorityMeta {
   dot: string;
 }
 
+// Options shown in the priority selector. "Just Dreaming" was removed; existing
+// just_dreaming records are treated as "Maybe, Someday" (planning_to) everywhere.
 export const PRIORITIES: PriorityMeta[] = [
   { value: "must_do", label: "Must Do", badgeClass: "bg-red-100 text-red-700", dot: "#ef4444" },
-  { value: "planning_to", label: "Planning To", badgeClass: "bg-amber-100 text-amber-800", dot: "#f59e0b" },
-  { value: "just_dreaming", label: "Just Dreaming", badgeClass: "bg-teal-100 text-teal-700", dot: "#14b8a6" },
+  { value: "planning_to", label: "Maybe, Someday", badgeClass: "bg-amber-100 text-amber-800", dot: "#f59e0b" },
 ];
 
-export const PRIORITY_MAP: Record<string, PriorityMeta> = Object.fromEntries(
-  PRIORITIES.map((p) => [p.value, p]),
-);
+export const PRIORITY_MAP: Record<string, PriorityMeta> = {
+  ...Object.fromEntries(PRIORITIES.map((p) => [p.value, p])),
+  // Legacy value maps to the same display as "Maybe, Someday".
+  just_dreaming: { value: "just_dreaming", label: "Maybe, Someday", badgeClass: "bg-amber-100 text-amber-800", dot: "#f59e0b" },
+};

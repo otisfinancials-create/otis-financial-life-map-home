@@ -62,28 +62,89 @@ export default function LifeEvents() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [eventToDelete, setEventToDelete] = useState<LifeEvent | undefined>(undefined);
 
-  const active = useMemo(() => (events ?? []).filter((e) => e.isActive), [events]);
+  const eventDateOf = (e: LifeEvent) => e.eventDate || e.startDate || "";
 
-  const totalPlanned = active.reduce((s, e) => s + e.amount, 0);
-  const mustDoTotal = active.filter((e) => e.priority === "must_do").reduce((s, e) => s + e.amount, 0);
+  const mustDoEvents = useMemo(
+    () =>
+      (events ?? [])
+        .filter((e) => e.priority === "must_do")
+        .sort((a, b) => eventDateOf(a).localeCompare(eventDateOf(b))),
+    [events],
+  );
 
-  const nextEvent = useMemo(() => {
-    const todayStr = new Date().toISOString().split("T")[0];
-    return active
-      .map((e) => ({ e, date: e.eventDate || e.startDate || "" }))
-      .filter((x) => x.date && x.date >= todayStr)
-      .sort((a, b) => a.date.localeCompare(b.date))[0]?.e;
-  }, [active]);
+  const somedayEvents = useMemo(
+    () =>
+      (events ?? [])
+        .filter((e) => e.priority === "planning_to" || e.priority === "just_dreaming")
+        .sort((a, b) => eventDateOf(a).localeCompare(eventDateOf(b))),
+    [events],
+  );
 
-  const grouped = useMemo(() => {
-    const byCat: Record<string, LifeEvent[]> = {};
-    for (const e of events ?? []) {
-      (byCat[e.category] ??= []).push(e);
-    }
-    return LIFE_EVENT_CATEGORIES.map((c) => ({ cat: c, items: byCat[c.value] ?? [] })).filter(
-      (g) => g.items.length > 0,
+  function renderCard(ev: LifeEvent) {
+    const priority = PRIORITY_MAP[ev.priority];
+    return (
+      <Card key={ev.id} className={`${cardChrome} group ${ev.isActive ? "" : "opacity-60"}`}>
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2 min-w-0">
+              <span className="shrink-0 mt-0.5" style={{ fontSize: "16px", lineHeight: 1 }} aria-hidden="true">
+                {getCategoryEmoji(categoryLabel(ev.category, ev.customCategory), ev.eventName)}
+              </span>
+              <div className="min-w-0">
+                <p className="font-semibold truncate">{ev.eventName}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {categoryLabel(ev.category, ev.customCategory)}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                onClick={() => {
+                  setEventToEdit(ev);
+                  setIsEditOpen(true);
+                }}
+                className="rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                title="Edit"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setEventToDelete(ev)}
+                className="rounded-md p-1.5 text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
+                title="Delete"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 text-2xl font-bold font-mono tabular-nums tracking-tight">
+            <FormatCurrency amount={ev.amount} />
+          </div>
+
+          <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+            <CalendarRange className="h-3 w-3 shrink-0" />
+            <span className="truncate">{timingSummary(ev)}</span>
+          </p>
+
+          <div className="mt-3 flex items-center gap-2">
+            {priority && (
+              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${priority.badgeClass}`}>
+                {priority.label}
+              </span>
+            )}
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+              {TIMING_LABELS[ev.timingType] ?? ev.timingType}
+            </span>
+          </div>
+
+          {ev.notes && <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{ev.notes}</p>}
+        </CardContent>
+      </Card>
     );
-  }, [events]);
+  }
 
   function handleDelete() {
     if (!eventToDelete) return;
@@ -119,73 +180,19 @@ export default function LifeEvents() {
         />
       </div>
 
-      {/* Summary panel */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card className={cardChrome} style={{ borderLeft: "3px solid #14b8a6" }}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Planned</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-9 w-32" />
-            ) : (
-              <>
-                <div className="text-3xl font-bold font-mono tabular-nums tracking-tight">
-                  <FormatCurrency amount={totalPlanned} />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1.5">{active.length} active event{active.length === 1 ? "" : "s"}</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className={cardChrome} style={{ borderLeft: "3px solid #ef4444" }}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Must-Do Commitments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-9 w-32" />
-            ) : (
-              <>
-                <div className="text-3xl font-bold font-mono tabular-nums tracking-tight">
-                  <FormatCurrency amount={mustDoTotal} />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1.5">Highest-priority spending</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className={cardChrome} style={{ borderLeft: "3px solid #3b82f6" }}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Next Up</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-9 w-40" />
-            ) : nextEvent ? (
-              <>
-                <div className="text-xl font-bold tracking-tight truncate">{nextEvent.eventName}</div>
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  {fmtDate(nextEvent.eventDate || nextEvent.startDate)} · <FormatCurrency amount={nextEvent.amount} />
-                </p>
-              </>
-            ) : (
-              <div className="text-sm text-muted-foreground">Nothing on the horizon yet.</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Events grouped by category */}
+      {/* Two-column priority layout */}
       {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-28 w-full" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {[1, 2].map((col) => (
+            <div key={col} className="space-y-3">
+              <Skeleton className="h-6 w-32" />
+              {[1, 2].map((i) => (
+                <Skeleton key={i} className="h-28 w-full" />
+              ))}
+            </div>
           ))}
         </div>
-      ) : grouped.length === 0 ? (
+      ) : mustDoEvents.length === 0 && somedayEvents.length === 0 ? (
         <EmptyState
           icon={<CalendarHeart className="h-8 w-8" />}
           title="No life events yet"
@@ -193,104 +200,32 @@ export default function LifeEvents() {
           className="mt-8"
         />
       ) : (
-        <div className="space-y-8">
-          {grouped.map(({ cat, items }) => {
-            const catTotal = items.filter((e) => e.isActive).reduce((s, e) => s + e.amount, 0);
-            return (
-              <div key={cat.value}>
-                <div className="flex items-center gap-2 mb-3">
-                  <span
-                    className="flex h-7 w-7 items-center justify-center rounded-md"
-                    style={{ backgroundColor: cat.bg, fontSize: "16px", lineHeight: 1 }}
-                  >
-                    {getCategoryEmoji(cat.label)}
-                  </span>
-                  <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                    {cat.label}
-                  </h2>
-                  <span className="text-xs text-muted-foreground font-mono">
-                    <FormatCurrency amount={catTotal} />
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {items.map((ev) => {
-                    const priority = PRIORITY_MAP[ev.priority];
-                    return (
-                      <Card
-                        key={ev.id}
-                        className={`${cardChrome} group ${ev.isActive ? "" : "opacity-60"}`}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-start gap-2 min-w-0">
-                              <span
-                                className="shrink-0 mt-0.5"
-                                style={{ fontSize: "16px", lineHeight: 1 }}
-                                aria-hidden="true"
-                              >
-                                {getCategoryEmoji(categoryLabel(ev.category, ev.customCategory), ev.eventName)}
-                              </span>
-                              <div className="min-w-0">
-                                <p className="font-semibold truncate">{ev.eventName}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {categoryLabel(ev.category, ev.customCategory)}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEventToEdit(ev);
-                                  setIsEditOpen(true);
-                                }}
-                                className="rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                                title="Edit"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEventToDelete(ev)}
-                                className="rounded-md p-1.5 text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#ef4444" }} />
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Must Do</h2>
+              <span className="text-xs text-muted-foreground">({mustDoEvents.length})</span>
+            </div>
+            {mustDoEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nothing marked as must-do yet.</p>
+            ) : (
+              <div className="space-y-3">{mustDoEvents.map(renderCard)}</div>
+            )}
+          </div>
 
-                          <div className="mt-3 text-2xl font-bold font-mono tabular-nums tracking-tight">
-                            <FormatCurrency amount={ev.amount} />
-                          </div>
-
-                          <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-                            <CalendarRange className="h-3 w-3 shrink-0" />
-                            <span className="truncate">{timingSummary(ev)}</span>
-                          </p>
-
-                          <div className="mt-3 flex items-center gap-2">
-                            {priority && (
-                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${priority.badgeClass}`}>
-                                {priority.label}
-                              </span>
-                            )}
-                            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                              {TIMING_LABELS[ev.timingType] ?? ev.timingType}
-                            </span>
-                          </div>
-
-                          {ev.notes && (
-                            <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{ev.notes}</p>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#f59e0b" }} />
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Maybe, Someday</h2>
+              <span className="text-xs text-muted-foreground">({somedayEvents.length})</span>
+            </div>
+            {somedayEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nothing on the maybe list yet.</p>
+            ) : (
+              <div className="space-y-3">{somedayEvents.map(renderCard)}</div>
+            )}
+          </div>
         </div>
       )}
 

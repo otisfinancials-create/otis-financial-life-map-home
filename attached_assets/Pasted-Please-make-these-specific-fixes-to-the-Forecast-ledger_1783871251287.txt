@@ -1,0 +1,79 @@
+Please make these specific fixes to the Forecast ledger — do not change any data logic:
+1. Fix emoji mapping — the current emoji lookup is not matching correctly. Replace the entire CATEGORY_EMOJI mapping with this exact version and make sure the matching checks if the category string CONTAINS the key, not exact match:
+typescript
+const CATEGORY_EMOJI: Record<string, string> = {
+  'salary': '💼',
+  'income': '💼',
+  'paycheck': '💼',
+  'mortgage': '🏠',
+  'housing': '🏠',
+  'rent': '🏠',
+  'insurance': '🛡️',
+  'subscription': '📺',
+  'netflix': '📺',
+  'spotify': '📺',
+  'streaming': '📺',
+  'utilities': '⚡',
+  'electric': '⚡',
+  'water': '💧',
+  'gas for': '🚗',
+  'auto': '🚗',
+  'car': '🚗',
+  'transport': '🚗',
+  'food': '🍽️',
+  'grocer': '🛒',
+  'restaurant': '🍽️',
+  'dining': '🍽️',
+  'vacation': '✈️',
+  'travel': '✈️',
+  'medical': '❤️',
+  'health': '❤️',
+  'doctor': '❤️',
+  'savings': '🏦',
+  'transfer': '🏦',
+  'pets': '🐾',
+  'education': '🎓',
+  'celebration': '🎉',
+  'home improvement': '🔨',
+  'renovation': '🔨',
+  'balance update': '🔄',
+  'garbage': '🗑️',
+  'trash': '🗑️',
+  'waste': '🗑️',
+  'other': '📋',
+  'manual': '✏️',
+  'gas': '⛽',
+}
+
+function getCategoryEmoji(category: string, description: string = ''): string {
+  const searchText = (category + ' ' + description).toLowerCase()
+  for (const [key, emoji] of Object.entries(CATEGORY_EMOJI)) {
+    if (searchText.includes(key)) return emoji
+  }
+  return '📋'
+}
+Pass BOTH the category AND the description/bill name to the function so it can match on either — e.g. a bill named "Netflix" in category "Subscriptions" will match on "netflix".
+2. Fix font sizes — update these specific CSS values in the ledger:
+Date cell: font-size 12px, color #999
+Description cell: font-size 13px, font-weight 500, color #1A1A2E
+Amount cell: font-size 13px, font-weight 500
+Category badge: font-size 11px
+Balance cell: font-size 14px, font-weight 600, color #0D2B45
+Action buttons: font-size 11px
+3. Fix row height — increase cell padding to 11px top and 11px bottom on all data cells. Minimum row height 44px.
+4. Fix category badge colors — the badges are still showing as plain gray. Apply these background and text colors:
+Food: background #FAECE7, text #712B13
+Housing: background #E6F1FB, text #0C447C
+Insurance: background #FAECE7, text #712B13
+Utilities: background #E1F5EE, text #085041
+Auto: background #FAEEDA, text #633806
+Subscriptions: background #EEEDFE, text #3C3489
+Income/Salary: background #E1F5EE, text #085041
+Savings: background #FCEBEB, text #791F1F
+Balance Update: background #E6F1FB, text #0C447C
+Vacation: background #E1F5EE, text #085041
+Other: background #F1EFE8, text #444441
+5. Fix Balance Update row — the label shows as "Balance Update — 2026-07-11" which is ugly. Format it as "Balance updated" with just the date in muted gray: "Balance updated · Jul 11"
+6. Hide history is also hiding the 'TODAY' row, please update so that that row remains on hide history.
+Apply all 6 fixes and push to GitHub when complete
+

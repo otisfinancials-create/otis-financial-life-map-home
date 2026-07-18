@@ -22,6 +22,8 @@ export interface LifeEvent {
   endDate?: string | null;
   /** @nullable */
   frequency?: string | null;
+  /** @nullable */
+  customIntervalDays?: number | null;
   priority: string;
   /** @nullable */
   notes?: string | null;

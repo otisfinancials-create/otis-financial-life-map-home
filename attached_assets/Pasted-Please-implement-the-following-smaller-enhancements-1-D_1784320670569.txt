@@ -1,0 +1,27 @@
+Please implement the following smaller enhancements:
+1. Dashboard — rename Overview to Dashboard
+Find any instance of the word "Overview" used as a page title or heading on the Dashboard page and change it to "Dashboard".
+2. Bills — rename Auto-Pay to Bank Draft
+Find every instance of "Auto-Pay" or "autopay" in the Bills section — dropdown options, labels, column headers, form fields — and rename to "Bank Draft".
+3. Bills — Add Cell Phone category
+Add "Cell Phone 📱" as a category option in the Bills category dropdown. Insert it between "Auto" and "Food" alphabetically. Apply a category color (#8B5CF6 purple) and consistent icon throughout the app — category bar, badge, emoji — matching the existing category system.
+4. Bills — Inline edit sidebar stays on page
+When a user clicks a bill row to edit it, instead of opening a full sidebar overlay that covers the page, implement a split-panel layout:
+
+The bills list slides left and resizes to approximately 60% of the page width
+The edit panel opens on the right as a new panel taking the remaining 40%
+Both panels are visible simultaneously so the user can reference the list while editing
+The edit panel has a close button (X) top right that returns to full-width list view
+
+5. Bills — Add Planned vs Actual pill
+Add a pill/tab labeled "Planned vs Actual" at the top of the Bills page alongside existing pills. When clicked it shows a snapshot view for the current month with three columns:
+
+Planned: the budgeted amount for each bill category
+Actual: what has been marked as paid so far this month
+Remaining: Planned minus Actual
+Show by category with totals at the bottom
+Note: Actual data is manual for now — pulled from bills marked as paid in the current month
+
+6. UI — Remove white topbar
+The white bar across the top of every page (containing the greeting and notification icons) should be removed. The page title and greeting move directly onto the soft gray page background with no white container behind them. The result is that only the Carolina blue sidebar with rounded corners and the soft gray background are visible — no white topbar stripe.
+After all changes push to GitHub with commit message: "Round 2 part 2 — bills enhancements, topbar removed, category additions

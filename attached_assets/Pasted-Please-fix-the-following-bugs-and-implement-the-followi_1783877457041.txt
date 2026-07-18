@@ -1,0 +1,59 @@
+Please fix the following bugs and implement the following enhancements across multiple sections of the app. Address every item completely before finishing.
+---
+### DASHBOARD
+1. Tagline — Add a static tagline "Organize · Track · Inform · Simulate" that appears consistently at the top of every page, just below the main navigation header. It should never change, never scroll away, and use a subtle muted color so it doesn't compete with page content. Font size 11px, letter-spacing 0.08em, centered or left-aligned consistently with the page layout.
+---
+### CONNECTED ACCOUNTS
+2. Notes field character limit — Limit the Notes field in the Add/Edit Account form to 200 characters. Show a character count below the field (e.g. "45/200"). Also display the notes text on the account card in the Connected Accounts list so users can see their notes without clicking edit.
+3. Credit card and loan balance handling — When a user selects account type "Credit Card" or "Loan", always treat the balance as negative in calculations regardless of whether the user enters a positive or negative number. If a user enters a negative number for these account types, show an inline error: "Credit card and loan balances are always treated as negative in calculations. Enter the balance as a positive number and Otis will do the rest." Convert any positive number entered to negative automatically before saving.
+4. Balance field validation — The balance field should only accept numbers. Limit to 9 digits before the decimal point and 2 decimal places maximum. Reject any non-numeric input with an inline error.
+5. Enhancements:
+Add "Other" as an account type option in the dropdown
+Positive account balances display in green, negative in red throughout the Connected Accounts page
+---
+### MY ASSETS
+6. Notes field — Same as Connected Accounts: limit Notes to 200 characters with character count shown. Display notes on the asset card.
+7. Negative asset value validation — Assets must be zero or positive only. If a user enters a negative value, show an inline error: "Asset values must be positive. Enter the estimated value of what this asset is worth." Do not save negative asset values under any circumstances — they incorrectly reduce Net Worth.
+8. Estimated Value field — Limit to 9 digits before decimal and 2 decimal places maximum.
+---
+### BILLS
+9. Donut chart percentages exceeding 100% — Fix the percentage calculation in the donut chart legend so all category percentages sum to exactly 100% (within 0.1% rounding). The issue is likely that percentages are being calculated independently per category rather than as a proportion of the total. Formula: category % = (category monthly total ÷ sum of ALL category monthly totals) × 100.
+10. Company URL prefixing — When a user enters a company URL without a protocol prefix (e.g. "netflix.com" instead of "https://www.netflix.com"), automatically add "https://www." before saving and when generating the hyperlink. Validation: if the entered value contains a dot and no spaces, treat it as a valid URL and prefix it. If it already starts with "http://" or "https://" leave it as-is.
+11. Search field in Monthly Summary view — The search/filter field currently does nothing when Monthly Summary view is active. Fix this so search works in both Ledger and Monthly Summary views — filtering to show only months that contain matching transactions, and expanding those months to show the matching rows.
+12. Sortable columns — Add sort functionality to the bills table for these 6 columns: Bill Name, Category, Amount, Frequency, Due Date, Payment Method. Clicking a column header sorts ascending, clicking again sorts descending. Show a sort arrow indicator on the active sort column. Active and Actions columns are not sortable.
+13. Donut chart category filter — Make the donut chart slices clickable. When a user clicks a category slice: filter the summary panel to the right of the donut AND the bills table below to show only bills in that category. The slice should highlight to show it's selected. Clicking the same slice again deselects it and shows all categories (toggle behavior). Clicking a different slice switches to that category.
+14. Donut chart note — Add a small note below the donut chart title: "Monthly equivalents — all bill amounts normalized to a monthly figure for comparison." Style as muted gray italic text, font-size 11px.
+15. Amount field — Limit to 9 digits before decimal and 2 decimal places maximum.
+16. Remove end date bug — When a user removes an end date (clears the field) and saves, the change is not being persisted. Fix this so clearing the end date saves correctly as null/empty and the bill continues indefinitely in the forecast.
+---
+### PAY SCHEDULES
+17. "Add your first income source" button color — Change the empty state "Add your first income source" button to match the blue style of the "Add Income Source" button at the top of the page. Both buttons should look identical.
+18. Field limits:
+Employer / Income Source Name: maximum 100 characters
+Net Pay Amount: maximum 9 digits before decimal, 2 decimal places
+---
+### FORECAST
+19. Update Current Balance row positioning — When a user updates their current balance, insert the Balance Update row in the correct position: after the most recent paid transaction for that date, but before any unpaid transactions for the same date. Example: if today has a paid $200 food row (balance $3,500), then two unpaid $50 rows, and the user sets balance to $4,000 — the Balance Update row should appear between the $3,500 paid row and the first unpaid $50 row. The Balance Update row becomes the new running balance baseline and the subsequent unpaid rows calculate forward from $4,000.
+20. Export download security fix — The CSV/Excel export is triggering antivirus warnings (McAfee blocking it as a threat). This is likely caused by the file generation method. Fix the export to generate a clean safe file: for CSV use a plain text Blob with mime type "text/csv;charset=utf-8", add a UTF-8 BOM (\uFEFF) at the start. For Excel use the SheetJS (xlsx) library which generates standard XLSX files that don't trigger antivirus. Do not use any server-side file generation — generate entirely client-side in the browser.
+---
+### LOANS
+21. Amortization schedule note for historical loans — When a loan has a start date in the past, add a note next to the amortization schedule title: "Showing payments from today forward. This loan started on [start date] with [N] payments already made." Style as muted gray text, font-size 12px.
+22. Custom loan term — Add a "Custom" option at the bottom of the loan term dropdown. When selected, show a text input field where the user can type any number of months. Validate that it's a positive integer. Use this custom value in all amortization calculations.
+23. Next payment date validation — Add a validation check: the Next Payment Date cannot be earlier than the Loan Start Date. If it is, show an inline error: "Next payment date must be on or after the loan start date."
+24. Amortization export — Add an "Export Schedule" button on the amortization view. Exports the full amortization table to CSV with columns: Payment #, Payment Date, Payment Amount, Principal, Interest, Remaining Balance. Filename: "[Loan Name]-amortization.csv". Apply the same safe CSV generation method from fix #20.
+---
+### RETIREMENT
+25. Filter to Retirement accounts only — The Retirement page is currently including Investment accounts in the total. Fix this so ONLY accounts with type "Retirement" from Connected Accounts appear on the Retirement page. Investment, Brokerage, and other account types should not be included. Add a note at the top of the Retirement page: "Retirement savings pulled from accounts marked as 'Retirement' type in Connected Accounts."
+---
+### OTIS AI
+26. Head tilt animation — head only — Currently the entire body/avatar tilts when the user is typing. Fix the animation so only the head portion tilts side to side while the user is typing — not a single tilt, but a continuous gentle side-to-side head movement (left tilt → center → right tilt → center → repeat) while typing is in progress. The body/chest should remain completely still. Use CSS transform-origin set to the bottom center of the head element so only the head rotates.
+27. Remove duplicate Otis avatar in the  header — Remove the Otis avatar in the header. It is redundant with the Otis avatar next to ‘Ask Otis’, keep that one only
+28. Page scroll behavior during response — When Otis is responding to a question, the page currently scrolls to the bottom forcing the user to wait and then scroll back up. Fix this so the page does NOT auto-scroll during response generation. Instead, keep the viewport pinned where the user is so they can see the response appearing in real time in the chat area. Only auto-scroll if the user is already at the bottom of the chat.
+---
+### AFTER ALL CHANGES:
+ 1. Test the donut percentage fix by verifying all percentages sum to 100%
+ 2. Test the URL prefixing by entering "netflix.com" and clicking the link
+ 3. Test the export by downloading CSV — verify no antivirus warning
+ 4. Test the Otis head tilt — only head should move, not body
+ 5. Push all changes to GitHub with commit message: "End of day fixes — multi-section bugs and enhancements
+

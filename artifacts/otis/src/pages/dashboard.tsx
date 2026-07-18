@@ -295,7 +295,8 @@ export default function Dashboard() {
   });
 
   /* ── Savings & investments ──────────────────────────────────────────── */
-  const SAVINGS_INVESTMENT_TYPES = ["savings", "investment", "retirement", "brokerage"];
+  // Retirement is intentionally excluded — it's shown in its own section (#R3-6).
+  const SAVINGS_INVESTMENT_TYPES = ["savings", "investment", "brokerage"];
   const savingsAccounts = (accounts ?? []).filter((a) =>
     SAVINGS_INVESTMENT_TYPES.includes(a.accountType),
   );

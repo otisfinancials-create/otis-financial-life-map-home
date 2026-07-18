@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lt, lte, gt, inArray, isNull, desc } from "drizzle-orm";
+import { eq, and, or, gte, lt, lte, gt, inArray, isNull, desc } from "drizzle-orm";
 import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable } from "@workspace/db";
 import {
   CreateForecastedTransactionBody,
@@ -134,10 +134,15 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
   //   - Balance-update rows (real-world reconciliations, not projections)
   //   - Past rows (paid, missed, or still pending) — they are the 30-day
   //     rolling history and must survive a rebuild.
+  //   - User-committed rows (isCommitted) — manual entries and rows the user
+  //     has edited. Wiping these was the "forecast edits don't persist" bug:
+  //     any bill/loan/life-event change triggers a background regenerate,
+  //     which used to delete every future non-paid row including user edits.
   const regenTodayStr = toLocalIso(new Date());
   await db.delete(forecastedTransactionsTable).where(
     and(
       eq(forecastedTransactionsTable.isActual, false),
+      eq(forecastedTransactionsTable.isCommitted, false),
       isNull(forecastedTransactionsTable.sourceBalanceSyncId),
       gte(forecastedTransactionsTable.transactionDate, regenTodayStr),
       eq(forecastedTransactionsTable.userId, userId),
@@ -180,29 +185,40 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
   // groups: key = `${accountId}|${dueDateStr}` → child rows for that CC payment
   const ccGroups = new Map<string, { account: typeof ccAccounts[number]; dueDate: string; children: Array<typeof forecastedTransactionsTable.$inferInsert> }>();
 
-  // Paid (actual) CC children survive the delete above but their parent rows
-  // (isActual=false) do not. Track survivors so we (a) don't insert duplicate
-  // children for occurrences already marked paid, and (b) recreate each
-  // group's parent with the correct paid amount instead of $0.
-  const survivingCcChildren = await db
+  // Paid (actual) and user-committed rows survive the delete above, but
+  // generated parent/sibling rows do not. Track the survivors so we
+  // (a) don't insert duplicate occurrences for rows that already exist, and
+  // (b) recreate each CC group's parent with the correct paid amount.
+  const preservedRows = await db
     .select()
     .from(forecastedTransactionsTable)
     .where(and(
       eq(forecastedTransactionsTable.userId, userId),
-      eq(forecastedTransactionsTable.isActual, true),
       eq(forecastedTransactionsTable.isCcParent, false),
+      isNull(forecastedTransactionsTable.sourceBalanceSyncId),
       gte(forecastedTransactionsTable.transactionDate, regenTodayStr),
+      or(
+        eq(forecastedTransactionsTable.isActual, true),
+        eq(forecastedTransactionsTable.isCommitted, true),
+      ),
     ));
   const survivorsByGroup = new Map<string, number>(); // key → paid sum
-  const survivorOccurrences = new Set<string>(); // `${sourceBillId}|${dueDate}`
-  for (const child of survivingCcChildren) {
-    if (child.ccAccountId == null) continue;
-    const key = `${child.ccAccountId}|${child.transactionDate}`;
-    if (child.status !== "missed") {
-      survivorsByGroup.set(key, (survivorsByGroup.get(key) ?? 0) + parseFloat(String(child.amount)));
-    }
-    if (child.sourceBillId != null) {
-      survivorOccurrences.add(`${child.sourceBillId}|${child.transactionDate}`);
+  const survivorOccurrences = new Set<string>(); // `${sourceBillId}|${dueDate}` (CC children)
+  // Non-CC preserved occurrences: `bill|id|date`, `pay|id|date`, `life|id|date`
+  const preservedKeys = new Set<string>();
+  for (const row of preservedRows) {
+    if (row.ccAccountId != null) {
+      const key = `${row.ccAccountId}|${row.transactionDate}`;
+      if (row.isActual && row.status !== "missed") {
+        survivorsByGroup.set(key, (survivorsByGroup.get(key) ?? 0) + parseFloat(String(row.amount)));
+      }
+      if (row.sourceBillId != null) {
+        survivorOccurrences.add(`${row.sourceBillId}|${row.transactionDate}`);
+      }
+    } else {
+      if (row.sourceBillId != null) preservedKeys.add(`bill|${row.sourceBillId}|${row.transactionDate}`);
+      if (row.sourcePayId != null) preservedKeys.add(`pay|${row.sourcePayId}|${row.transactionDate}`);
+      if (row.sourceLifeEventId != null) preservedKeys.add(`life|${row.sourceLifeEventId}|${row.transactionDate}`);
     }
   }
 
@@ -230,7 +246,7 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
           transactionDate: dueDate,
           description: bill.billName,
           amount: String(amount),
-          transactionType: "expense",
+          transactionType: bill.amountType === "positive" ? "income" : "expense",
           category: bill.category,
           sourceBillId: bill.id,
           ccAccountId: card.id,
@@ -239,12 +255,15 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
           isCommitted: false,
         });
       } else {
+        // A preserved (paid or user-edited) row already covers this
+        // occurrence — don't insert a duplicate.
+        if (preservedKeys.has(`bill|${bill.id}|${dateStr}`)) continue;
         toInsert.push({
           userId,
           transactionDate: dateStr,
           description: bill.billName,
           amount: String(amount),
-          transactionType: "expense",
+          transactionType: bill.amountType === "positive" ? "income" : "expense",
           category: bill.category,
           sourceBillId: bill.id,
           isActual: false,
@@ -299,7 +318,7 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     let current = new Date(ps.nextPayDate);
 
     while (current <= endDate) {
-      if (current >= today) {
+      if (current >= today && !preservedKeys.has(`pay|${ps.id}|${current.toISOString().split("T")[0]}`)) {
         toInsert.push({
           userId,
           transactionDate: current.toISOString().split("T")[0],
@@ -327,6 +346,7 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     const category = ev.category === "custom" && ev.customCategory ? ev.customCategory : ev.category;
 
     const pushRow = (dateStr: string, amount: number, description: string) => {
+      if (preservedKeys.has(`life|${ev.id}|${dateStr}`)) return;
       toInsert.push({
         userId,
         transactionDate: dateStr,
@@ -668,6 +688,9 @@ router.patch("/forecast/:id", async (req, res): Promise<void> => {
     ...restTxData,
     ...(rawTxAmount !== undefined && { amount: String(rawTxAmount) }),
     ...(rawForecastedAmount !== undefined && { forecastedAmount: rawForecastedAmount === null ? null : String(rawForecastedAmount) }),
+    // Any user edit commits the row so forecast regeneration preserves it
+    // (CC parent rows stay uncommitted — they are always derived).
+    ...(!existing.isCcParent && { isCommitted: true }),
   };
 
   const tx = await db.transaction(async (trx) => {
@@ -697,6 +720,8 @@ router.patch("/forecast/:id", async (req, res): Promise<void> => {
       if (restTxData.category !== undefined) futureSet.category = restTxData.category;
       if (rawTxAmount !== undefined) futureSet.amount = String(rawTxAmount);
       if (Object.keys(futureSet).length > 0) {
+        // Commit these rows too so regeneration preserves the applied edits.
+        futureSet.isCommitted = true;
         await trx
           .update(forecastedTransactionsTable)
           .set(futureSet)

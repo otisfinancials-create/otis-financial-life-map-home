@@ -191,6 +191,14 @@ export default function Forecast() {
 
   // inline edit
   const [editingId, setEditingId] = useState<number | null>(null);
+  // "Saved ✓" row flash after a successful save (#R3-1).
+  const [savedFlashId, setSavedFlashId] = useState<number | null>(null);
+  const savedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashSaved = (id: number) => {
+    setSavedFlashId(id);
+    if (savedFlashTimer.current) clearTimeout(savedFlashTimer.current);
+    savedFlashTimer.current = setTimeout(() => setSavedFlashId(null), 2200);
+  };
   const [editValue, setEditValue] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
 
@@ -240,13 +248,15 @@ export default function Forecast() {
   const endDate   = format(addMonths(today, months), "yyyy-MM-dd");
 
   // ── Queries ──────────────────────────────────────────────────────────────
+  // refetchOnMount "always": returning to this page always reloads forecast
+  // rows from the database so saved edits are reflected (#R3-1).
   const { data: rawTxs = [], isLoading: loadingTxs } = useListForecast(
     { startDate, endDate },
-    { query: { queryKey: getListForecastQueryKey({ startDate, endDate }) } },
+    { query: { queryKey: getListForecastQueryKey({ startDate, endDate }), refetchOnMount: "always" } },
   );
   const { data: allTxs = [], isLoading: loadingAll } = useListForecast(
     undefined,
-    { query: { queryKey: getListForecastQueryKey() } },
+    { query: { queryKey: getListForecastQueryKey(), refetchOnMount: "always" } },
   );
   const { data: monthlyData = [], isLoading: loadingMonthly } = useGetMonthlyForecast();
   const { data: userSettings, isLoading: loadingSettings } = useGetUserSettings();
@@ -600,6 +610,7 @@ export default function Forecast() {
     updateTx.mutate({ id: tx.id, data: { isActual: true, status: null } }, {
       onSuccess: () => {
         invalidate();
+        flashSaved(tx.id);
         toast({ title: tx.transactionType === "income" ? "Confirmed received" : "Marked as paid" });
         setSelectedTx(null);
       },
@@ -657,8 +668,9 @@ export default function Forecast() {
       // First time the amount deviates from plan, remember the planned value
       // so the variance indicator can show "vs planned".
       if (prev && prev.forecastedAmount == null && val !== prev.amount) data.forecastedAmount = prev.amount;
+      const savedId = editingId;
       updateTx.mutate({ id: editingId, data }, {
-        onSuccess: () => invalidate(),
+        onSuccess: () => { invalidate(); flashSaved(savedId); },
         onError: () => toast({ title: "Failed to save", variant: "destructive" }),
       });
     } else if (editValue.trim() !== "") {
@@ -756,8 +768,9 @@ export default function Forecast() {
         isActual: false,
       },
     }, {
-      onSuccess: () => {
+      onSuccess: (created) => {
         invalidate();
+        if (created?.id != null) flashSaved(created.id);
         setShowManualModal(false);
         setManualForm({ description: "", amount: "", transactionDate: todayStr, category: "Other", transactionType: "expense" });
         setManualErrors({});
@@ -818,6 +831,7 @@ export default function Forecast() {
         invalidate();
         setSelectedTx(null);
         setRecurringPrompt(null);
+        flashSaved(id);
         toast({ title: "Transaction updated" });
       },
       onError: () => toast({ title: "Failed to update", variant: "destructive" }),
@@ -1308,6 +1322,11 @@ export default function Forecast() {
                                     {tx.transactionType === "income" ? "Confirmed" : "Paid"}
                                   </StatusPill>
                                 )}
+                                {savedFlashId === tx.id && (
+                                  <StatusPill bg="#E7F6EC" text="#059669">
+                                    Saved ✓
+                                  </StatusPill>
+                                )}
                                 {isOverdue && (
                                   <StatusPill bg="#FFF3E0" text="#9A3412">
                                     <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#F97316" }} />
@@ -1373,9 +1392,22 @@ export default function Forecast() {
                                           : "Double-click to edit"
                                       }
                                     >
-                                      {tx.isVariable && !isAdjustment && <span className="text-muted-foreground mr-0.5">~</span>}
-                                      {!isAdjustment && (tx.transactionType === "income" ? "+" : "−")}
-                                      <FormatCurrency amount={tx.amount} />
+                                      {ccChild && tx.isActual && !isMissed ? (
+                                        // Paid CC child: the amount rolled up into the
+                                        // parent "Credit Card Payment" row — show $0.00.
+                                        <span
+                                          className="line-through text-muted-foreground"
+                                          title={`Paid — $${tx.amount.toFixed(2)} added to the Credit Card Payment total`}
+                                        >
+                                          <FormatCurrency amount={0} />
+                                        </span>
+                                      ) : (
+                                        <>
+                                          {tx.isVariable && !isAdjustment && <span className="text-muted-foreground mr-0.5">~</span>}
+                                          {!isAdjustment && (tx.transactionType === "income" ? "+" : "−")}
+                                          <FormatCurrency amount={tx.amount} />
+                                        </>
+                                      )}
                                     </span>
                                     {variance !== null && (
                                       <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">

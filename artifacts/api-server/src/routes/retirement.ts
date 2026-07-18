@@ -13,7 +13,7 @@ const router: IRouter = Router();
 
 // Account types counted toward the retirement savings base. Investment accounts
 // are included intentionally (e.g. a brokerage earmarked for retirement).
-const RETIREMENT_ACCOUNT_TYPES = ["retirement", "investment"];
+const RETIREMENT_ACCOUNT_TYPES = ["retirement"];
 
 const DEFAULTS = {
   currentAge: null as number | null,
@@ -98,8 +98,8 @@ router.post("/retirement/settings", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (parsed.data.retirementAge <= parsed.data.currentAge) {
-    res.status(400).json({ error: "Planned retirement age must be greater than your current age" });
+  if (parsed.data.retirementAge < parsed.data.currentAge) {
+    res.status(400).json({ error: "Planned retirement age cannot be before your current age" });
     return;
   }
 
@@ -146,7 +146,7 @@ router.get("/retirement/summary", async (req, res): Promise<void> => {
 
   const hasSettings = settings.currentAge != null && settings.retirementGoal != null;
   let projectedValue = currentSavings;
-  if (settings.currentAge != null && settings.retirementAge > settings.currentAge) {
+  if (settings.currentAge != null && settings.retirementAge >= settings.currentAge) {
     const points = projectRetirement(
       currentSavings,
       monthlyContribution,
@@ -159,7 +159,7 @@ router.get("/retirement/summary", async (req, res): Promise<void> => {
   const readinessScore =
     settings.retirementGoal && settings.retirementGoal > 0
       ? Math.min(100, Math.round((projectedValue / settings.retirementGoal) * 100))
-      : 0;
+      : 100;
 
   res.json(
     GetRetirementSummaryResponse.parse({
@@ -186,14 +186,15 @@ router.get("/retirement/projection", async (req, res): Promise<void> => {
   );
 
   const hasSettings = settings.currentAge != null && settings.retirementGoal != null;
-  if (settings.currentAge == null || settings.retirementAge <= settings.currentAge) {
+  if (settings.currentAge == null || settings.retirementAge < settings.currentAge) {
+    const goal = settings.retirementGoal ?? 0;
     res.json(
       GetRetirementProjectionResponse.parse({
         points: [],
         projectedValue: Math.round(currentSavings),
         retirementGoal: settings.retirementGoal,
-        onTrack: false,
-        shortfall: settings.retirementGoal ?? 0,
+        onTrack: goal <= 0,
+        shortfall: goal <= 0 ? 0 : Math.max(0, goal - Math.round(currentSavings)),
         hasSettings,
       }),
     );
@@ -209,7 +210,7 @@ router.get("/retirement/projection", async (req, res): Promise<void> => {
   );
   const projectedValue = points[points.length - 1].projected;
   const goal = settings.retirementGoal ?? 0;
-  const onTrack = goal > 0 && projectedValue >= goal;
+  const onTrack = goal <= 0 || projectedValue >= goal;
   const shortfall = onTrack ? 0 : Math.max(0, goal - projectedValue);
 
   res.json(

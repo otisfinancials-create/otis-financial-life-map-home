@@ -2,6 +2,7 @@
 - [Otis light/dark theming](otis-theming.md) — class-based dark via @custom-variant; a stray `dark` class on Shell.tsx made the authenticated app dark while the sign-in page stayed light.
 - [Git ops from the agent](git-write-block.md) — local object writes (commit, tag) are blocked, but `git push` works; GitHub rejects pushes of repos with CI files unless token has `workflow` scope; create tags via the REST API.
 - [Clerk dev iframe 401s](clerk-dev-iframe-cookies.md) — preview-pane iframe blocks Clerk session cookie; signed-in app 401s with sessionStatus null. Fix: open app in own tab. Not data loss.
+- [E2E Clerk testing](e2e-clerk-testing.md) — runTest needs explicit programmatic sign-in step or Turnstile blocks it; test user has no data, create fixtures first; don't test mid-edit (HMR false failures).
 - [Forecast date stepping](forecast-date-stepping.md) — recurring/spread generation must clamp month day (addMonthsIso) and compare YYYY-MM-DD strings, not Date objects.
 - [Life events timing normalization](life-events-timing-normalization.md) — server clears non-applicable date/frequency fields on create+update; PATCH merges existing then normalizes on final timingType.
 - [Artifact root routing swap](artifact-root-routing-swap.md) — to serve a different web artifact at `/`, swap previewPath+paths+BASE_PATH in both artifact.tomls; otis survives moving to /app/ (root-relative API + wouter base).
@@ -10,3 +11,4 @@
 - [Loans amortization parity](loans-amortization-parity.md) — amortization engine duplicated on server (routes/loans.ts) and client (components/loans/amortization.ts); change both in lockstep.
 - [Codegen transient reload errors](codegen-transient-errors.md) — Orval codegen briefly deletes generated files; ignore Vite/Metro reload errors in that window, restart Expo to clear Metro's cached failure.
 - [Forecast balance anchoring](forecast-balance-anchoring.md) — sync-adjustment rows must skip the past back-fill and survive regenerate/delete, or rebaselining silently breaks.
+- [pnpm @types/react hoist](pnpm-types-react-hoist.md) — duplicate @types/react (Expo pin vs catalog) breaks web typecheck via pnpm hidden hoist; align all pins to catalog:.

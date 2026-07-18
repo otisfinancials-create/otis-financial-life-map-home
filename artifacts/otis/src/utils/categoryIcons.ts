@@ -55,6 +55,7 @@ export type CategoryKey =
   | "education"
   | "celebrations"
   | "homeImprovements"
+  | "cryptocurrency"
   | "balanceUpdate"
   | "custom"
   | "other";
@@ -89,6 +90,7 @@ export const CATEGORY_META: Record<CategoryKey, CategoryMeta> = {
   education:        { icon: GraduationCap,   color: "#534AB7", bg: "#EEEDFE", text: "#3C3489", label: "Education" },
   celebrations:     { icon: PartyPopper,     color: "#D4537E", bg: "#FBEAF0", text: "#72243E", label: "Celebrations" },
   homeImprovements: { icon: Hammer,          color: "#BA7517", bg: "#FAEEDA", text: "#633806", label: "Home Improvements" },
+  cryptocurrency:   { icon: TrendingUp,      color: "#F59E0B", bg: "#FEF3C7", text: "#92400E", label: "Cryptocurrency" },
   balanceUpdate:    { icon: RefreshCw,       color: "#185FA5", bg: "#E6F1FB", text: "#0C447C", label: "Balance Update" },
   custom:           { icon: Sparkles,        color: "#888780", bg: "#F1EFE8", text: "#444441", label: "Custom" },
   other:            { icon: Pencil,          color: "#888780", bg: "#F1EFE8", text: "#444441", label: "Other" },
@@ -115,6 +117,7 @@ const NAME_TO_KEY: Record<string, CategoryKey> = {
   education: "education",
   celebrations: "celebrations",
   "home improvements": "homeImprovements", home_improvements: "homeImprovements",
+  cryptocurrency: "cryptocurrency", crypto: "cryptocurrency", bitcoin: "cryptocurrency",
   adjustment: "balanceUpdate", "balance update": "balanceUpdate",
   custom: "custom",
   other: "other", manual: "other",
@@ -193,6 +196,9 @@ export const CATEGORY_EMOJI: Record<string, string> = {
   medical: "❤️",
   health: "❤️",
   doctor: "❤️",
+  cryptocurrency: "🪙",
+  crypto: "🪙",
+  bitcoin: "🪙",
   savings: "🏦",
   transfer: "🏦",
   pets: "🐾",

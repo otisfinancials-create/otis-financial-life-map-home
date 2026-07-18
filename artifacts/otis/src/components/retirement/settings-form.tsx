@@ -36,8 +36,8 @@ const settingsSchema = z
       .optional(),
     retirementDurationYears: z.coerce.number().int().min(1).max(60),
   })
-  .refine((data) => data.retirementAge > data.currentAge, {
-    message: "Retirement age must be after your current age",
+  .refine((data) => data.retirementAge >= data.currentAge, {
+    message: "Retirement age cannot be before your current age",
     path: ["retirementAge"],
   });
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, MoreHorizontal, Home, Car, Package, Boxes, Building2, Trash2, Pencil, Scale } from "lucide-react";
+import { Plus, MoreHorizontal, Home, Car, Package, Boxes, Building2, Bitcoin, Trash2, Pencil, Scale } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useListAssets, useGetAssetsSummary, useDeleteAsset, getListAssetsQueryKey, getGetAssetsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
@@ -36,6 +36,7 @@ const TYPE_LABELS: Record<string, string> = {
   vehicle: "Vehicle",
   personal_property: "Personal Property",
   business_interest: "Business Interest",
+  cryptocurrency: "Cryptocurrency",
   other: "Other",
 };
 
@@ -49,6 +50,7 @@ const getAssetIcon = (type: string) => {
     case 'vehicle': return <Car className="h-4 w-4" />;
     case 'personal_property': return <Package className="h-4 w-4" />;
     case 'business_interest': return <Building2 className="h-4 w-4" />;
+    case 'cryptocurrency': return <Bitcoin className="h-4 w-4" />;
     default: return <Boxes className="h-4 w-4" />;
   }
 };
@@ -59,6 +61,7 @@ const getAssetColor = (type: string) => {
     case 'vehicle': return 'text-[#0D2B45]';
     case 'personal_property': return 'text-primary';
     case 'business_interest': return 'text-[#0D2B45]';
+    case 'cryptocurrency': return 'text-[#F59E0B]';
     default: return 'text-primary';
   }
 };

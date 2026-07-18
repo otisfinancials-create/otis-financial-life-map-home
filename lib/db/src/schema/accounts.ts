@@ -10,6 +10,7 @@ export const accountsTable = pgTable("accounts", {
   institutionName: text("institution_name").notNull(),
   currentBalance: numeric("current_balance", { precision: 15, scale: 2 }).notNull(),
   monthlyContribution: numeric("monthly_contribution", { precision: 12, scale: 2 }).notNull().default("0"),
+  savingsGoal: numeric("savings_goal", { precision: 15, scale: 2 }),
   retirementSubtype: text("retirement_subtype"),
   isAsset: boolean("is_asset").notNull().default(true),
   accountNumberLast4: text("account_number_last4"),

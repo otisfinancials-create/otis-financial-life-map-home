@@ -250,7 +250,7 @@ export default function Bills() {
 
       {view === "bills" && (
       <div className="flex flex-col lg:flex-row gap-4 items-start">
-      <Card className={`border-card-border bg-card rounded-xl overflow-hidden transition-all duration-300 w-full min-w-0 ${billToEdit ? "lg:w-[60%]" : "lg:w-full"}`}>
+      <Card className={`border-card-border bg-card rounded-xl overflow-hidden transition-all duration-300 w-full min-w-0 ${billToEdit ? "lg:flex-1 [&_td]:text-[12px] [&_th]:text-[12px] [&_td_.text-sm]:text-[12px]" : "lg:w-full"}`}>
         {isLoading ? (
           <div className="p-8 space-y-4">
             {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -358,7 +358,13 @@ export default function Bills() {
                       })()}
                     </TableCell>
                     <TableCell className="font-mono">
-                      <FormatCurrency amount={bill.amount} />
+                      {bill.amountType === "positive" ? (
+                        <span className="text-[#059669]">
+                          +<FormatCurrency amount={bill.amount} />
+                        </span>
+                      ) : (
+                        <FormatCurrency amount={bill.amount} />
+                      )}
                     </TableCell>
                     <TableCell className="capitalize text-muted-foreground text-sm">
                       {bill.frequency}
@@ -429,7 +435,7 @@ export default function Bills() {
       </Card>
 
       {billToEdit && (
-        <Card className="border-card-border bg-card rounded-xl w-full lg:w-[40%] shrink-0 p-5 animate-in slide-in-from-right-4 fade-in duration-300">
+        <Card className="border-card-border bg-card rounded-xl w-full lg:w-[300px] lg:min-w-[280px] lg:max-w-[320px] shrink-0 p-4 animate-in slide-in-from-right-4 fade-in duration-300 [&_label]:text-[12px] [&_input]:text-[13px] [&_textarea]:text-[13px] [&_button]:text-[13px] [&_select]:text-[13px]">
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold">Edit Bill</h2>

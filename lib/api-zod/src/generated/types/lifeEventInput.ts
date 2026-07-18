@@ -16,6 +16,7 @@ export interface LifeEventInput {
   startDate?: string;
   endDate?: string;
   frequency?: string;
+  customIntervalDays?: number;
   priority: string;
   notes?: string;
   isActive?: boolean;

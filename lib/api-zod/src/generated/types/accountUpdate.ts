@@ -14,6 +14,8 @@ export interface AccountUpdate {
   currentBalance?: number;
   monthlyContribution?: number;
   /** @nullable */
+  savingsGoal?: number | null;
+  /** @nullable */
   retirementSubtype?: AccountUpdateRetirementSubtype;
   isAsset?: boolean;
   /**

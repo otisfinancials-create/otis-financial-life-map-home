@@ -1,0 +1,124 @@
+The icon library choice (Lucide) is correct — keep it consistent with the rest of the app. However please make the following fixes to ensure icons render correctly and are applied consistently across the ENTIRE application, not just the Forecast page:
+### Part A: Forecast page icon fixes
+Verify every category icon in the Forecast ledger is:
+
+Rendering visibly at 16px — not showing as a blank square, broken element, or generic fallback
+Colored correctly per category (not defaulting to gray or black):
+
+Income/Salary/Paycheck: Lucide Briefcase — color #2D9B6F
+Housing/Mortgage: Lucide Home — color #185FA5
+Insurance: Lucide Shield — color #D85A30
+Subscriptions: Lucide Tv — color #534AB7
+Auto/Gas/Car/Transportation: Lucide Car — color #BA7517
+Utilities/Electric/Water: Lucide Zap — color #0F6E56
+Food/Groceries: Lucide UtensilsCrossed — color #D85A30
+Vacation/Travel: Lucide Plane — color #1D9E75
+Medical/Health: Lucide HeartPulse — color #993556
+Savings: Lucide PiggyBank — color #E24B4A
+Life Events — Pets: Lucide PawPrint — color #1D9E75
+Life Events — Home Improvements: Lucide Hammer — color #BA7517
+Life Events — Education: Lucide GraduationCap — color #534AB7
+Life Events — Celebrations: Lucide PartyPopper — color #D4537E
+Balance Update: Lucide RefreshCw — color #185FA5
+Other/Manual: Lucide Pencil — color #888780
+
+
+Vertically centered in their 32px column cell
+stroke-width of 1.5 (not the default 2 — thinner looks more refined at small sizes)
+
+### Part B: Apply the same category color system to the Bills section
+In the Bills page, each bill row and the donut chart should use the exact same category color mapping listed above. Specifically:
+
+The donut chart slices should use the category colors above (not random default colors)
+Each bill row in the table should have the matching category icon from Lucide in the correct color
+Category badges in the bills table should use the colored background and text system: light fill background + dark text from the same color family
+
+### Part C: Apply category colors to the Dashboard
+In the Upcoming Bills widget on the dashboard:
+
+Each bill row should show its category icon in the correct color
+The urgency dot (red/orange/gray based on days until due) should remain — just add the category icon to the left of the bill name
+
+In the By Account Type panel:
+
+Checking/Savings: Lucide Landmark — color #185FA5
+Credit Card: Lucide CreditCard — color #534AB7
+Investment: Lucide TrendingUp — color #2D9B6F
+Retirement: Lucide Umbrella — color #0F6E56
+Mortgage: Lucide Home — color #185FA5
+Loan: Lucide Receipt — color #E24B4A
+
+### Part D: Apply category icons to Life Events section
+In the Life Events page, each event card/row should show its category icon:
+
+Pets: Lucide PawPrint — color #1D9E75
+Vacations: Lucide Plane — color #1D9E75
+Home Improvements: Lucide Hammer — color #BA7517
+Education: Lucide GraduationCap — color #534AB7
+Celebrations: Lucide PartyPopper — color #D4537E
+Vehicle: Lucide Car — color #BA7517
+Medical: Lucide HeartPulse — color #993556
+Custom: Lucide Sparkles — color #888780
+
+### Part E: Create a shared icon utility
+To ensure consistency going forward, create a shared utility file at src/utils/categoryIcons.ts (or .js) that exports:
+typescriptexport const CATEGORY_ICONS = {
+  income: { icon: 'Briefcase', color: '#2D9B6F' },
+  housing: { icon: 'Home', color: '#185FA5' },
+  insurance: { icon: 'Shield', color: '#D85A30' },
+  subscriptions: { icon: 'Tv', color: '#534AB7' },
+  auto: { icon: 'Car', color: '#BA7517' },
+  utilities: { icon: 'Zap', color: '#0F6E56' },
+  food: { icon: 'UtensilsCrossed', color: '#D85A30' },
+  vacation: { icon: 'Plane', color: '#1D9E75' },
+  medical: { icon: 'HeartPulse', color: '#993556' },
+  savings: { icon: 'PiggyBank', color: '#E24B4A' },
+  pets: { icon: 'PawPrint', color: '#1D9E75' },
+  education: { icon: 'GraduationCap', color: '#534AB7' },
+  celebrations: { icon: 'PartyPopper', color: '#D4537E' },
+  homeImprovements: { icon: 'Hammer', color: '#BA7517' },
+  balanceUpdate: { icon: 'RefreshCw', color: '#185FA5' },
+  other: { icon: 'Pencil', color: '#888780' },
+}
+
+export const CATEGORY_BADGE_COLORS = {
+  income: { bg: '#E1F5EE', text: '#085041' },
+  housing: { bg: '#E6F1FB', text: '#0C447C' },
+  insurance: { bg: '#FAECE7', text: '#712B13' },
+  subscriptions: { bg: '#EEEDFE', text: '#3C3489' },
+  auto: { bg: '#FAEEDA', text: '#633806' },
+  utilities: { bg: '#E1F5EE', text: '#085041' },
+  food: { bg: '#FAECE7', text: '#712B13' },
+  vacation: { bg: '#E1F5EE', text: '#085041' },
+  medical: { bg: '#FBEAF0', text: '#72243E' },
+  savings: { bg: '#FCEBEB', text: '#791F1F' },
+  pets: { bg: '#E1F5EE', text: '#085041' },
+  education: { bg: '#EEEDFE', text: '#3C3489' },
+  celebrations: { bg: '#FBEAF0', text: '#72243E' },
+  homeImprovements: { bg: '#FAEEDA', text: '#633806' },
+  other: { bg: '#F1EFE8', text: '#444441' },
+}
+
+export const CATEGORY_BAR_COLORS = {
+  income: '#2D9B6F',
+  housing: '#185FA5',
+  insurance: '#D85A30',
+  subscriptions: '#534AB7',
+  auto: '#BA7517',
+  utilities: '#0F6E56',
+  food: '#D85A30',
+  vacation: '#1D9E75',
+  medical: '#993556',
+  savings: '#E24B4A',
+  pets: '#1D9E75',
+  education: '#534AB7',
+  celebrations: '#D4537E',
+  homeImprovements: '#BA7517',
+  other: '#888780',
+}
+Import and use this utility file everywhere categories need icons, colors, or badge styles — Bills, Forecast, Dashboard, Life Events, and Connected Accounts. This ensures if a color ever needs to change it only needs to change in one place.
+### After all changes:
+1. Verify icons render visibly on: Forecast ledger, Bills table, Dashboard upcoming bills widget, Life Events page
+2. Verify badge colors match across all sections
+3. Verify the shared utility file is being imported and used — no hardcoded category colors anywhere else in the codebase
+4. Push to GitHub when complete

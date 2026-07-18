@@ -35,4 +35,4 @@ export const RETIREMENT_SUBTYPE_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-export const RETIREMENT_ACCOUNT_TYPES = ["retirement", "investment"];
+export const RETIREMENT_ACCOUNT_TYPES = ["retirement"];

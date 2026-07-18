@@ -1,0 +1,243 @@
+Got it — cleaner file. Here's the updated prompt:
+
+"Please fix the following bugs and implement the following enhancements across the app. Address every item completely before finishing.
+---
+### CRITICAL BUGS — Fix These First
+1. Net Worth and Total Liabilities missing Loan balances (TC-D02, TC-D05, TC-DI03, Loans section)
+This is the most important fix. The Net Worth card and Total Liabilities card are only pulling debt from Connected Accounts — they're ignoring the Loans section entirely. Fix the calculation everywhere Net Worth and Total Liabilities appear:
+
+Net Worth = Σ(positive Connected Account balances) + Σ(My Assets values) - Σ(|negative Connected Account balances|) - Σ(Loan balances not already represented in Connected Accounts)
+Total Liabilities = Σ(|negative Connected Account balances|) + Σ(Loan balances not already in Connected Accounts)
+Deduplication rule: if a loan in the Loans section has the same name OR the same monthly payment as a negative Connected Account, count it only once — use the Connected Account balance as the source of truth
+Apply this fix to: Dashboard Net Worth card, Dashboard Total Liabilities card, and any net worth calculation used by Otis AI
+
+2. Loans double-counting in Otis AI (TC-INT03 related)
+When a user has a mortgage in Bills AND in Loans, Otis AI treats it as 2 separate monthly expenses. Fix the financial context object sent to Claude: deduplicate bills and loans — if a loan payment amount and name closely match an existing bill, count it once only in the monthly expenses total.
+3. Otis AI extra payment calculator gives different answers every time (TC-INT03)
+Asking "What if I paid $300 extra on my mortgage?" returns $47K, $57K, and $67K in interest saved across three attempts. Root cause: Claude is estimating the math instead of calculating it. Fix:
+
+Calculate the extra payment result server-side using the deterministic formula: n = -ln(1-(r×B)/(P+extra)) / ln(1+r) where r = annual rate÷12, B = current balance, P = regular payment, extra = extra payment amount
+Calculate: months_saved = n_original - n_new, interest_saved = total_interest_original - total_interest_new
+Pass these pre-calculated values to Claude as facts in the context: "The server has calculated that paying $300 extra per month saves exactly X months and $Y in interest. Use these exact figures."
+Never allow Claude to estimate or approximate loan math
+
+4. Dashboard Upcoming Bills clicking goes to Bills section instead of Forecast (TC-D07)
+Clicking any bill in the Upcoming Bills panel navigates to the Bills section. Fix: clicking a bill in the Upcoming Bills panel should navigate to the Forecast page and scroll to that specific transaction row, briefly highlighting it with a yellow flash animation so the user can orient themselves.
+5. Days Until Next Paycheck showing TODAY incorrectly (TC-D08)
+The Monthly Snapshot shows "TODAY" when the next paycheck is July 17 and today is July 12. Fix the calculation: Days Until Next Paycheck = next_pay_date minus today in whole calendar days. Show "Today" only if next_pay_date is literally today. Show the number of days otherwise (e.g. "5 days").
+6. Forecast export triggering McAfee antivirus warning
+The CSV and Excel export from the Forecast page is being blocked by McAfee as a threat. Fix by generating all exports entirely client-side in the browser:
+
+CSV: create a Blob with mime type "text/csv;charset=utf-8" and prepend a UTF-8 BOM character (\uFEFF) to the content
+Excel: use the SheetJS (xlsx) library to generate a standard .xlsx file client-side
+Do not use any server-side file generation for exports
+Apply the same fix to the Loans amortization export
+After fixing, verify both download without triggering any security warning
+
+7. Life Event with past date allowed (TC-LE06)
+A one-time life event can currently be saved with a date in the past. Fix: if the event date is before today, show an inline validation error: "Life events must be scheduled for a future date." Prevent saving until the date is corrected.
+8. Retirement age = current age causes an error (TC-R07)
+Setting retirement age equal to current age should be allowed — it means the user is retiring now. Fix: when retirement age equals current age, set projected value = current retirement savings with zero growth. Show a friendly message: "Based on retiring today, your projected savings is your current balance of $X." No crash, no error.
+9. Retirement goal of $0 shows 0% readiness instead of 100% (TC-R08)
+When a user sets their retirement goal to $0, the readiness score shows 0% instead of 100%. Fix: if retirement goal is $0 or null, show readiness as 100% with message: "No specific goal set — you're ahead of the curve!" Guard against divide-by-zero in all retirement calculations.
+10. Otis AI loses conversation context between questions (TC-O05)
+When asking "What is my net worth?" followed by "What is the biggest component of that?" Otis responds asking for clarification on what "that" refers to. Fix: ensure the full conversation history array (minimum last 10 message pairs) is included in every API call to Claude. The messages array must contain all prior exchanges in the current session so Claude can reference previous answers using pronouns and context naturally.
+11. Otis AI chat markdown not rendering (TC-UI14)
+Otis responses display raw markdown syntax — bold shows as asterisks, ## headers show as hash symbols, --- shows as dashes. Fix: use react-markdown (or equivalent markdown renderer) to render all Otis chat bubble content. Bold renders as bold text, bullet lists render as proper lists, horizontal rules render as thin lines. Apply within the existing chat bubble styling so colors and fonts remain consistent.
+12. Mobile responsiveness completely broken (TC-UI02)
+At 375px width (iPhone) the app makes no attempt to fit the screen — it looks like a desktop page squeezed into a phone. Fix:
+
+Verify the HTML head contains: <meta name="viewport" content="width=device-width, initial-scale=1.0">
+At screen widths below 768px: sidebar must collapse into a hamburger menu icon. Tapping the icon slides the sidebar in as an overlay
+All page layouts must switch to single-column on mobile
+Tables must either scroll horizontally or reflow to stacked card format on mobile
+All interactive elements (buttons, toggles, links) must be minimum 44px tall for touch targets
+Test every page at 375px (iPhone SE) and 390px (iPhone 14/15) before marking complete
+
+13. Add Pets to Bill Category dropdown (TC-INT07)
+Add "Pets 🐾" as a category option in the Bill Category dropdown. Insert it between Medical and Other alphabetically. Apply the correct category color (#1D9E75) and icon (PawPrint) throughout the app — category bar color, badge background/text color, and emoji icon — consistent with the existing categoryIcons utility.
+---
+### DASHBOARD ENHANCEMENTS
+14. Net Worth card → popup breakdown modal
+Remove the current navigation behavior when clicking the Net Worth card. Replace with a modal popup:
+
+Title: "How your net worth is calculated"
+Section 1 "Assets": list each positive Connected Account (name, type badge, balance) + each My Asset (name, type badge, value). Show assets subtotal
+Section 2 "Liabilities": list each negative Connected Account + each Loan (deduplicated). Show liabilities subtotal
+Footer row: Assets $X — Liabilities $X = Net Worth $X in large bold text
+X close button top right. Matches current light mode styling.
+
+15. Monthly Cash Flow card → popup breakdown modal
+Remove current navigation to Forecast. Replace with a modal popup:
+
+Title: "Your monthly cash flow"
+Left card "Money In": list each pay schedule with name and monthly amount. Total at bottom in green
+Right card "Money Out": bills broken down by category (same data as the donut chart). Total at bottom in red
+Footer: Net Cash Flow = Money In minus Money Out. Green if positive, red if negative
+X close button top right.
+
+16. Total Liabilities card → popup breakdown modal
+Remove current navigation to Connected Accounts. Replace with a modal popup:
+
+Title: "Your total liabilities"
+Card 1 "Mortgages": loans from Loans section with type = Mortgage
+Card 2 "Loans": all other loan types from Loans section
+Card 3 "Credit Cards": Connected Accounts with type = Credit Card, showing balance
+Deduplicate any items appearing in both Connected Accounts and Loans
+Total liabilities at bottom. X close button top right.
+
+17. By Account Type panel — rename and resort
+
+Rename the panel title from "By Account Type" to "Connected Accounts"
+New sort order: negative balance accounts first (sorted by absolute value, highest first), then positive balance accounts sorted low to high
+
+---
+### CONNECTED ACCOUNTS ENHANCEMENTS
+18. Restructure page layout — group under summary cards
+Redesign the Connected Accounts page:
+
+Total Assets summary card spans full width at the top of the assets section. Below it, each asset-type account (Checking, Savings, Investment, Retirement, Other Assets) renders as an individual card of the same width, stacked directly beneath
+Total Liabilities summary card spans full width at the top of the liabilities section. Below it, each liability account (Credit Card, Loan, Mortgage) renders as an individual card of the same width, stacked beneath
+Each individual account card shows: institution name, account name, account type badge, current balance (red if negative), Connect via Plaid placeholder button
+
+19. Retirement account — add monthly contribution field
+When account type = "Retirement" is selected in the Add/Edit Account form, show an additional field labeled "Monthly Contribution ($)". Store this value with the account. The Retirement page must use this value as the monthly contribution in all projection calculations — overriding or supplementing any existing contribution input.
+---
+### MY ASSETS ENHANCEMENT
+20. Asset Name — 100 character limit
+Add a 100 character maximum to the Asset Name field. Show character count below (e.g. "45/100"). Consistent with other field limits in the app.
+---
+### BILLS ENHANCEMENT
+21. Rename page heading from "Bills & Subscriptions" to "Bills"
+Update the page title, any breadcrumbs, and sidebar label to read "Bills" only.
+---
+### PAY SCHEDULES ENHANCEMENT
+22. Notes field — 100 character limit
+Add a 100 character maximum to the Notes field in Pay Schedules. Show character count (e.g. "32/100").
+---
+### FORECAST ENHANCEMENTS
+23. Single click to edit amount field
+Currently editing an amount in the forecast ledger requires a double-click. Change to single click to enter inline edit mode.
+---
+### LOANS ENHANCEMENTS
+24. Loan → Bill auto-sync on creation
+When a user saves a new loan, automatically check the Bills section for an existing bill that matches:
+
+Same or similar name (case-insensitive, partial match acceptable)
+OR monthly payment amount within 5% of an existing bill amount
+If match found: do nothing. Show a subtle notification: "This loan payment matches your existing [Bill Name] bill — no duplicate created."
+If no match found: automatically create a new bill with Name = "[Loan Name] Payment", Amount = monthly payment, Frequency = Monthly, Category = "Debt Payments". Show notification: "We've added [Loan Name] Payment to your Bills to keep your forecast accurate."
+Apply the same deduplication when editing a loan
+
+25. "Model a Loan" button → Otis AI
+Add a "Model a Loan 🤖" button on the Loans page header area. When clicked, navigate to the Otis AI page with the chat input pre-filled with: "I'd like to model a potential new loan. Can you help me understand the financial impact?"
+---
+### LIFE EVENTS ENHANCEMENTS
+26. Rename priorities:
+
+Keep "Must Do" as is
+Rename "Planning To" → "Maybe, Someday"
+Remove "Just Dreaming" — any existing Just Dreaming events should migrate to "Maybe, Someday"
+
+27. Restructure top layout — two columns:
+Replace the current three summary cards with a two-column layout:
+
+Left column: Header "Must Do" — all Must Do events listed below, sorted by date soonest first
+Right column: Header "Maybe, Someday" — all Maybe/Someday events listed below, sorted by date soonest first
+Remove the "Next Up" card entirely
+
+28. Add frequency options:
+Add "Bi-Annually" (every 6 months) and "Custom" (user enters a number of days interval) to the Frequency dropdown.
+29. Field limits:
+
+Event Name: maximum 100 characters with character count shown
+Total Amount: maximum 9 digits before decimal, 2 decimal places maximum
+
+---
+### RETIREMENT ENHANCEMENTS
+30. Rename chart line label:
+On the Projected Savings chart, rename the blue "On Track" line label to "Current Assumptions".
+31. Add Reset button to What-If section:
+Add a "Reset to Current Assumptions" button in the What-If sliders panel. When clicked, all sliders return to the values currently saved in Retirement Settings.
+---
+### OTIS AI ENHANCEMENTS
+32. Keep chat open within session:
+Do not clear the Otis AI chat when the user navigates away and returns to the Otis page. Persist the conversation in session/component state until the user explicitly clicks "Start New Conversation" or logs out.
+33. Persistent conversation history across sessions:
+Store all Otis AI conversations in the database. Create an otis_conversations table:
+otis_conversations (
+  id, user_id, role ('user' or 'assistant'),
+  content TEXT, created_at TIMESTAMP
+)
+When the user opens Otis AI, load their last 20 messages from the database and display them with a subtle date divider between sessions. Include these historical messages in the Claude API call so Otis remembers past conversations.
+34. No suggestions — only options:
+Add to the Claude API system prompt: "Never say 'I suggest' or 'you should'. Always frame guidance as options: 'Here are some options...' or 'You could consider...'. Never be prescriptive or directive."
+35. Always positive and non-judgmental tone:
+Add to the Claude API system prompt: "Always maintain a warm, positive, and completely non-judgmental tone regardless of the user's financial situation. Never imply criticism of past decisions. You are a supportive best friend, not a financial critic."
+36. Response formatting improvements:
+Update the Claude API system prompt with these formatting rules:
+
+No emoji in section headers
+Tables maximum 2-3 columns only
+All dollar amounts formatted as $X,XXX with commas
+Single blank line between sections — never double
+One sentence of insight per section maximum
+Health scores: bold number then a simple two-column strengths vs opportunities table
+Remove all filler phrases: "genuinely strong", "That's not catastrophic", "I want to make sure", "I'm all ears"
+End every comprehensive response with exactly one follow-up question or offer — never a list of options
+
+37. Update Otis tagline:
+Change "Your financial advisor, always at your side" to "Your non-judgmental best friend, always at your side"
+38. Close button on expanded scenario cards:
+When a scenario card expands to show input fields, add a clearly visible X button or "Close" link in the top right corner of the expanded panel. Clicking it collapses the panel back to the card grid.
+39. Amortization schedule in Major Purchase, New Vehicle, Buy a Home scenarios:
+After a user runs any of these three scenarios, add a collapsible "View Amortization Schedule" section below the results panel. The schedule should match the format of the Loans section amortization table: Payment #, Payment Date, Payment Amount, Principal, Interest, Remaining Balance.
+40. Buy a Home — "Sell current home" toggle not affecting analysis:
+The toggle currently has no effect on the results. Fix: when toggled ON, the scenario must:
+
+Look for a Real Estate asset in My Assets and use its value as the estimated sale proceeds
+If no Real Estate asset exists, show a field: "Estimated sale price of current home ($)"
+Subtract the sale proceeds from the total cost of the new home in the analysis
+Show this clearly in the results: "After selling your current home for $X, your net new housing cost is $Y"
+
+41. Cache common Otis AI responses:
+Implement server-side response caching:
+
+Cache the net worth answer — invalidate only when Connected Accounts, My Assets, or Loans data changes
+Cache the monthly cash flow answer — invalidate only when Bills or Pay Schedules change
+Store cache in the database or Redis with user_id and a last_updated timestamp
+Show a subtle "as of [time]" indicator on cached responses so users know when data was last calculated
+
+42. Compress Claude API financial context:
+Stop sending raw database rows to Claude. Replace with a structured summary object:
+javascript{
+  summary: {
+    netWorth: number,
+    totalAssets: number,
+    totalLiabilities: number,
+    monthlyCashFlow: number,
+    monthlyIncome: number,
+    monthlyExpenses: number
+  },
+  income: [{ name, monthlyAmount }],
+  billsByCategory: [{ category, monthlyTotal }],
+  loans: [{ name, balance, rate, monthlyPayment, payoffDate }],
+  retirement: { currentSavings, monthlyContribution, projectedValue, readinessScore },
+  upcomingBills: [{ name, amount, dueDate }], // next 5 only
+  lifeEvents: [{ name, amount, date, priority }] // committed only
+}
+Never send individual forecast rows, transaction history, or full account lists to Claude.
+43. Shorten Claude API system prompt:
+Review the current system prompt and reduce to under 500 tokens. Remove any redundant instructions, verbose explanations, or repeated guidelines. Keep only: persona definition, tone rules, data access explanation, formatting rules, and the financial advice disclaimer.
+---
+### GENERAL ENHANCEMENTS (implement now)
+44. Compress Claude API context and shorten system prompt — covered in items 42 and 43 above.
+---
+### AFTER ALL CHANGES:
+1. Verify Net Worth on dashboard now matches: Connected Account assets + My Assets - Connected Account liabilities - Loan balances (deduplicated). Manually calculate and confirm
+2. Ask Otis "What if I paid $300 extra on my mortgage?" three times — verify the same answer each time
+3. Test mobile at 375px — sidebar collapses, all pages reflow correctly, tap targets work
+4. Download Forecast CSV and Excel — verify no antivirus warning from McAfee
+5. Have a multi-turn Otis conversation and verify context is maintained ("What is my net worth?" → "What makes up the biggest portion of that?")
+6. Verify Otis chat persists when navigating away and returning
+7. Push all changes to GitHub with commit message: "QA Round 1 complete — net worth fix, mobile, Otis AI, all enhancements

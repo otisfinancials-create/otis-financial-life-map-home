@@ -1,0 +1,119 @@
+Please implement the Otis animated avatar component in the Otis AI page (/otis). This is the animated avatar that appears at the top of the chat interface and brings personality to the AI assistant experience.
+### Part A: Save the Avatar Image
+The Otis avatar image has been provided as a PNG file. Please:
+1. Save it to public/images/otis-avatar.png in the project
+2. This is the circular portrait of Otis the yellow Labrador with a blue background — it is already cropped as a circle
+### Part B: Create the Avatar Component
+Create a new reusable component at src/components/OtisAvatar.tsx with the following behavior:
+The component accepts these props:
+typescriptinterface OtisAvatarProps {
+  state: 'idle' | 'thinking' | 'talking' | 'listening'
+  message?: string
+  size?: 'sm' | 'md' | 'lg'
+}
+Size mappings:
+
+sm: 48px — for inline chat bubbles and sidebar
+md: 120px — for the chat panel header
+lg: 220px — for the full Otis page hero
+
+### Part C: Animation States
+Implement these CSS animations on the avatar image:
+1. Idle — gentle breathing scale animation:
+css@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.018); }
+}
+animation: breathe 4s ease-in-out infinite;
+transform-origin: center 60%;
+2. Listening / Thinking — head tilt left with spring bounce:
+csstransform: rotate(-14deg);
+transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+transform-origin: center 60%;
+Add a pulsing teal ring around the avatar: border 3px solid #2D9B6F, animation pulses opacity 1 → 0.4 → 1 over 1 second
+Show animated thinking dots in a speech bubble above the avatar: three teal dots (#2D9B6F) bouncing sequentially
+3. Talking / Responding — slight head tilt right:
+csstransform: rotate(4deg);
+transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+transform-origin: center 60%;
+Show a dark navy speech bubble (#0D2B45, white text) above the avatar with the first 60 characters of the current message
+Add a solid teal ring: border 3px solid #0D2B45
+4. Return to idle — smooth transition back after talking completes:
+After the message finishes displaying (approximately 5 seconds or when a new message starts), smoothly return to idle breathing state
+### Part D: Speech Bubble
+Position a speech bubble above the avatar:
+
+Absolute positioned, centered above the image
+Background: #0D2B45, white text, border-radius 16px, padding 10px 16px
+Downward pointing triangle at the bottom center
+Font size 13px, font weight 500
+Fade in/out with opacity transition 0.3s ease
+For thinking state: show three animated bouncing dots instead of text
+Maximum width: 280px, text truncates with ellipsis if longer
+
+### Part E: Integrate Into the Otis AI Page
+On the /otis page, replace the current avatar/icon with the new OtisAvatar component:
+1. In the chat panel header — use size="md" (120px)
+
+Show the avatar to the left of "Ask Otis" heading
+Avatar state syncs to chat state: idle when waiting, thinking when API call is in progress, talking when response is streaming in
+
+2. Above the scenario cards grid — use size="lg" (220px)
+
+Center the avatar above the greeting text
+Idle state by default
+When user clicks a scenario card: transitions to thinking state
+When scenario results appear: transitions to talking state with a brief summary message
+
+3. In the Otis AI chat bubbles — use size="sm" (48px)
+
+Small circular avatar appears to the left of every Otis response bubble
+Static (no animation) at this size — just the portrait image in a circle
+
+### Part F: State Synchronization
+Wire the avatar state to the actual chat behavior:
+typescriptconst [avatarState, setAvatarState] = useState<'idle' | 'thinking' | 'talking' | 'listening'>('idle')
+const [avatarMessage, setAvatarMessage] = useState<string>('')
+
+// When user submits a message:
+setAvatarState('thinking')
+
+// When API response starts streaming:
+setAvatarState('talking')
+setAvatarMessage(response.substring(0, 60) + '...')
+
+// When response finishes:
+setTimeout(() => {
+  setAvatarState('idle')
+  setAvatarMessage('')
+}, 5000)
+
+// When user is typing:
+setAvatarState('listening')
+### Part G: Greeting on Page Load
+When the Otis page first loads and no conversation has started yet:
+1. After a 800ms delay, transition avatar to talking state
+2. Display this greeting message in the speech bubble and chat area:
+"Hi! I know your complete financial picture. What's on your mind today?"
+3. After 4 seconds, return to idle state
+### Part H: Sidebar Avatar
+In the sidebar navigation, replace the current "Otis" text-only item with:
+
+A 28px circular Otis avatar image to the left of the "Otis" label
+Static image, no animation
+When the user is on the Otis page, add a subtle teal glow ring around it: box-shadow 0 0 0 2px #2D9B6F
+
+### Styling notes:
+
+The avatar image should always render as a perfect circle: border-radius 50%, overflow hidden
+The status ring (thinking/talking indicator) sits 4px outside the avatar as an absolutely positioned element: inset -6px, border-radius 50%
+On mobile (width < 768px) reduce the lg size to 160px
+The speech bubble should never overlap the controls bar or chat input — position it above the avatar only
+All transitions use cubic-bezier(0.34, 1.56, 0.64, 1) for that spring/bounce feel that makes it feel alive
+
+### After implementation:
+1. Verify all three sizes render correctly
+2. Verify the thinking → talking → idle state sequence works when you ask Otis a question
+3. Verify the speech bubble appears and disappears cleanly
+4. Verify the sidebar avatar shows correctly with the teal ring when on the Otis page
+5. Push to GitHub when complete
