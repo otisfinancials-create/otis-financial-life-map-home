@@ -530,13 +530,13 @@ router.post("/forecast/sync-balance", async (req, res): Promise<void> => {
     for (const r of paid) {
       await tx.update(forecastedTransactionsTable)
         .set({ sortOrder: order++ })
-        .where(eq(forecastedTransactionsTable.id, r.id));
+        .where(and(eq(forecastedTransactionsTable.id, r.id), eq(forecastedTransactionsTable.userId, req.userId)));
     }
     const overrideSortOrder = order++;
     for (const r of unpaid) {
       await tx.update(forecastedTransactionsTable)
         .set({ sortOrder: order++ })
-        .where(eq(forecastedTransactionsTable.id, r.id));
+        .where(and(eq(forecastedTransactionsTable.id, r.id), eq(forecastedTransactionsTable.userId, req.userId)));
     }
 
     await tx.insert(forecastedTransactionsTable).values({

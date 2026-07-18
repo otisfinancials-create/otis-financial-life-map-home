@@ -61,7 +61,7 @@ function OtisLogo() {
       src={`${basePath}/images/otis_logo.png`}
       alt="Otis Financial"
       className="sidebar-logo-img"
-      style={{ width: 120, height: "auto", display: "block" }}
+      style={{ width: 90, height: "auto", display: "block" }}
     />
   );
 }
@@ -80,9 +80,10 @@ function SidebarItem({
       href={item.href}
       onClick={onNavigate}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 mb-0.5 transition-colors",
+        "flex items-center gap-2.5 rounded-lg transition-colors",
         active ? "bg-[var(--color-active-bg)]" : "hover:bg-white/10"
       )}
+      style={{ padding: "7px 10px", marginBottom: 1 }}
     >
       <item.icon
         className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-white/60")}
@@ -100,9 +101,12 @@ function SidebarItem({
   );
 }
 
-function SectionLabel({ children }: { children: string }) {
+function SectionLabel({ children, first = false }: { children: string; first?: boolean }) {
   return (
-    <div className="px-2 pt-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.8px] text-[rgba(255,255,255,0.5)]">
+    <div
+      className="font-semibold uppercase text-[9px] tracking-[0.8px] text-[rgba(255,255,255,0.35)]"
+      style={{ padding: first ? "10px 8px 4px" : "14px 8px 4px" }}
+    >
       {children}
     </div>
   );
@@ -128,18 +132,18 @@ export function SidebarContent({ onNavigate, onToggleCollapse }: SidebarContentP
       {/* Logo area — its own floating off-white rounded box (#R3-5) */}
       <div
         className="shrink-0 flex flex-col items-center"
-        style={{ background: "#F8F6F1", borderRadius: 12, margin: "10px 10px 0 10px", padding: 16 }}
+        style={{ background: "#F8F6F1", borderRadius: 12, margin: "8px 8px 0 8px", padding: "10px 14px" }}
       >
         <OtisLogo />
         <div
           className="sidebar-tagline"
           style={{
-            fontSize: 8,
+            fontSize: 7,
             color: "#6b7280",
-            letterSpacing: "0.8px",
+            letterSpacing: "0.6px",
             textTransform: "uppercase",
             whiteSpace: "nowrap",
-            marginTop: 4,
+            marginTop: 3,
             fontWeight: 500,
           }}
         >
@@ -148,10 +152,10 @@ export function SidebarContent({ onNavigate, onToggleCollapse }: SidebarContentP
       </div>
 
       {/* Nav — 8px gap below the logo box (#R3-5) */}
-      <nav className="flex-1 overflow-y-auto px-2.5 pb-3.5 pt-3.5" style={{ marginTop: 8 }}>
-        {sections.map((section) => (
+      <nav className="flex-1 overflow-y-auto" style={{ marginTop: 8, padding: "8px 10px" }}>
+        {sections.map((section, sectionIndex) => (
           <div key={section.label}>
-            <SectionLabel>{section.label}</SectionLabel>
+            <SectionLabel first={sectionIndex === 0}>{section.label}</SectionLabel>
             {section.items.map((item) => (
               <SidebarItem
                 key={item.href}
@@ -168,9 +172,10 @@ export function SidebarContent({ onNavigate, onToggleCollapse }: SidebarContentP
           href="/otis"
           onClick={onNavigate}
           className={cn(
-            "flex items-center gap-2.5 rounded-lg px-2.5 py-2 mb-0.5 transition-colors",
+            "flex items-center gap-2.5 rounded-lg transition-colors",
             location === "/otis" ? "bg-[var(--color-active-bg)]" : "hover:bg-white/10"
           )}
+          style={{ padding: "7px 10px", marginBottom: 1 }}
         >
           <img
             src={`${import.meta.env.BASE_URL}images/otis-avatar.png`}
@@ -192,9 +197,10 @@ export function SidebarContent({ onNavigate, onToggleCollapse }: SidebarContentP
       </nav>
 
       {/* Help & Support (placeholder) — sits just above the divider (#R3-9) */}
-      <div className="shrink-0 px-2.5 pb-2">
+      <div className="shrink-0 px-2.5 pb-2" style={{ marginTop: 6 }}>
         <div
-          className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12px] text-white/70 cursor-pointer hover:bg-white/10 transition-colors"
+          className="flex items-center gap-2 rounded-lg text-[11px] text-white/70 cursor-pointer hover:bg-white/10 transition-colors"
+          style={{ padding: "7px 10px" }}
           role="button"
           tabIndex={0}
         >

@@ -12,3 +12,4 @@
 - [Codegen transient reload errors](codegen-transient-errors.md) — Orval codegen briefly deletes generated files; ignore Vite/Metro reload errors in that window, restart Expo to clear Metro's cached failure.
 - [Forecast balance anchoring](forecast-balance-anchoring.md) — sync-adjustment rows must skip the past back-fill and survive regenerate/delete, or rebaselining silently breaks.
 - [pnpm @types/react hoist](pnpm-types-react-hoist.md) — duplicate @types/react (Expo pin vs catalog) breaks web typecheck via pnpm hidden hoist; align all pins to catalog:.
+- [Mobile AI tab dead endpoints](mobile-ai-dead-endpoints.md) — mobile ai.tsx targets /api/anthropic/* routes that never existed; typecheck patched with local hooks, real fix must retarget /api/otis SSE with auth plumbing.
