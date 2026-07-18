@@ -153,10 +153,6 @@ function MetricCard({
   return (
     <Card
       className={`${cardChrome} cursor-pointer transition-all duration-150 hover:shadow-md group overflow-hidden`}
-      style={{
-        borderLeft: `3px solid ${accent}`,
-        backgroundImage: `linear-gradient(135deg, ${accent}0d 0%, transparent 55%)`,
-      }}
       onClick={onClick}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -183,6 +179,22 @@ function MetricCard({
       </CardContent>
     </Card>
   );
+}
+
+/* ── Muted chart colors (≈20% less saturation, 6 Month View only) ─────── */
+
+function softenColor(color: string): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  if (!m) return color;
+  const num = parseInt(m[1]!, 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  // Desaturate by mixing each channel 20% toward the luminance gray
+  const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+  const mix = (c: number) => Math.round(c + (gray - c) * 0.2);
+  const toHex = (c: number) => c.toString(16).padStart(2, "0");
+  return `#${toHex(mix(r))}${toHex(mix(g))}${toHex(mix(b))}`;
 }
 
 /* ── 6 Month View tooltip ─────────────────────────────────────────────── */
@@ -369,8 +381,8 @@ export default function Dashboard() {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Your financial life at a glance.</p>
+          <h1 className="tracking-tight" style={{ fontSize: 18, fontWeight: 600 }}>Dashboard</h1>
+          <p className="mt-1" style={{ fontSize: 12, color: "#64748b" }}>Your financial life at a glance.</p>
         </div>
       </div>
 
@@ -527,18 +539,18 @@ export default function Dashboard() {
                           type="monotone"
                           dataKey={cat}
                           stackId="1"
-                          stroke={categoryMeta(cat).color}
-                          fill={categoryMeta(cat).color}
-                          fillOpacity={0.85}
+                          stroke={softenColor(categoryMeta(cat).color)}
+                          fill={softenColor(categoryMeta(cat).color)}
+                          fillOpacity={0.65}
                         />
                       ))}
                       <Area
                         type="monotone"
                         dataKey="remaining"
                         stackId="1"
-                        stroke="#059669"
-                        fill="#059669"
-                        fillOpacity={0.85}
+                        stroke={softenColor("#059669")}
+                        fill={softenColor("#059669")}
+                        fillOpacity={0.65}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -549,13 +561,13 @@ export default function Dashboard() {
                     <span key={cat} className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <span
                         className="h-2.5 w-2.5 rounded-sm shrink-0"
-                        style={{ backgroundColor: categoryMeta(cat).color }}
+                        style={{ backgroundColor: softenColor(categoryMeta(cat).color) }}
                       />
                       {categoryMeta(cat).label}
                     </span>
                   ))}
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: "#059669" }} />
+                    <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: softenColor("#059669") }} />
                     Cash flow
                   </span>
                 </div>
