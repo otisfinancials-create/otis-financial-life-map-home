@@ -166,7 +166,10 @@ function MetricCard({
           <Skeleton className="h-9 w-[140px]" />
         ) : (
           <>
-            <div className={`text-3xl font-bold font-mono tabular-nums tracking-tight ${valueClass}`}>
+            <div
+              className={`text-3xl font-bold font-mono tabular-nums tracking-tight ${valueClass}`}
+              style={{ color: "#0D2B45" }}
+            >
               {value}
             </div>
             {trend}
@@ -416,7 +419,7 @@ export default function Dashboard() {
           accent="#059669"
           loading={isLoadingSummary || isLoadingBills}
           value={<FormatCurrency amount={avgMonthlyCashFlow} compact showSign />}
-          valueClass={avgMonthlyCashFlow >= 0 ? "text-emerald-600" : "text-destructive"}
+          
           trend={<SteadyBadge />}
           subline={
             <span>
@@ -454,7 +457,7 @@ export default function Dashboard() {
           accent="var(--color-navy)"
           loading={isLoadingBills}
           value={<FormatCurrency amount={avgMonthlyCashFlow} compact showSign />}
-          valueClass={avgMonthlyCashFlow >= 0 ? "text-emerald-600" : "text-destructive"}
+          
           trend={
             <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
               <span>

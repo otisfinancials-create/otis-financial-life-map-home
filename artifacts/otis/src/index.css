@@ -204,9 +204,10 @@
     @apply font-sans antialiased bg-background text-foreground;
     font-size: 13px;
   }
+  html,
   body,
   #root {
-    background: var(--color-page-bg);
+    background: #F4F6F9;
   }
   h1 { font-size: 16px; font-weight: 600; color: var(--color-text-primary); }
   h2 { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }

@@ -31,8 +31,8 @@ function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 
   return (
     <div
-      className="hidden md:flex items-center justify-between border border-[var(--color-card-border)] bg-[var(--color-card-bg)]"
-      style={{ borderRadius: 12, padding: "12px 20px", marginBottom: 10 }}
+      className="hidden md:flex items-center justify-between"
+      style={{ padding: "6px 0 4px", marginBottom: 10 }}
     >
       <div>
         <h1 className="text-[16px] font-semibold text-[var(--color-text-primary)]">
