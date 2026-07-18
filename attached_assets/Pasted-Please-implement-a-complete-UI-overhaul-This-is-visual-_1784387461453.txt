@@ -1,0 +1,473 @@
+Please implement a complete UI overhaul. This is visual and styling only — no functionality changes whatsoever. All existing features, data, and logic must remain exactly as they are.
+---
+### 1. GLOBAL COLOR SYSTEM
+Replace all existing color variables with these. Apply globally across every page:
+css
+:root {
+  --color-navy-dark:     #0A1628;
+  --color-navy:          #0D2B45;
+  --color-carolina:      #56A0D3;
+  --color-page-bg:       #F4F6F9;
+  --color-logo-bg:       #F8F6F1;
+  --color-card-bg:       #ffffff;
+  --color-card-border:   #e8ecf0;
+  --color-surface:       #f8fafc;
+  --color-surface-border:#f0f2f5;
+  --color-text-primary:  #0D2B45;
+  --color-text-secondary:#64748b;
+  --color-text-muted:    #94a3b8;
+  --color-positive:      #059669;
+  --color-negative:      #dc2626;
+  --color-warning:       #d97706;
+  --color-purple:        #7c3aed;
+  --sidebar-width:       210px;
+}
+---
+### 2. PAGE BACKGROUND
+Set the page background to soft gray everywhere:
+css
+body, #root, .app-container, .page-wrapper {
+  background: var(--color-page-bg);
+}
+---
+### 3. SIDEBAR — Complete rebuild
+The sidebar must be rebuilt with this exact specification:
+css
+.sidebar {
+  width: var(--sidebar-width);
+  background: var(--color-navy-dark);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  margin: 10px 0 10px 10px;
+  border-radius: 14px;
+  height: calc(100vh - 20px);
+  position: fixed;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+}
+Logo area — own rounded section with off-white background:
+css
+.sidebar-logo-area {
+  background: var(--color-logo-bg);
+  padding: 12px 14px 10px;
+  flex-shrink: 0;
+}
+.sidebar-logo-img {
+  width: 90px;
+  height: auto;
+  display: block;
+}
+.sidebar-tagline {
+  font-size: 7px;
+  color: #94a3b8;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+Navigation area:
+css
+.sidebar-nav {
+  flex: 1;
+  padding: 10px 8px;
+  overflow-y: auto;
+}
+.sidebar-section-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.25);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 12px 8px 5px;
+}
+.sidebar-section-label:not(:first-child) {
+  padding-top: 14px;
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  margin-bottom: 1px;
+  text-decoration: none;
+}
+.sidebar-item:hover {
+  background: rgba(255,255,255,0.06);
+}
+.sidebar-item.active {
+  background: var(--color-carolina);
+}
+.sidebar-item .icon {
+  font-size: 15px;
+  color: rgba(255,255,255,0.45);
+  width: 16px;
+  flex-shrink: 0;
+}
+.sidebar-item.active .icon {
+  color: #ffffff;
+}
+.sidebar-item .label {
+  font-size: 12.5px;
+  color: rgba(255,255,255,0.6);
+  font-weight: 400;
+}
+.sidebar-item.active .label {
+  color: #ffffff;
+  font-weight: 500;
+}
+Bottom area — Help & Support, divider, user profile only. NO icon row here:
+css
+.sidebar-bottom {
+  padding: 10px 8px 12px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+.sidebar-help {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  border-radius: 7px;
+  margin-bottom: 8px;
+}
+.sidebar-help:hover {
+  background: rgba(255,255,255,0.06);
+}
+.sidebar-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  margin: 0 8px 10px;
+}
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+}
+.sidebar-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-carolina);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+.sidebar-user-name {
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.8);
+  font-weight: 500;
+}
+.sidebar-user-plan {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+}
+---
+### 4. TOPBAR — Icons move to upper right, no white bar
+Remove the white topbar background entirely. The page title and greeting sit directly on the soft gray page background. Add a clean topbar row with greeting on the left and icons on the right:
+css
+.topbar {
+  background: var(--color-card-bg);
+  border-radius: 12px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  border: 1px solid var(--color-card-border);
+}
+.topbar-greeting h1 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.topbar-greeting p {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 1px;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tb-badge {
+  background: #e8f4fd;
+  border: 1px solid #b8d9f0;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: #1a5f8a;
+  font-weight: 500;
+}
+.tb-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.tb-icon-btn i {
+  font-size: 15px;
+  color: var(--color-text-secondary);
+}
+.tb-icon-btn:hover {
+  background: var(--color-card-border);
+}
+The topbar right section must contain in this order:
+ 1. Pro plan badge
+ 2. Search icon button
+ 3. Alerts/bell icon button
+ 4. Settings icon button
+ 5. Collapse sidebar icon button
+These 4 icon buttons replace the previous icon row that was at the bottom of the sidebar. Remove them from the sidebar bottom completely.
+---
+### 5. MAIN CONTENT LAYOUT
+css
+.main-content {
+  margin-left: calc(var(--sidebar-width) + 18px);
+  padding: 10px 10px 10px 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.page-content {
+  flex: 1;
+}
+---
+### 6. CARD SYSTEM — Apply globally
+css
+.card {
+  background: var(--color-card-bg);
+  border-radius: 10px;
+  border: 1px solid var(--color-card-border);
+  padding: 16px 18px;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.card-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.card-link {
+  font-size: 11px;
+  color: var(--color-carolina);
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+}
+---
+### 7. STAT CARDS — Dashboard summary pills
+css
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.stat-card {
+  background: var(--color-card-bg);
+  border-radius: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-card-border);
+}
+.stat-label {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.5px;
+}
+.stat-positive { color: var(--color-positive); font-size: 10.5px; margin-top: 3px; }
+.stat-negative { color: var(--color-negative); font-size: 10.5px; margin-top: 3px; }
+.stat-neutral  { color: var(--color-text-secondary); font-size: 10.5px; margin-top: 3px; }
+---
+### 8. SNAP ITEMS — Mini stat cards inside cards
+css
+.snap-item {
+  background: var(--color-surface);
+  border-radius: 7px;
+  padding: 11px;
+  border: 1px solid var(--color-surface-border);
+}
+.snap-label {
+  font-size: 9.5px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+}
+.snap-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+.snap-sub {
+  font-size: 9.5px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+.mini-bar {
+  height: 3px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  margin-top: 7px;
+  overflow: hidden;
+}
+.mini-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+---
+### 9. GLOBAL TYPOGRAPHY
+css
+body {
+  font-family: -apple-system, 'Inter', 'Segoe UI', Arial, sans-serif;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 16px; font-weight: 600; color: var(--color-text-primary); }
+h2 { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+h3 { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
+a  { color: var(--color-carolina); text-decoration: none; }
+---
+### 10. BUTTONS — Primary and secondary
+css
+.btn-primary {
+  background: var(--color-carolina);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-primary:hover {
+  background: #4a8fc0;
+}
+.btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-card-border);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  background: var(--color-card-border);
+}
+---
+### 11. MOBILE RESPONSIVE
+css
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(calc(-1 * var(--sidebar-width) - 10px));
+    transition: transform 0.25s ease;
+    z-index: 100;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .main-content {
+    margin-left: 0;
+    padding: 10px;
+  }
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .row-two, .row-three {
+    grid-template-columns: 1fr;
+  }
+}
+---
+For the sidebar logo area, do not use the PNG image file. Instead render the word 'Otis' as plain styled text:
+css
+.sidebar-logo-text {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 28px;
+  font-weight: bold;
+  color: #0D2B45;
+  letter-spacing: -0.5px;
+  display: block;
+}
+The HTML should be simply:
+html
+<div class="sidebar-logo-area">
+  <span class="sidebar-logo-text">Otis</span>
+  <div class="sidebar-tagline">Organize · Track · Inform · Simulate</div>
+</div>
+No image tag, no SVG, no paw print. Just the clean Georgia serif wordmark. Remove any existing logo image references from the sidebar entirely
+
+
+### 12. APPLY TO ALL PAGES
+Every page in the app must use these styles consistently:
+Dashboard
+Bills
+Pay
+Budget
+Forecast
+Connected Accounts
+Assets & Investments
+Loans
+Life Events
+Goals
+Retirement
+Otis AI
+On every page:
+Page background: var(--color-page-bg) — soft gray
+All cards: white background, 10px border radius, 1px border
+All accent colors: var(--color-carolina) #56A0D3 — replace any teal, green, or other accent
+All primary buttons: Carolina blue
+All links and active states: Carolina blue
+Progress bars: Carolina blue
+Toggle switches when active: Carolina blue
+---
+### AFTER ALL CHANGES — VERIFY THESE:
+1. Sidebar is dark navy #0A1628 with rounded corners, floating with 10px margin from edges
+ 2. Active nav item is Carolina blue #56A0D3 pill — all others are transparent
+ 3. Logo area is its own off-white section at the top of the sidebar
+ 4. Tagline "Organize · Track · Inform · Simulate" sits below the logo on one line
+ 5. Sidebar bottom has only: Help & Support + divider + user profile. NO icon row
+ 6. Topbar has: greeting left + Pro badge + 4 icon buttons (search, bell, settings, collapse) right
+ 7. Page background is soft gray #F4F6F9 on every single page — click through all pages to confirm
+ 8. All cards are white with subtle border — no colored card backgrounds
+ 9. All accent colors are Carolina blue — no teal, no old green accent anywhere
+ 10. Mobile at 375px: sidebar collapses, content stacks single column
+ 11. Push to GitHub with commit message: "Complete UI overhaul — dark navy sidebar, Carolina blue accent, premium layout
+

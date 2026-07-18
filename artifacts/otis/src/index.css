@@ -88,42 +88,46 @@
 
 :root {
   /* ===== Otis brand palette (UI overhaul) ===== */
+  --color-navy-dark:      #0A1628;
   --color-navy:           #0D2B45;
   --color-carolina:       #56A0D3;
   --color-carolina-light: #e8f4fd;
   --color-carolina-muted: rgba(86,160,211,0.18);
-  --color-page-bg:        #f0f4f8;
+  --color-page-bg:        #F4F6F9;
   --color-logo-bg:        #F8F6F1;
   --color-card-bg:        #ffffff;
-  --color-card-border:    #eaecf0;
+  --color-card-border:    #e8ecf0;
+  --color-surface:        #f8fafc;
+  --color-surface-border: #f0f2f5;
   --color-text-primary:   #0D2B45;
-  --color-text-secondary: #6b7280;
-  --color-text-muted:     #9ca3af;
+  --color-text-secondary: #64748b;
+  --color-text-muted:     #94a3b8;
   --color-positive:       #059669;
   --color-negative:       #dc2626;
   --color-warning:        #d97706;
-  --color-sidebar-bg:     #56A0D3;
-  --color-sidebar-text:   rgba(255,255,255,0.85);
-  --color-sidebar-muted:  rgba(255,255,255,0.5);
-  --color-active-bg:      #0D2B45;
+  --color-purple:         #7c3aed;
+  --color-sidebar-bg:     #0A1628;
+  --color-sidebar-text:   rgba(255,255,255,0.6);
+  --color-sidebar-muted:  rgba(255,255,255,0.45);
+  --color-active-bg:      #56A0D3;
   --color-active-text:    #ffffff;
-  --sidebar-width:        220px;
+  --sidebar-width:        210px;
 
   /* Light mode theme for Otis — mapped to brand palette */
-  --background: 210 36% 96%;           /* #f0f4f8 — page background */
+  --background: 216 29% 97%;           /* #F4F6F9 — page background */
   --foreground: 208 68% 16%;           /* #0D2B45 — navy headings & body */
-  --border: 220 17% 93%;               /* #eaecf0 — borders */
+  --border: 210 21% 93%;               /* #e8ecf0 — borders */
   --card: 0 0% 100%;                   /* #ffffff — card background */
   --card-foreground: 208 68% 16%;
-  --card-border: 220 17% 93%;
-  --sidebar: 205 59% 58%;              /* #56A0D3 — Carolina blue sidebar */
+  --card-border: 210 21% 93%;
+  --sidebar: 216 60% 10%;              /* #0A1628 — dark navy sidebar */
   --sidebar-foreground: 0 0% 100%;
-  --sidebar-border: 205 59% 52%;
-  --sidebar-primary: 208 68% 16%;      /* navy */
+  --sidebar-border: 216 60% 14%;
+  --sidebar-primary: 205 59% 58%;      /* carolina */
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 205 59% 64%;       /* hover state in sidebar */
+  --sidebar-accent: 216 60% 16%;       /* hover state in sidebar */
   --sidebar-accent-foreground: 0 0% 100%;
-  --sidebar-ring: 208 68% 16%;
+  --sidebar-ring: 205 59% 58%;
   --popover: 0 0% 100%;
   --popover-foreground: 208 68% 16%;
   --popover-border: 220 17% 93%;
@@ -131,8 +135,8 @@
   --primary-foreground: 0 0% 100%;     /* white text on primary */
   --secondary: 210 31% 95%;
   --secondary-foreground: 208 68% 16%;
-  --muted: 210 36% 96%;
-  --muted-foreground: 220 9% 46%;      /* #6b7280 — secondary text */
+  --muted: 216 29% 97%;
+  --muted-foreground: 215 16% 47%;     /* #64748b — secondary text */
   --accent: 205 76% 95%;               /* #e8f4fd carolina light */
   --accent-foreground: 208 68% 16%;
   --destructive: 0 72% 51%;            /* #dc2626 */
@@ -198,11 +202,15 @@
   }
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    font-size: 13px;
   }
   body,
   #root {
     background: var(--color-page-bg);
   }
+  h1 { font-size: 16px; font-weight: 600; color: var(--color-text-primary); }
+  h2 { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+  h3 { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
 }
 
 /* Otis avatar animations */

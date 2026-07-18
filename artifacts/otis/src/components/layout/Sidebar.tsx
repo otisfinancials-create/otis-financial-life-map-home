@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -55,17 +54,6 @@ const sections: { label: string; items: NavItem[] }[] = [
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-function OtisLogo() {
-  return (
-    <img
-      src={`${basePath}/images/otis_logo.png`}
-      alt="Otis Financial"
-      className="sidebar-logo-img"
-      style={{ width: 90, height: "auto", display: "block" }}
-    />
-  );
-}
-
 function SidebarItem({
   item,
   active,
@@ -80,19 +68,19 @@ function SidebarItem({
       href={item.href}
       onClick={onNavigate}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg transition-colors",
-        active ? "bg-[var(--color-active-bg)]" : "hover:bg-white/10"
+        "flex items-center gap-[9px] rounded-[7px] transition-colors",
+        active ? "bg-[var(--color-active-bg)]" : "hover:bg-white/[0.06]"
       )}
       style={{ padding: "7px 10px", marginBottom: 1 }}
     >
       <item.icon
-        className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-white/60")}
+        className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-white/45")}
         aria-hidden="true"
       />
       <span
         className={cn(
-          "text-[13px]",
-          active ? "text-white font-medium" : "text-[rgba(255,255,255,0.85)] font-normal"
+          "text-[12.5px]",
+          active ? "text-white font-medium" : "text-[rgba(255,255,255,0.6)] font-normal"
         )}
       >
         {item.name}
@@ -104,8 +92,8 @@ function SidebarItem({
 function SectionLabel({ children, first = false }: { children: string; first?: boolean }) {
   return (
     <div
-      className="font-semibold uppercase text-[9px] tracking-[0.8px] text-[rgba(255,255,255,0.35)]"
-      style={{ padding: first ? "10px 8px 4px" : "14px 8px 4px" }}
+      className="font-semibold uppercase text-[9px] tracking-[0.8px] text-[rgba(255,255,255,0.25)]"
+      style={{ padding: first ? "12px 8px 5px" : "14px 8px 5px" }}
     >
       {children}
     </div>
@@ -114,10 +102,9 @@ function SectionLabel({ children, first = false }: { children: string; first?: b
 
 interface SidebarContentProps {
   onNavigate?: () => void;
-  onToggleCollapse?: () => void;
 }
 
-export function SidebarContent({ onNavigate, onToggleCollapse }: SidebarContentProps) {
+export function SidebarContent({ onNavigate }: SidebarContentProps) {
   const [location] = useLocation();
   const { signOut } = useClerk();
   const { user } = useUser();
@@ -129,30 +116,41 @@ export function SidebarContent({ onNavigate, onToggleCollapse }: SidebarContentP
 
   return (
     <div className="flex h-full w-full flex-col bg-[var(--color-sidebar-bg)]">
-      {/* Logo area — its own floating off-white rounded box (#R3-5) */}
+      {/* Logo area — off-white section at the top with a Georgia serif wordmark */}
       <div
-        className="shrink-0 flex flex-col items-center"
-        style={{ background: "#F8F6F1", borderRadius: 12, margin: "8px 8px 0 8px", padding: "10px 14px" }}
+        className="shrink-0"
+        style={{ background: "var(--color-logo-bg)", padding: "12px 14px 10px" }}
       >
-        <OtisLogo />
+        <span
+          className="sidebar-logo-text"
+          style={{
+            fontFamily: "Georgia, 'Times New Roman', serif",
+            fontSize: 28,
+            fontWeight: "bold",
+            color: "#0D2B45",
+            letterSpacing: "-0.5px",
+            display: "block",
+          }}
+        >
+          Otis
+        </span>
         <div
           className="sidebar-tagline"
           style={{
             fontSize: 7,
-            color: "#6b7280",
-            letterSpacing: "0.6px",
+            color: "#94a3b8",
+            letterSpacing: "0.7px",
             textTransform: "uppercase",
             whiteSpace: "nowrap",
-            marginTop: 3,
-            fontWeight: 500,
+            marginTop: 2,
           }}
         >
           Organize · Track · Inform · Simulate
         </div>
       </div>
 
-      {/* Nav — 8px gap below the logo box (#R3-5) */}
-      <nav className="flex-1 overflow-y-auto" style={{ marginTop: 8, padding: "8px 10px" }}>
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto" style={{ padding: "10px 8px" }}>
         {sections.map((section, sectionIndex) => (
           <div key={section.label}>
             <SectionLabel first={sectionIndex === 0}>{section.label}</SectionLabel>
@@ -172,8 +170,8 @@ export function SidebarContent({ onNavigate, onToggleCollapse }: SidebarContentP
           href="/otis"
           onClick={onNavigate}
           className={cn(
-            "flex items-center gap-2.5 rounded-lg transition-colors",
-            location === "/otis" ? "bg-[var(--color-active-bg)]" : "hover:bg-white/10"
+            "flex items-center gap-[9px] rounded-[7px] transition-colors",
+            location === "/otis" ? "bg-[var(--color-active-bg)]" : "hover:bg-white/[0.06]"
           )}
           style={{ padding: "7px 10px", marginBottom: 1 }}
         >
@@ -185,10 +183,10 @@ export function SidebarContent({ onNavigate, onToggleCollapse }: SidebarContentP
           />
           <span
             className={cn(
-              "text-[13px]",
+              "text-[12.5px]",
               location === "/otis"
                 ? "text-white font-medium"
-                : "text-[rgba(255,255,255,0.85)] font-normal"
+                : "text-[rgba(255,255,255,0.6)] font-normal"
             )}
           >
             Otis AI
@@ -196,29 +194,29 @@ export function SidebarContent({ onNavigate, onToggleCollapse }: SidebarContentP
         </Link>
       </nav>
 
-      {/* Help & Support (placeholder) — sits just above the divider (#R3-9) */}
-      <div className="shrink-0 px-2.5 pb-2" style={{ marginTop: 6 }}>
+      {/* Bottom area — Help & Support, divider, user profile. NO icon row. */}
+      <div className="shrink-0 border-t border-white/[0.07]" style={{ padding: "10px 8px 12px" }}>
         <div
-          className="flex items-center gap-2 rounded-lg text-[11px] text-white/70 cursor-pointer hover:bg-white/10 transition-colors"
-          style={{ padding: "7px 10px" }}
+          className="flex items-center gap-2 rounded-[7px] text-[11.5px] text-white/45 cursor-pointer hover:bg-white/[0.06] transition-colors"
+          style={{ padding: "6px 10px", marginBottom: 8 }}
           role="button"
           tabIndex={0}
         >
           <span aria-hidden>❓</span>
           <span>Help &amp; Support</span>
         </div>
-      </div>
-
-      {/* Bottom area */}
-      <div className="shrink-0 border-t border-white/20 px-2.5 pt-3 pb-4">
-        <div className="flex items-center justify-between gap-2 px-2 py-1">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-navy)] text-xs font-semibold text-white">
+        <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "0 8px 10px" }} />
+        <div className="flex items-center justify-between gap-2" style={{ padding: "6px 10px" }}>
+          <div className="flex min-w-0 items-center gap-[9px]">
+            <div
+              className="flex shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white"
+              style={{ width: 28, height: 28, background: "var(--color-carolina)" }}
+            >
               {initials}
             </div>
             <div className="flex min-w-0 flex-col">
-              <span className="truncate text-xs font-medium text-white/90">{displayName}</span>
-              <span className="text-[10px] text-white/50">Personal plan</span>
+              <span className="truncate text-[11.5px] font-medium text-white/80">{displayName}</span>
+              <span className="text-[10px] text-white/35">Personal plan</span>
             </div>
           </div>
           <button
@@ -230,62 +228,26 @@ export function SidebarContent({ onNavigate, onToggleCollapse }: SidebarContentP
             <LogOut className="h-4 w-4" />
           </button>
         </div>
-
-        {/* Placeholder icon row (#R3-9) — only the hide toggle does anything yet */}
-        <div className="flex justify-around" style={{ padding: "8px 10px 4px", marginTop: 8 }}>
-          {[
-            { title: "Search", glyph: "🔍" },
-            { title: "Alerts", glyph: "🔔" },
-            { title: "Settings", glyph: "⚙️" },
-          ].map((b) => (
-            <button
-              key={b.title}
-              type="button"
-              title={b.title}
-              className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-[14px] hover:bg-white/25 transition-colors"
-            >
-              <span aria-hidden>{b.glyph}</span>
-            </button>
-          ))}
-          <button
-            type="button"
-            title="Hide sidebar"
-            onClick={onToggleCollapse}
-            className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-[14px] text-white/80 hover:bg-white/25 transition-colors"
-          >
-            <span aria-hidden>◀</span>
-          </button>
-        </div>
       </div>
     </div>
   );
 }
 
-export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
-
+export function Sidebar({ collapsed }: { collapsed: boolean }) {
   return (
-    <>
-      <div
-        className="hidden md:flex shrink-0 overflow-hidden rounded-2xl transition-[width,margin] duration-200"
-        style={
-          collapsed
-            ? { width: 0, margin: "12px 0", height: "calc(100vh - 24px)" }
-            : { width: "var(--sidebar-width)", margin: "12px 0 12px 12px", height: "calc(100vh - 24px)" }
-        }
-      >
-        <SidebarContent onToggleCollapse={() => setCollapsed(true)} />
-      </div>
-      {collapsed && (
-        <button
-          type="button"
-          title="Show sidebar"
-          onClick={() => setCollapsed(false)}
-          className="hidden md:flex fixed left-2 top-4 z-40 h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-navy)] text-[14px] text-white shadow-md hover:opacity-90 transition-opacity"
-        >
-          <span aria-hidden>▶</span>
-        </button>
-      )}
-    </>
+    <div
+      className="hidden md:flex shrink-0 overflow-hidden rounded-[14px] transition-[width,margin] duration-200"
+      style={
+        collapsed
+          ? { width: 0, margin: "10px 0", height: "calc(100vh - 20px)" }
+          : {
+              width: "var(--sidebar-width)",
+              margin: "10px 0 10px 10px",
+              height: "calc(100vh - 20px)",
+            }
+      }
+    >
+      <SidebarContent />
+    </div>
   );
 }
