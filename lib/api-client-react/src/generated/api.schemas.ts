@@ -366,6 +366,20 @@ export interface AccountUpdate {
   ccPaymentDueDate?: number | null;
 }
 
+export interface AccountGoalInput {
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  goalAmount: number | null;
+}
+
+export interface AccountGoal {
+  accountId: number;
+  /** @nullable */
+  goalAmount: number | null;
+}
+
 export interface SavingsSummary {
   total: number;
   accountCount: number;

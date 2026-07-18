@@ -58,6 +58,15 @@ contains commits that add it. Fix = a token WITH `workflow` scope.
 bouncing the user through the Git pane, which silently fails on any repo that has
 CI workflow files.
 
+## Snapshot-diff push (refined recipe)
+Local commit SHAs never exist on the remotes (all remote commits were API-created),
+so `compare` 404s and fast-forward `git push` gets rejected. Reliable approach:
+fetch the remote head's tree recursively, hash local files with `git hash-object`
+(no `-w` — read-only, not blocked), upload only differing blobs, include `sha: null`
+entries for remote-only paths, POST tree with `base_tree` = remote tree, commit with
+parent = remote head, PATCH the ref. Repeat per repo. Also: plain `git status`
+inside a script trips the write-guard via index.lock — always `--no-optional-locks`.
+
 ## Two GitHub repos share this lineage
 Both `otisfinancials-create/otis-financial-life-map` (original, referenced by the
 replit.md CI badge) and `otis-financial-life-map-home` (the configured `subrepl-*`

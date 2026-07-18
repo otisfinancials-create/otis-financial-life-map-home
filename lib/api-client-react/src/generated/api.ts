@@ -21,6 +21,8 @@ import type {
 
 import type {
   Account,
+  AccountGoal,
+  AccountGoalInput,
   AccountInput,
   AccountUpdate,
   AccountsSummary,
@@ -1570,6 +1572,154 @@ export function useGetAccountsSummary<TData = Awaited<ReturnType<typeof getAccou
 
 
 
+
+export const getListAccountGoalsUrl = () => {
+
+
+
+
+  return `/api/account-goals`
+}
+
+/**
+ * @summary List savings goals for the user's accounts
+ */
+export const listAccountGoals = async ( options?: RequestInit): Promise<AccountGoal[]> => {
+
+  return customFetch<AccountGoal[]>(getListAccountGoalsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAccountGoalsQueryKey = () => {
+    return [
+    `/api/account-goals`
+    ] as const;
+    }
+
+
+export const getListAccountGoalsQueryOptions = <TData = Awaited<ReturnType<typeof listAccountGoals>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountGoals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAccountGoalsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAccountGoals>>> = ({ signal }) => listAccountGoals({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAccountGoals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAccountGoalsQueryResult = NonNullable<Awaited<ReturnType<typeof listAccountGoals>>>
+export type ListAccountGoalsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List savings goals for the user's accounts
+ */
+
+export function useListAccountGoals<TData = Awaited<ReturnType<typeof listAccountGoals>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountGoals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAccountGoalsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSetAccountGoalUrl = (accountId: number,) => {
+
+
+
+
+  return `/api/account-goals/${accountId}`
+}
+
+/**
+ * @summary Set or clear the savings goal for an account
+ */
+export const setAccountGoal = async (accountId: number,
+    accountGoalInput: AccountGoalInput, options?: RequestInit): Promise<AccountGoal> => {
+
+  return customFetch<AccountGoal>(getSetAccountGoalUrl(accountId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(accountGoalInput)
+  }
+);}
+
+
+
+
+export const getSetAccountGoalMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAccountGoal>>, TError,{accountId: number;data: BodyType<AccountGoalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setAccountGoal>>, TError,{accountId: number;data: BodyType<AccountGoalInput>}, TContext> => {
+
+const mutationKey = ['setAccountGoal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setAccountGoal>>, {accountId: number;data: BodyType<AccountGoalInput>}> = (props) => {
+          const {accountId,data} = props ?? {};
+
+          return  setAccountGoal(accountId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetAccountGoalMutationResult = NonNullable<Awaited<ReturnType<typeof setAccountGoal>>>
+    export type SetAccountGoalMutationBody = BodyType<AccountGoalInput>
+    export type SetAccountGoalMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Set or clear the savings goal for an account
+ */
+export const useSetAccountGoal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAccountGoal>>, TError,{accountId: number;data: BodyType<AccountGoalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setAccountGoal>>,
+        TError,
+        {accountId: number;data: BodyType<AccountGoalInput>},
+        TContext
+      > => {
+      return useMutation(getSetAccountGoalMutationOptions(options));
+    }
 
 export const getGetSavingsSummaryUrl = () => {
 

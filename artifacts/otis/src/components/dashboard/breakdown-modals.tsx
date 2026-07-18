@@ -232,7 +232,7 @@ export function CashFlowModal({
                   <LineRow key={i} name={r.name} amount={r.amount} amountClass="text-emerald-600" />
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground py-1.5">No pay schedules.</p>
+                <p className="text-sm text-muted-foreground py-1.5">No pay entries.</p>
               )}
             </div>
             <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">

@@ -65,7 +65,7 @@ function SteadyBadge() {
   return (
     <p
       className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground"
-      title="This figure comes from your recurring bills and pay schedules, so it stays steady month to month unless you change them."
+      title="This figure comes from your recurring bills and pay, so it stays steady month to month unless you change them."
     >
       <Minus className="h-3 w-3" />
       <span>steady · recurring</span>
@@ -493,7 +493,7 @@ export default function Dashboard() {
               <Skeleton className="h-[280px] w-full" />
             ) : payMonthly === 0 && chartCategories.length === 0 ? (
               <div className="py-16 flex items-center justify-center text-muted-foreground text-sm">
-                Add pay schedules and bills to see your 6 month view.
+                Add pay and bills to see your 6 month view.
               </div>
             ) : (
               <>

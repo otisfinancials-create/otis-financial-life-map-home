@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, accountsTable, savingsSnapshotsTable } from "@workspace/db";
+import { db, accountsTable, savingsSnapshotsTable, accountGoalsTable } from "@workspace/db";
 import {
   CreateAccountBody,
   UpdateAccountBody,
@@ -13,6 +13,10 @@ import {
   UpdateAccountResponse,
   GetAccountsSummaryResponse,
   GetSavingsSummaryResponse,
+  ListAccountGoalsResponse,
+  SetAccountGoalParams,
+  SetAccountGoalBody,
+  SetAccountGoalResponse,
 } from "@workspace/api-zod";
 
 const SAVINGS_INVESTMENT_TYPES = ["savings", "investment", "brokerage"];
@@ -43,6 +47,53 @@ router.post("/accounts", async (req, res): Promise<void> => {
     savingsGoal: parsed.data.savingsGoal != null ? String(parsed.data.savingsGoal) : null,
   }).returning();
   res.status(201).json(CreateAccountResponse.parse(serialize(account)));
+});
+
+router.get("/account-goals", async (req, res): Promise<void> => {
+  req.log.info("Fetching account goals");
+  const goals = await db
+    .select()
+    .from(accountGoalsTable)
+    .where(eq(accountGoalsTable.userId, req.userId));
+  res.json(
+    ListAccountGoalsResponse.parse(
+      goals.map((g) => ({ accountId: g.accountId, goalAmount: parseFloat(String(g.goalAmount)) })),
+    ),
+  );
+});
+
+router.put("/account-goals/:accountId", async (req, res): Promise<void> => {
+  const params = SetAccountGoalParams.safeParse(req.params);
+  const body = SetAccountGoalBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid request" });
+    return;
+  }
+  const { accountId } = params.data;
+  const [account] = await db
+    .select()
+    .from(accountsTable)
+    .where(and(eq(accountsTable.id, accountId), eq(accountsTable.userId, req.userId)));
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  const { goalAmount } = body.data;
+  if (goalAmount == null) {
+    await db
+      .delete(accountGoalsTable)
+      .where(and(eq(accountGoalsTable.userId, req.userId), eq(accountGoalsTable.accountId, accountId)));
+    res.json(SetAccountGoalResponse.parse({ accountId, goalAmount: null }));
+    return;
+  }
+  await db
+    .insert(accountGoalsTable)
+    .values({ userId: req.userId, accountId, goalAmount: String(goalAmount) })
+    .onConflictDoUpdate({
+      target: [accountGoalsTable.userId, accountGoalsTable.accountId],
+      set: { goalAmount: String(goalAmount), updatedAt: new Date() },
+    });
+  res.json(SetAccountGoalResponse.parse({ accountId, goalAmount }));
 });
 
 router.get("/savings/summary", async (req, res): Promise<void> => {

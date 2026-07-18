@@ -9,4 +9,5 @@ export * from "./scenarios";
 export * from "./user_settings";
 export * from "./balance_syncs";
 export * from "./savings_snapshots";
+export * from "./account_goals";
 export * from "./otis_conversations";

@@ -129,7 +129,7 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
           syncForecast();
         },
         onError: () => {
-          toast({ title: "Failed to update pay schedule", variant: "destructive" });
+          toast({ title: "Failed to update income source", variant: "destructive" });
         },
       });
     } else {
@@ -142,7 +142,7 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
           syncForecast();
         },
         onError: () => {
-          toast({ title: "Failed to create pay schedule", variant: "destructive" });
+          toast({ title: "Failed to create income source", variant: "destructive" });
         },
       });
     }
@@ -158,7 +158,7 @@ export function PayScheduleDialog({ schedule, trigger, open, onOpenChange }: Pay
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Pay Schedule" : "Add Income Source"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Income Source" : "Add Income Source"}</DialogTitle>
           <DialogDescription>
             {isEditing
               ? "Update this income source. The forecast will resync automatically."

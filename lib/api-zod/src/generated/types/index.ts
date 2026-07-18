@@ -7,6 +7,8 @@
  */
 
 export * from './account';
+export * from './accountGoal';
+export * from './accountGoalInput';
 export * from './accountInput';
 export * from './accountInputRetirementSubtype';
 export * from './accountRetirementSubtype';

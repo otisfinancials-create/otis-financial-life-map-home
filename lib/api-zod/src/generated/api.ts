@@ -509,6 +509,37 @@ export const GetAccountsSummaryResponse = zod.object({
 
 
 /**
+ * @summary List savings goals for the user's accounts
+ */
+export const ListAccountGoalsResponseItem = zod.object({
+  "accountId": zod.number(),
+  "goalAmount": zod.number().nullable()
+})
+export const ListAccountGoalsResponse = zod.array(ListAccountGoalsResponseItem)
+
+
+/**
+ * @summary Set or clear the savings goal for an account
+ */
+export const SetAccountGoalParams = zod.object({
+  "accountId": zod.coerce.number()
+})
+
+export const setAccountGoalBodyGoalAmountMin = 0;
+
+
+
+export const SetAccountGoalBody = zod.object({
+  "goalAmount": zod.number().min(setAccountGoalBodyGoalAmountMin).nullable()
+})
+
+export const SetAccountGoalResponse = zod.object({
+  "accountId": zod.number(),
+  "goalAmount": zod.number().nullable()
+})
+
+
+/**
  * @summary Savings & investments totals with month-over-month change
  */
 export const GetSavingsSummaryResponse = zod.object({

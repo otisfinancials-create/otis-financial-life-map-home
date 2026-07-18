@@ -14,8 +14,7 @@ import Bills from "@/pages/bills";
 import Budget from "@/pages/budget";
 import Goals from "@/pages/goals";
 import Accounts from "@/pages/accounts";
-import AssetsLiabilities from "@/pages/assets-liabilities";
-import SavingsInvestments from "@/pages/savings-investments";
+import AssetsInvestments from "@/pages/assets-investments";
 import Forecast from "@/pages/forecast";
 import PaySchedules from "@/pages/pay-schedules";
 import LifeEvents from "@/pages/life-events";
@@ -231,11 +230,14 @@ function ClerkProviderWithRoutes() {
             <Route path="/accounts">
               <ProtectedShell><Accounts /></ProtectedShell>
             </Route>
+            <Route path="/assets-investments">
+              <ProtectedShell><AssetsInvestments /></ProtectedShell>
+            </Route>
             <Route path="/assets-liabilities">
-              <ProtectedShell><AssetsLiabilities /></ProtectedShell>
+              <Redirect to="/assets-investments" />
             </Route>
             <Route path="/savings-investments">
-              <ProtectedShell><SavingsInvestments /></ProtectedShell>
+              <Redirect to="/assets-investments" />
             </Route>
             <Route path="/forecast">
               <ProtectedShell><Forecast /></ProtectedShell>

@@ -1,9 +1,3 @@
-import {
-  useCreateAnthropicConversation,
-  useListAnthropicConversations,
-  useListAnthropicMessages,
-} from "@workspace/api-client-react";
-import type { AnthropicConversation, AnthropicMessage } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
 import { fetch } from "expo/fetch";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -19,9 +13,52 @@ import {
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useColors } from "@/hooks/useColors";
+
+type AnthropicConversation = { id: number; title: string; createdAt: string };
+type AnthropicMessage = { id: number; role: string; content: string };
+
+const API_BASE = process.env.EXPO_PUBLIC_DOMAIN
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+  : "";
+
+async function fetchJson<T>(path: string, init?: Parameters<typeof fetch>[1]): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, init);
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return (await res.json()) as T;
+}
+
+function useListAnthropicConversations() {
+  return useQuery<AnthropicConversation[]>({
+    queryKey: ["anthropic-conversations"],
+    queryFn: () => fetchJson<AnthropicConversation[]>("/api/anthropic/conversations"),
+  });
+}
+
+function useListAnthropicMessages(
+  conversationId: number,
+  options?: { query?: { enabled?: boolean } },
+) {
+  return useQuery<AnthropicMessage[]>({
+    queryKey: ["anthropic-messages", conversationId],
+    queryFn: () =>
+      fetchJson<AnthropicMessage[]>(`/api/anthropic/conversations/${conversationId}/messages`),
+    enabled: options?.query?.enabled ?? true,
+  });
+}
+
+function useCreateAnthropicConversation() {
+  return useMutation<AnthropicConversation, Error, { data: { title: string } }>({
+    mutationFn: ({ data }) =>
+      fetchJson<AnthropicConversation>("/api/anthropic/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }),
+  });
+}
 
 const SUGGESTED_PROMPTS = [
   "What's my net worth breakdown?",

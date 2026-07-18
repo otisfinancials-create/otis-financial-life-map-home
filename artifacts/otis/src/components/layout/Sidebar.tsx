@@ -30,7 +30,7 @@ const sections: { label: string; items: NavItem[] }[] = [
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
       { name: "Bills", href: "/bills", icon: Receipt },
-      { name: "Pay schedules", href: "/pay-schedules", icon: Banknote },
+      { name: "Pay", href: "/pay-schedules", icon: Banknote },
       { name: "Budget", href: "/budget", icon: Wallet },
       { name: "Forecast", href: "/forecast", icon: LineChart },
     ],
@@ -39,8 +39,7 @@ const sections: { label: string; items: NavItem[] }[] = [
     label: "Accounts",
     items: [
       { name: "Connected accounts", href: "/accounts", icon: Landmark },
-      { name: "Assets", href: "/assets-liabilities", icon: Scale },
-      { name: "Savings & Investments", href: "/savings-investments", icon: PiggyBank },
+      { name: "Assets & Investments", href: "/assets-investments", icon: Scale },
       { name: "Loans", href: "/loans", icon: CreditCard },
     ],
   },

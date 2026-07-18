@@ -1,0 +1,97 @@
+Please implement the following navigation restructure and page merge. This touches the sidebar, navigation, and two existing pages.
+---
+### 1. SIDEBAR NAVIGATION RESTRUCTURE
+Update the sidebar navigation to this exact structure — remove Assets and Savings & Investments as separate items and replace with a single "Assets & Investments" item:
+PLANNING
+  Dashboard
+  Bills
+  Pay
+  Budget
+  Forecast
+
+ACCOUNTS
+  Connected Accounts
+  Assets & Investments
+  Loans
+
+LIFE
+  Life Events
+  Goals
+  Retirement
+
+INTELLIGENCE
+  Otis AI
+Remove from sidebar: "Assets" and "Savings & Investments" as separate nav items.
+ Add to sidebar: "Assets & Investments" between Connected Accounts and Loans.
+ Rename "Pay Schedules" to "Pay" everywhere — sidebar label, page title, page subtitle, breadcrumbs, and any references to "Pay Schedules" throughout the entire application including database query labels and API route display names. Do not rename database columns or API routes themselves — only the display text visible to users.
+---
+### 2. NEW "ASSETS & INVESTMENTS" PAGE
+Create a new unified page that merges the functionality of the old Assets page and the old Savings & Investments page into one cohesive experience.
+Page title: "Assets & Investments"
+ Page subtitle: "Your complete picture of things you own plus your savings and investments"
+---
+### Page Layout
+Summary bar at the top — three summary cards side by side:
+Total Assets & Investments — sum of all manually added assets + all connected savings/investment/brokerage account balances
+Manual Assets — count and total of manually entered assets (property, vehicles, etc)
+Savings & Investments — count and total of connected accounts (savings, investment, brokerage only — NOT retirement)
+---
+### Section 1 — Manual Assets
+Section heading: "My Assets"
+Displays all manually entered assets exactly as the old Assets page did:
+Asset name, type badge, estimated value
+Asset types: Real Estate, Vehicle, Investment Account, Business, Cryptocurrency 🪙, Other
+Add Asset button — opens the existing add asset form
+Edit and delete actions on each asset card
+All existing asset data must carry over — do not lose any existing assets
+---
+### Section 2 — Savings & Investment Accounts
+Section heading: "Savings & Investment Accounts"
+Displays all Connected Accounts where type = Savings, Investment, or Brokerage:
+Account name, institution, type badge, current balance
+Do NOT include Retirement accounts here — those belong in the Retirement section
+Do NOT include Checking, Credit Card, Loan, or Mortgage accounts
+For each account card show:
+Account name and institution
+Type badge (Savings / Investment / Brokerage)
+Current balance
+Goal field: "Set a goal ($)" — optional target balance the user wants to reach
+If goal is set: show a Carolina blue progress bar with label "$X of $Y goal — Z% there"
+Edit goal inline — clicking the goal amount makes it editable
+Store goals in a new table: account_goals (id, user_id, account_id, goal_amount, created_at, updated_at)
+Run the migration to create this table
+Empty state if no savings/investment accounts exist:
+ "No savings or investment accounts yet. Add them in Connected Accounts by selecting type Savings, Investment, or Brokerage."
+---
+### Section 3 — Total Net Worth Contribution
+A simple summary row at the bottom of the page:
+Manual Assets total + Savings & Investment Accounts total = Total shown on this page
+Note: "Retirement accounts are tracked separately in the Retirement section"
+Note: "Connected checking and credit accounts are tracked in Connected Accounts"
+---
+### 3. UPDATE ALL REFERENCES
+Update every reference throughout the app:
+Any link or navigation that pointed to the old "Assets" page now points to "Assets & Investments"
+Any link or navigation that pointed to the old "Savings & Investments" page now points to "Assets & Investments"
+The Dashboard "Savings & Investments" pill continues to pull the same data (savings + investment + brokerage connected accounts only, no retirement, no manual assets) — do not change the dashboard pill data source
+Net Worth calculation: manual assets + all connected account balances (existing logic) — no change needed
+"Pay Schedules" renamed to "Pay" everywhere in the UI
+---
+### 4. REMOVE OLD PAGES
+Once the new Assets & Investments page is confirmed working:
+Remove the old standalone Assets page and its route
+Remove the old standalone Savings & Investments page and its route
+Ensure no broken links remain anywhere in the app
+---
+After all changes verify:
+ 1. Sidebar shows the new structure with no scroll on a standard laptop screen height
+ 2. "Pay Schedules" is now "Pay" everywhere in the UI
+ 3. Assets & Investments page shows both manual assets and connected savings/investment/brokerage accounts
+ 4. Existing manual assets all appear correctly — no data loss
+ 5. Goal functionality works on savings/investment account cards
+ 6. Progress bar displays correctly when a goal is set
+ 7. Retirement accounts do NOT appear in the Assets & Investments page
+ 8. Dashboard Savings & Investments pill still shows correct total
+ 9. Old Assets and Savings & Investments pages are removed with no broken links
+ 10. Push to GitHub with commit message: "Nav restructure — Assets & Investments merged, Pay Schedules renamed to Pay, sidebar scroll fixed
+

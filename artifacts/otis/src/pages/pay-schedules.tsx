@@ -90,7 +90,7 @@ export default function PaySchedules() {
         syncForecast();
       },
       onError: () => {
-        toast({ title: "Failed to delete pay schedule", variant: "destructive" });
+        toast({ title: "Failed to delete income source", variant: "destructive" });
         setScheduleToDelete(undefined);
       },
     });
@@ -101,7 +101,7 @@ export default function PaySchedules() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Pay Schedules</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Pay</h1>
           <p className="text-muted-foreground mt-1">
             Manage your income sources. Changes sync to the forecast automatically.
           </p>

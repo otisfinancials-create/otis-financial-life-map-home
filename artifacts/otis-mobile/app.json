@@ -28,7 +28,13 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-system-ui",
+        {
+          "backgroundColor": "#09090B"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
