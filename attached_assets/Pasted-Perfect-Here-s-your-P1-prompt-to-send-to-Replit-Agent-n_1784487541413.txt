@@ -1,0 +1,126 @@
+Perfect. Here's your P1 prompt to send to Replit Agent now:
+
+"Please implement the Plaid bank account connection flow (P1). I have added PLAID_CLIENT_ID, PLAID_SECRET, and PLAID_ENV=production to Replit Secrets. Use these for all Plaid API calls.
+---
+### P1 — Plaid Link Setup & Bank Account Connection Flow
+Implement the complete Plaid Link integration so users can connect their real bank accounts to Otis.
+---
+### Backend — Server Side
+Install the Plaid Node.js SDK:
+npm install plaid
+Create a Plaid client configuration:
+javascriptconst { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
+
+const configuration = new Configuration({
+  basePath: PlaidEnvironments[process.env.PLAID_ENV],
+  baseOptions: {
+    headers: {
+      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
+      'PLAID-SECRET': process.env.PLAID_SECRET,
+    },
+  },
+});
+
+const plaidClient = new PlaidApi(configuration);
+Create these API routes:
+Route 1 — Create Link Token:
+POST /api/plaid/create-link-token
+This generates a temporary token that initializes Plaid Link for the user. Request body: { user_id }. Call plaidClient.linkTokenCreate() with:
+
+user: { client_user_id: user_id.toString() }
+client_name: 'Otis Financial'
+products: ['transactions', 'liabilities']
+country_codes: ['US']
+language: 'en'
+Return: { link_token }
+
+Route 2 — Exchange Public Token:
+POST /api/plaid/exchange-token
+After user completes Plaid Link, exchange the public_token for a permanent access_token. Request body: { public_token, user_id }. Call plaidClient.itemPublicTokenExchange(). Store the access_token and item_id securely in a new database table:
+sqlCREATE TABLE plaid_items (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  access_token TEXT NOT NULL,
+  item_id TEXT NOT NULL,
+  institution_id TEXT,
+  institution_name TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+Return: { success: true, item_id }
+Route 3 — Fetch Accounts:
+POST /api/plaid/accounts
+After token exchange, immediately fetch the user's accounts. Call plaidClient.accountsGet() using the stored access_token. For each account returned, upsert into the connected_accounts table:
+
+Map Plaid account types to Otis account types:
+
+depository + checking → Checking
+depository + savings → Savings
+credit → Credit Card
+investment → Investment
+loan + mortgage → Mortgage
+loan (other) → Loan
+
+
+Store: account_id (Plaid's), name, official_name, type, subtype, current_balance, available_balance, institution_name
+Mark each account as plaid_connected: true
+Store the plaid_item_id reference
+
+Return: { accounts: [...] }
+Route 4 — Get Institution Name:
+POST /api/plaid/institution
+Given an institution_id, return the institution name and logo. Call plaidClient.institutionsGetById(). Used to show the bank name after connection.
+---
+### Frontend — Plaid Link UI
+Install Plaid Link React:
+npm install react-plaid-link
+In the Connected Accounts page, add a "Connect Account" button that:
+
+Calls /api/plaid/create-link-token to get a link_token
+Opens Plaid Link using the usePlaidLink hook
+On success (onSuccess callback): calls /api/plaid/exchange-token with the public_token
+Then calls /api/plaid/accounts to fetch and display the connected accounts
+Shows a success message: "Your [Bank Name] accounts have been connected successfully"
+Refreshes the Connected Accounts list
+
+Plaid Link button styling — match existing app design:
+jsx<button
+  onClick={openPlaidLink}
+  className="btn-primary"
+  disabled={!ready}
+>
+  🏦 Connect Bank Account
+</button>
+Show a loading state while Plaid Link is initializing.
+Handle these Plaid Link callbacks:
+
+onSuccess: exchange token and fetch accounts
+onExit: if user exits without connecting, show a gentle message "No accounts connected — you can connect anytime from Connected Accounts"
+onError: show error message "We had trouble connecting to your bank. Please try again or add your account manually."
+
+---
+### Connected Accounts Page Updates
+After a successful Plaid connection:
+
+Show a "Connected via Plaid 🔗" badge on each Plaid-connected account
+Show the institution logo if available
+Show current balance pulled from Plaid (not manually entered)
+Show a "Disconnect" button that removes the Plaid connection but keeps the account as manual
+Show "Last synced: [time]" on each connected account
+
+---
+### Security Requirements
+
+Never expose the access_token to the frontend — it stays server-side only
+Never log the access_token in console logs
+The plaid_items table access_token column should be treated as sensitive — do not return it in any API response
+All Plaid API routes must verify the authenticated user_id before accessing any Plaid data
+
+---
+### After Implementation Verify:
+1. Click "Connect Bank Account" — Plaid Link opens
+2. Select a bank and enter credentials — use your own real Wells Fargo or bank account to test
+3. After connection — accounts appear in Connected Accounts with Plaid badge and real balance
+4. Verify access_token is stored in plaid_items table but never visible in API responses or browser
+5. Verify the institution name appears correctly on each account
+6. Push to GitHub with commit message: "P1 — Plaid Link connection flow implemented

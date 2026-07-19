@@ -30,6 +30,8 @@ tags:
     description: User preferences and settings
   - name: retirement
     description: Retirement planning and projections
+  - name: plaid
+    description: Plaid bank connection
 
 paths:
   /healthz:
@@ -1076,6 +1078,64 @@ paths:
         "404":
           description: Not found
 
+
+  /plaid/create-link-token:
+    post:
+      operationId: createPlaidLinkToken
+      tags: [plaid]
+      summary: Create a Plaid Link token for the authenticated user
+      responses:
+        "200":
+          description: Link token created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaidLinkToken"
+        "502":
+          description: Plaid error
+
+  /plaid/exchange-token:
+    post:
+      operationId: exchangePlaidToken
+      tags: [plaid]
+      summary: Exchange a public token, store the item, and import accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaidExchangeInput"
+      responses:
+        "200":
+          description: Item linked and accounts imported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaidExchangeResult"
+        "502":
+          description: Plaid error
+
+  /plaid/disconnect:
+    post:
+      operationId: disconnectPlaidAccount
+      tags: [plaid]
+      summary: Disconnect an account from Plaid but keep it as a manual account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaidDisconnectInput"
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaidDisconnectResult"
+        "404":
+          description: Account not found
+
 components:
   schemas:
     HealthStatus:
@@ -1422,6 +1482,13 @@ components:
           maximum: 31
         plaidAccountId:
           type: ["string", "null"]
+        plaidItemId:
+          type: ["integer", "null"]
+        availableBalance:
+          type: ["number", "null"]
+        institutionLogo:
+          type: ["string", "null"]
+          description: Base64 institution logo from Plaid, if available
         lastSyncedAt:
           type: ["string", "null"]
         createdAt:
@@ -2244,3 +2311,49 @@ components:
         - scenarioType
         - inputParameters
         - resultsSummary
+
+    PlaidLinkToken:
+      type: object
+      required: [linkToken]
+      properties:
+        linkToken:
+          type: string
+
+    PlaidExchangeInput:
+      type: object
+      required: [publicToken]
+      properties:
+        publicToken:
+          type: string
+        institutionId:
+          type: ["string", "null"]
+        institutionName:
+          type: ["string", "null"]
+
+    PlaidExchangeResult:
+      type: object
+      required: [success, itemId, institutionName, accountsAdded]
+      properties:
+        success:
+          type: boolean
+        itemId:
+          type: integer
+          description: Internal plaid_items row id (never the Plaid access token)
+        institutionName:
+          type: string
+        accountsAdded:
+          type: integer
+
+    PlaidDisconnectInput:
+      type: object
+      required: [accountId]
+      properties:
+        accountId:
+          type: integer
+
+    PlaidDisconnectResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean

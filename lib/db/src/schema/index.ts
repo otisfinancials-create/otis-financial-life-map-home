@@ -11,3 +11,4 @@ export * from "./balance_syncs";
 export * from "./savings_snapshots";
 export * from "./account_goals";
 export * from "./otis_conversations";
+export * from "./plaid_items";

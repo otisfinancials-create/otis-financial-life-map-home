@@ -14,13 +14,14 @@ import userSettingsRouter from "./user_settings";
 import retirementRouter from "./retirement";
 import otisRouter from "./otis";
 import scenariosRouter from "./scenarios";
+import plaidRouter from "./plaid";
 import { invalidateOtisCache } from "../lib/otis-cache";
 
 const router: IRouter = Router();
 
 /** Invalidate Otis cached answers whenever financial data changes. */
 const otisCacheInvalidation: import("express").RequestHandler = (req, res, next) => {
-  if (req.method !== "GET" && /^\/(accounts|assets|loans|bills|pay-schedules|settings|forecast)/.test(req.path)) {
+  if (req.method !== "GET" && /^\/(accounts|assets|loans|bills|pay-schedules|settings|forecast|plaid)/.test(req.path)) {
     res.on("finish", () => {
       if (res.statusCode < 400 && req.userId) {
         void invalidateOtisCache(req.userId, ["net_worth", "cash_flow"]).catch(() => {});
@@ -46,5 +47,6 @@ router.use(userSettingsRouter);
 router.use(retirementRouter);
 router.use(otisRouter);
 router.use(scenariosRouter);
+router.use(plaidRouter);
 
 export default router;

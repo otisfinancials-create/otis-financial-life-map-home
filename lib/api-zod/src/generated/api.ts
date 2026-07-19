@@ -428,6 +428,9 @@ export const ListAccountsResponseItem = zod.object({
   "ccCycleEndDate": zod.number().min(1).max(listAccountsResponseCcCycleEndDateMax).nullish(),
   "ccPaymentDueDate": zod.number().min(1).max(listAccountsResponseCcPaymentDueDateMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
+  "plaidItemId": zod.number().nullish(),
+  "availableBalance": zod.number().nullish(),
+  "institutionLogo": zod.string().nullish().describe('Base64 institution logo from Plaid, if available'),
   "lastSyncedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -487,6 +490,9 @@ export const CreateAccountResponse = zod.object({
   "ccCycleEndDate": zod.number().min(1).max(createAccountResponseCcCycleEndDateMax).nullish(),
   "ccPaymentDueDate": zod.number().min(1).max(createAccountResponseCcPaymentDueDateMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
+  "plaidItemId": zod.number().nullish(),
+  "availableBalance": zod.number().nullish(),
+  "institutionLogo": zod.string().nullish().describe('Base64 institution logo from Plaid, if available'),
   "lastSyncedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -581,6 +587,9 @@ export const GetAccountResponse = zod.object({
   "ccCycleEndDate": zod.number().min(1).max(getAccountResponseCcCycleEndDateMax).nullish(),
   "ccPaymentDueDate": zod.number().min(1).max(getAccountResponseCcPaymentDueDateMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
+  "plaidItemId": zod.number().nullish(),
+  "availableBalance": zod.number().nullish(),
+  "institutionLogo": zod.string().nullish().describe('Base64 institution logo from Plaid, if available'),
   "lastSyncedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -643,6 +652,9 @@ export const UpdateAccountResponse = zod.object({
   "ccCycleEndDate": zod.number().min(1).max(updateAccountResponseCcCycleEndDateMax).nullish(),
   "ccPaymentDueDate": zod.number().min(1).max(updateAccountResponseCcPaymentDueDateMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
+  "plaidItemId": zod.number().nullish(),
+  "availableBalance": zod.number().nullish(),
+  "institutionLogo": zod.string().nullish().describe('Base64 institution logo from Plaid, if available'),
   "lastSyncedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1365,5 +1377,42 @@ export const DeleteScenarioParams = zod.object({
 })
 
 export const DeleteScenarioResponse = zod.void()
+
+
+/**
+ * @summary Create a Plaid Link token for the authenticated user
+ */
+export const CreatePlaidLinkTokenResponse = zod.object({
+  "linkToken": zod.string()
+})
+
+
+/**
+ * @summary Exchange a public token, store the item, and import accounts
+ */
+export const ExchangePlaidTokenBody = zod.object({
+  "publicToken": zod.string(),
+  "institutionId": zod.string().nullish(),
+  "institutionName": zod.string().nullish()
+})
+
+export const ExchangePlaidTokenResponse = zod.object({
+  "success": zod.boolean(),
+  "itemId": zod.number().describe('Internal plaid_items row id (never the Plaid access token)'),
+  "institutionName": zod.string(),
+  "accountsAdded": zod.number()
+})
+
+
+/**
+ * @summary Disconnect an account from Plaid but keep it as a manual account
+ */
+export const DisconnectPlaidAccountBody = zod.object({
+  "accountId": zod.number()
+})
+
+export const DisconnectPlaidAccountResponse = zod.object({
+  "success": zod.boolean()
+})
 
 

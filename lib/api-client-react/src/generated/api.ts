@@ -55,6 +55,11 @@ import type {
   PaySchedule,
   PayScheduleInput,
   PayScheduleUpdate,
+  PlaidDisconnectInput,
+  PlaidDisconnectResult,
+  PlaidExchangeInput,
+  PlaidExchangeResult,
+  PlaidLinkToken,
   RegenerateForecastResult,
   ReorderForecastInput,
   ReorderForecastResult,
@@ -4516,5 +4521,215 @@ export const useDeleteScenario = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getDeleteScenarioMutationOptions(options));
+    }
+
+export const getCreatePlaidLinkTokenUrl = () => {
+
+
+
+
+  return `/api/plaid/create-link-token`
+}
+
+/**
+ * @summary Create a Plaid Link token for the authenticated user
+ */
+export const createPlaidLinkToken = async ( options?: RequestInit): Promise<PlaidLinkToken> => {
+
+  return customFetch<PlaidLinkToken>(getCreatePlaidLinkTokenUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCreatePlaidLinkTokenMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlaidLinkToken>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPlaidLinkToken>>, TError,void, TContext> => {
+
+const mutationKey = ['createPlaidLinkToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPlaidLinkToken>>, void> = () => {
+
+
+          return  createPlaidLinkToken(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePlaidLinkTokenMutationResult = NonNullable<Awaited<ReturnType<typeof createPlaidLinkToken>>>
+
+    export type CreatePlaidLinkTokenMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a Plaid Link token for the authenticated user
+ */
+export const useCreatePlaidLinkToken = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlaidLinkToken>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPlaidLinkToken>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCreatePlaidLinkTokenMutationOptions(options));
+    }
+
+export const getExchangePlaidTokenUrl = () => {
+
+
+
+
+  return `/api/plaid/exchange-token`
+}
+
+/**
+ * @summary Exchange a public token, store the item, and import accounts
+ */
+export const exchangePlaidToken = async (plaidExchangeInput: PlaidExchangeInput, options?: RequestInit): Promise<PlaidExchangeResult> => {
+
+  return customFetch<PlaidExchangeResult>(getExchangePlaidTokenUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(plaidExchangeInput)
+  }
+);}
+
+
+
+
+export const getExchangePlaidTokenMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exchangePlaidToken>>, TError,{data: BodyType<PlaidExchangeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof exchangePlaidToken>>, TError,{data: BodyType<PlaidExchangeInput>}, TContext> => {
+
+const mutationKey = ['exchangePlaidToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof exchangePlaidToken>>, {data: BodyType<PlaidExchangeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  exchangePlaidToken(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExchangePlaidTokenMutationResult = NonNullable<Awaited<ReturnType<typeof exchangePlaidToken>>>
+    export type ExchangePlaidTokenMutationBody = BodyType<PlaidExchangeInput>
+    export type ExchangePlaidTokenMutationError = ErrorType<void>
+
+    /**
+ * @summary Exchange a public token, store the item, and import accounts
+ */
+export const useExchangePlaidToken = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exchangePlaidToken>>, TError,{data: BodyType<PlaidExchangeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof exchangePlaidToken>>,
+        TError,
+        {data: BodyType<PlaidExchangeInput>},
+        TContext
+      > => {
+      return useMutation(getExchangePlaidTokenMutationOptions(options));
+    }
+
+export const getDisconnectPlaidAccountUrl = () => {
+
+
+
+
+  return `/api/plaid/disconnect`
+}
+
+/**
+ * @summary Disconnect an account from Plaid but keep it as a manual account
+ */
+export const disconnectPlaidAccount = async (plaidDisconnectInput: PlaidDisconnectInput, options?: RequestInit): Promise<PlaidDisconnectResult> => {
+
+  return customFetch<PlaidDisconnectResult>(getDisconnectPlaidAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(plaidDisconnectInput)
+  }
+);}
+
+
+
+
+export const getDisconnectPlaidAccountMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectPlaidAccount>>, TError,{data: BodyType<PlaidDisconnectInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disconnectPlaidAccount>>, TError,{data: BodyType<PlaidDisconnectInput>}, TContext> => {
+
+const mutationKey = ['disconnectPlaidAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disconnectPlaidAccount>>, {data: BodyType<PlaidDisconnectInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  disconnectPlaidAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisconnectPlaidAccountMutationResult = NonNullable<Awaited<ReturnType<typeof disconnectPlaidAccount>>>
+    export type DisconnectPlaidAccountMutationBody = BodyType<PlaidDisconnectInput>
+    export type DisconnectPlaidAccountMutationError = ErrorType<void>
+
+    /**
+ * @summary Disconnect an account from Plaid but keep it as a manual account
+ */
+export const useDisconnectPlaidAccount = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectPlaidAccount>>, TError,{data: BodyType<PlaidDisconnectInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof disconnectPlaidAccount>>,
+        TError,
+        {data: BodyType<PlaidDisconnectInput>},
+        TContext
+      > => {
+      return useMutation(getDisconnectPlaidAccountMutationOptions(options));
     }
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Plus, MoreHorizontal, Landmark, CreditCard, PiggyBank, Briefcase, TrendingUp, Home, Banknote, Trash2, Pencil, Link2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useListAccounts, useGetAccountsSummary, useDeleteAccount, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { useListAccounts, useGetAccountsSummary, useDeleteAccount, useDisconnectPlaidAccount, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import type { Account } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AccountDialog } from "@/components/accounts/account-dialog";
+import { PlaidConnectButton } from "@/components/accounts/plaid-connect-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -93,6 +94,19 @@ export default function Accounts() {
   const { data: accounts, isLoading: isLoadingAccounts } = useListAccounts();
   const { data: summary, isLoading: isLoadingSummary } = useGetAccountsSummary();
   const deleteAccount = useDeleteAccount();
+  const disconnectPlaid = useDisconnectPlaidAccount();
+
+  const handleDisconnectPlaid = (account: Account) => {
+    disconnectPlaid.mutate({ data: { accountId: account.id } }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
+        toast({ title: "Disconnected from Plaid", description: `${account.accountName} is now a manual account.` });
+      },
+      onError: () => {
+        toast({ title: "Failed to disconnect", variant: "destructive" });
+      },
+    });
+  };
 
   const handleEdit = (account: Account) => {
     setAccountToEdit(account);
@@ -128,8 +142,12 @@ export default function Accounts() {
     <Card key={account.id} className="bg-card border-border overflow-hidden rounded-xl">
       <CardContent className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors group">
         <div className="flex items-start gap-3 min-w-0">
-          <div className={`h-10 w-10 rounded-md bg-secondary border border-border flex items-center justify-center shrink-0 ${getAccountColor(account.accountType)}`}>
-            {getAccountIcon(account.accountType)}
+          <div className={`h-10 w-10 rounded-md bg-secondary border border-border flex items-center justify-center shrink-0 overflow-hidden ${getAccountColor(account.accountType)}`}>
+            {account.institutionLogo ? (
+              <img src={`data:image/png;base64,${account.institutionLogo}`} alt="" className="h-7 w-7 object-contain" />
+            ) : (
+              getAccountIcon(account.accountType)
+            )}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -142,7 +160,9 @@ export default function Accounts() {
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               {account.accountNumberLast4 ? `····${account.accountNumberLast4} · ` : ""}
-              Updated {formatDate(account.updatedAt)}
+              {account.plaidAccountId && account.lastSyncedAt
+                ? `Last synced ${formatDate(account.lastSyncedAt)}`
+                : `Updated ${formatDate(account.updatedAt)}`}
             </p>
             {account.notes && (
               <p className="text-xs text-muted-foreground/80 mt-1 whitespace-pre-wrap break-words">
@@ -155,22 +175,12 @@ export default function Accounts() {
           <div className={`text-sm font-medium font-mono ${signedBalance(account) >= 0 ? 'text-[#059669]' : 'text-red-600'}`}>
             <FormatCurrency amount={signedBalance(account)} />
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span tabIndex={0}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled
-                  className="h-7 text-xs text-muted-foreground pointer-events-none"
-                >
-                  <Link2 className="mr-1.5 h-3 w-3" />
-                  Connect via Plaid
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Coming soon</TooltipContent>
-          </Tooltip>
+          {account.plaidAccountId && (
+            <Badge className="bg-[#56A0D3]/15 text-[#185FA5] hover:bg-[#56A0D3]/15 border-0 text-[10px] px-2 py-0.5 shrink-0">
+              <Link2 className="mr-1 h-3 w-3" />
+              Connected via Plaid
+            </Badge>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -182,6 +192,12 @@ export default function Accounts() {
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
+              {account.plaidAccountId && (
+                <DropdownMenuItem onClick={() => handleDisconnectPlaid(account)}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Disconnect from Plaid
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => setAccountToDelete(account)}
@@ -203,16 +219,19 @@ export default function Accounts() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Connected Accounts</h1>
-            <p className="text-muted-foreground mt-1">Financial accounts that will eventually sync via Plaid.</p>
+            <p className="text-muted-foreground mt-1">Link your bank accounts or add them manually.</p>
           </div>
-          <AccountDialog
-            trigger={
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Account
-              </Button>
-            }
-          />
+          <div className="flex items-center gap-2">
+            <PlaidConnectButton />
+            <AccountDialog
+              trigger={
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Account
+                </Button>
+              }
+            />
+          </div>
         </div>
 
         {/* Account Lists */}

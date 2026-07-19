@@ -44,6 +44,15 @@ export interface Account {
   /** @nullable */
   plaidAccountId?: string | null;
   /** @nullable */
+  plaidItemId?: number | null;
+  /** @nullable */
+  availableBalance?: number | null;
+  /**
+     * Base64 institution logo from Plaid, if available
+     * @nullable
+     */
+  institutionLogo?: string | null;
+  /** @nullable */
   lastSyncedAt?: string | null;
   createdAt: string;
   updatedAt: string;

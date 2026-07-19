@@ -257,6 +257,15 @@ export interface Account {
   /** @nullable */
   plaidAccountId?: string | null;
   /** @nullable */
+  plaidItemId?: number | null;
+  /** @nullable */
+  availableBalance?: number | null;
+  /**
+     * Base64 institution logo from Plaid, if available
+     * @nullable
+     */
+  institutionLogo?: string | null;
+  /** @nullable */
   lastSyncedAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -842,6 +851,34 @@ export interface SavedScenarioInput {
   scenarioType: string;
   inputParameters: SavedScenarioInputInputParameters;
   resultsSummary: SavedScenarioInputResultsSummary;
+}
+
+export interface PlaidLinkToken {
+  linkToken: string;
+}
+
+export interface PlaidExchangeInput {
+  publicToken: string;
+  /** @nullable */
+  institutionId?: string | null;
+  /** @nullable */
+  institutionName?: string | null;
+}
+
+export interface PlaidExchangeResult {
+  success: boolean;
+  /** Internal plaid_items row id (never the Plaid access token) */
+  itemId: number;
+  institutionName: string;
+  accountsAdded: number;
+}
+
+export interface PlaidDisconnectInput {
+  accountId: number;
+}
+
+export interface PlaidDisconnectResult {
+  success: boolean;
 }
 
 export type ListForecastParams = {

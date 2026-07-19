@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, accountsTable, savingsSnapshotsTable, accountGoalsTable } from "@workspace/db";
+import { db, accountsTable, savingsSnapshotsTable, accountGoalsTable, plaidItemsTable } from "@workspace/db";
 import {
   CreateAccountBody,
   UpdateAccountBody,
@@ -30,7 +30,19 @@ router.get("/accounts", async (req, res): Promise<void> => {
     .from(accountsTable)
     .where(eq(accountsTable.userId, req.userId))
     .orderBy(accountsTable.accountType, accountsTable.accountName);
-  res.json(ListAccountsResponse.parse(accounts.map(serialize)));
+  const items = await db
+    .select({ id: plaidItemsTable.id, institutionLogo: plaidItemsTable.institutionLogo })
+    .from(plaidItemsTable)
+    .where(eq(plaidItemsTable.userId, req.userId));
+  const logoByItem = new Map(items.map((i) => [i.id, i.institutionLogo]));
+  res.json(
+    ListAccountsResponse.parse(
+      accounts.map((a) => ({
+        ...serialize(a),
+        institutionLogo: a.plaidItemId != null ? (logoByItem.get(a.plaidItemId) ?? null) : null,
+      })),
+    ),
+  );
 });
 
 router.post("/accounts", async (req, res): Promise<void> => {
@@ -242,6 +254,7 @@ function serialize(a: typeof accountsTable.$inferSelect) {
     createdAt: a.createdAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
     lastSyncedAt: a.lastSyncedAt ? a.lastSyncedAt.toISOString() : null,
+    availableBalance: a.availableBalance != null ? parseFloat(String(a.availableBalance)) : null,
   };
 }
 
