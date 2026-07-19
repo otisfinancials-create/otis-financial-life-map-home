@@ -11,7 +11,6 @@ import { queryClient } from "@/lib/queryClient";
 import { Shell } from "@/components/layout/Shell";
 import Dashboard from "@/pages/dashboard";
 import Bills from "@/pages/bills";
-import Budget from "@/pages/budget";
 import Goals from "@/pages/goals";
 import Accounts from "@/pages/accounts";
 import AssetsInvestments from "@/pages/assets-investments";
@@ -222,7 +221,7 @@ function ClerkProviderWithRoutes() {
               <ProtectedShell><Bills /></ProtectedShell>
             </Route>
             <Route path="/budget">
-              <ProtectedShell><Budget /></ProtectedShell>
+              <Redirect to="/bills" />
             </Route>
             <Route path="/goals">
               <ProtectedShell><Goals /></ProtectedShell>

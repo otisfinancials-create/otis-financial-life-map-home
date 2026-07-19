@@ -496,7 +496,7 @@ export default function Dashboard() {
                 <CardDescription>How your income covers your bills</CardDescription>
               </div>
               <Link
-                href="/budget"
+                href="/bills"
                 className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
               >
                 View budget <ArrowRight className="h-3.5 w-3.5" />

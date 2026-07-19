@@ -6,8 +6,6 @@ import {
   useListBills,
   useDeleteBill,
   useUpdateBill,
-  useListForecast,
-  getListForecastQueryKey,
   getListBillsQueryKey,
   getGetUpcomingBillsQueryKey,
   getGetDashboardSummaryQueryKey,
@@ -41,9 +39,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BillDialog, BillForm } from "@/components/bills/bill-dialog";
-import { monthlyFactor } from "@/lib/bill-math";
 import { BillsAnalytics } from "@/components/bills/bills-analytics";
 import { categoryMeta, getCategoryEmoji } from "@/utils/categoryIcons";
+import { PlannedVsActualTab } from "@/components/bills/planned-vs-actual";
+import { BudgetTab } from "@/components/bills/budget-tab";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -76,7 +75,7 @@ type SortDir = "asc" | "desc";
 export default function Bills() {
   const [searchTerm, setSearchTerm] = useState("");
   const [billToEdit, setBillToEdit] = useState<Bill | undefined>(undefined);
-  const [view, setView] = useState<"bills" | "planned">("bills");
+  const [view, setView] = useState<"bills" | "planned" | "budget">("bills");
   const [billToDelete, setBillToDelete] = useState<Bill | undefined>(undefined);
   const [showInactive, setShowInactive] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -186,8 +185,13 @@ export default function Bills() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Bills</h1>
-          <p className="text-muted-foreground mt-1">Manage your recurring expenses and forecast commitments.</p>
+          <p className="text-muted-foreground mt-1">
+            {view === "bills" && "Manage your recurring expenses and forecast commitments."}
+            {view === "planned" && "This month's planned vs actual spending."}
+            {view === "budget" && "Your normalized monthly picture."}
+          </p>
         </div>
+        {view === "bills" && (
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -216,12 +220,14 @@ export default function Bills() {
             }
           />
         </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
         {([
-          ["bills", "All Bills"],
+          ["bills", "Bills"],
           ["planned", "Planned vs Actual"],
+          ["budget", "Budget"],
         ] as const).map(([key, label]) => (
           <button
             key={key}
@@ -238,7 +244,9 @@ export default function Bills() {
         ))}
       </div>
 
-      {view === "planned" && <PlannedVsActual bills={bills ?? []} />}
+      {view === "planned" && <PlannedVsActualTab bills={bills ?? []} />}
+
+      {view === "budget" && <BudgetTab />}
 
       {view === "bills" && !isLoading && (
         <BillsAnalytics
@@ -487,106 +495,5 @@ export default function Bills() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
-}
-
-// ── Planned vs Actual (current month snapshot) ───────────────────────────────
-function monthBounds(): { start: string; end: string; label: string } {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const lastDay = new Date(y, m + 1, 0).getDate();
-  const label = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  return { start: `${y}-${pad(m + 1)}-01`, end: `${y}-${pad(m + 1)}-${pad(lastDay)}`, label };
-}
-
-function PlannedVsActual({ bills }: { bills: Bill[] }) {
-  const { start, end, label } = monthBounds();
-  const { data: txs = [], isLoading } = useListForecast(
-    { startDate: start, endDate: end },
-    { query: { queryKey: getListForecastQueryKey({ startDate: start, endDate: end }) } },
-  );
-
-  const billCategoryById = new Map<number, string>();
-  for (const b of bills) billCategoryById.set(b.id, b.category);
-
-  // Planned: monthly-equivalent budget per category from active bills.
-  const planned: Record<string, number> = {};
-  for (const b of bills) {
-    if (!b.isActive) continue;
-    planned[b.category] = (planned[b.category] ?? 0) + b.amount * monthlyFactor(b.frequency);
-  }
-
-  // Actual: bill-linked forecast rows marked paid this month (not missed).
-  const actual: Record<string, number> = {};
-  for (const tx of txs) {
-    if (!tx.isActual || tx.status === "missed") continue;
-    if (tx.sourceBillId == null) continue;
-    const category = billCategoryById.get(tx.sourceBillId) ?? tx.category ?? "Other";
-    actual[category] = (actual[category] ?? 0) + Math.abs(tx.amount);
-  }
-
-  const categories = Array.from(new Set([...Object.keys(planned), ...Object.keys(actual)]))
-    .sort((a, b) => (planned[b] ?? 0) - (planned[a] ?? 0));
-
-  const totalPlanned = Object.values(planned).reduce((s, v) => s + v, 0);
-  const totalActual = Object.values(actual).reduce((s, v) => s + v, 0);
-
-  return (
-    <Card className="border-card-border bg-card rounded-xl overflow-hidden">
-      <div className="px-5 pt-5 pb-3">
-        <h2 className="text-base font-semibold">Planned vs Actual — {label}</h2>
-        <p className="text-[12px] text-muted-foreground mt-0.5">
-          Planned is your monthly-equivalent budget per category; Actual counts bills marked paid this month.
-        </p>
-      </div>
-      {isLoading ? (
-        <div className="p-5 space-y-3">
-          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
-        </div>
-      ) : categories.length === 0 ? (
-        <p className="px-5 pb-5 text-sm text-muted-foreground">No active bills yet.</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow className="border-border hover:bg-transparent">
-              <TableHead>Category</TableHead>
-              <TableHead className="text-right">Planned</TableHead>
-              <TableHead className="text-right">Actual</TableHead>
-              <TableHead className="text-right">Remaining</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {categories.map((cat) => {
-              const p = planned[cat] ?? 0;
-              const a = actual[cat] ?? 0;
-              const r = p - a;
-              return (
-                <TableRow key={cat} className="border-border">
-                  <TableCell className="font-medium">
-                    <span className="mr-2" style={{ fontSize: 16, lineHeight: 1 }}>{getCategoryEmoji(cat)}</span>
-                    {cat}
-                  </TableCell>
-                  <TableCell className="text-right font-mono"><FormatCurrency amount={p} /></TableCell>
-                  <TableCell className="text-right font-mono"><FormatCurrency amount={a} /></TableCell>
-                  <TableCell className={`text-right font-mono ${r < 0 ? "text-red-600" : "text-foreground"}`}>
-                    <FormatCurrency amount={r} />
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            <TableRow className="border-border bg-muted/40 hover:bg-muted/40 font-semibold">
-              <TableCell>Total</TableCell>
-              <TableCell className="text-right font-mono"><FormatCurrency amount={totalPlanned} /></TableCell>
-              <TableCell className="text-right font-mono"><FormatCurrency amount={totalActual} /></TableCell>
-              <TableCell className={`text-right font-mono ${totalPlanned - totalActual < 0 ? "text-red-600" : ""}`}>
-                <FormatCurrency amount={totalPlanned - totalActual} />
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      )}
-    </Card>
   );
 }
