@@ -12,6 +12,8 @@ export const plaidItemsTable = pgTable("plaid_items", {
   institutionId: text("institution_id"),
   institutionName: text("institution_name"),
   institutionLogo: text("institution_logo"),
+  transactionsCursor: text("transactions_cursor"),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [unique("plaid_items_user_item_unique").on(t.userId, t.itemId)]);

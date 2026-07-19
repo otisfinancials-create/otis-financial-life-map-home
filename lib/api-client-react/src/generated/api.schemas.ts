@@ -881,8 +881,47 @@ export interface PlaidDisconnectResult {
   success: boolean;
 }
 
+export interface PlaidWebhookInput {
+  webhook_type?: string;
+  webhook_code?: string;
+  item_id?: string;
+  [key: string]: unknown;
+ }
+
+export interface PlaidSyncResult {
+  added: number;
+  modified: number;
+  removed: number;
+  lastSyncedAt: string | null;
+}
+
+export interface PlaidTransaction {
+  id: number;
+  /** Plaid account_id */
+  accountId: string;
+  plaidTransactionId: string;
+  /** Plaid sign convention: positive = money out, negative = money in */
+  amount: number;
+  date: string;
+  name?: string | null;
+  merchantName?: string | null;
+  category?: string[] | null;
+  personalFinanceCategory?: string | null;
+  personalFinanceCategoryDetailed?: string | null;
+  paymentChannel?: string | null;
+  pending: boolean;
+  transactionType?: string | null;
+  currencyCode?: string | null;
+  accountName?: string | null;
+  accountType?: string | null;
+}
+
 export type ListForecastParams = {
 startDate?: string;
 endDate?: string;
+};
+
+export type ListPlaidTransactionsParams = {
+limit?: number;
 };
 

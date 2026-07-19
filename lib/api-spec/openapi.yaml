@@ -1115,6 +1115,57 @@ paths:
         "502":
           description: Plaid error
 
+  /plaid/sync:
+    post:
+      operationId: syncPlaidTransactions
+      tags: [plaid]
+      summary: Sync transactions from Plaid for all connected items of the authenticated user
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaidSyncResult"
+        "502":
+          description: Plaid error
+
+  /plaid/transactions:
+    get:
+      operationId: listPlaidTransactions
+      tags: [plaid]
+      summary: List synced Plaid transactions for the authenticated user (most recent first)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlaidTransaction"
+
+  /plaid/webhook:
+    post:
+      operationId: plaidWebhook
+      tags: [plaid]
+      summary: "Public Plaid webhook receiver (no auth: identified by Plaid item_id)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaidWebhookInput"
+      responses:
+        "200":
+          description: Acknowledged
+
   /plaid/disconnect:
     post:
       operationId: disconnectPlaidAccount
@@ -2357,3 +2408,79 @@ components:
       properties:
         success:
           type: boolean
+
+    PlaidWebhookInput:
+      type: object
+      properties:
+        webhook_type:
+          type: string
+        webhook_code:
+          type: string
+        item_id:
+          type: string
+      additionalProperties: true
+
+    PlaidSyncResult:
+      type: object
+      required: [added, modified, removed, lastSyncedAt]
+      properties:
+        added:
+          type: integer
+        modified:
+          type: integer
+        removed:
+          type: integer
+        lastSyncedAt:
+          type: string
+          nullable: true
+
+    PlaidTransaction:
+      type: object
+      required: [id, accountId, plaidTransactionId, amount, date, pending]
+      properties:
+        id:
+          type: integer
+        accountId:
+          type: string
+          description: Plaid account_id
+        plaidTransactionId:
+          type: string
+        amount:
+          type: number
+          description: "Plaid sign convention: positive = money out, negative = money in"
+        date:
+          type: string
+        name:
+          type: string
+          nullable: true
+        merchantName:
+          type: string
+          nullable: true
+        category:
+          type: array
+          items:
+            type: string
+          nullable: true
+        personalFinanceCategory:
+          type: string
+          nullable: true
+        personalFinanceCategoryDetailed:
+          type: string
+          nullable: true
+        paymentChannel:
+          type: string
+          nullable: true
+        pending:
+          type: boolean
+        transactionType:
+          type: string
+          nullable: true
+        currencyCode:
+          type: string
+          nullable: true
+        accountName:
+          type: string
+          nullable: true
+        accountType:
+          type: string
+          nullable: true

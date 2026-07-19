@@ -43,6 +43,7 @@ import type {
   LifeEventInput,
   LifeEventUpdate,
   ListForecastParams,
+  ListPlaidTransactionsParams,
   Loan,
   LoanAmortization,
   LoanInput,
@@ -60,6 +61,9 @@ import type {
   PlaidExchangeInput,
   PlaidExchangeResult,
   PlaidLinkToken,
+  PlaidSyncResult,
+  PlaidTransaction,
+  PlaidWebhookInput,
   RegenerateForecastResult,
   ReorderForecastInput,
   ReorderForecastResult,
@@ -4661,6 +4665,230 @@ export const useExchangePlaidToken = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getExchangePlaidTokenMutationOptions(options));
+    }
+
+export const getSyncPlaidTransactionsUrl = () => {
+
+
+
+
+  return `/api/plaid/sync`
+}
+
+/**
+ * @summary Sync transactions from Plaid for all connected items of the authenticated user
+ */
+export const syncPlaidTransactions = async ( options?: RequestInit): Promise<PlaidSyncResult> => {
+
+  return customFetch<PlaidSyncResult>(getSyncPlaidTransactionsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSyncPlaidTransactionsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncPlaidTransactions>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncPlaidTransactions>>, TError,void, TContext> => {
+
+const mutationKey = ['syncPlaidTransactions'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncPlaidTransactions>>, void> = () => {
+
+
+          return  syncPlaidTransactions(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncPlaidTransactionsMutationResult = NonNullable<Awaited<ReturnType<typeof syncPlaidTransactions>>>
+
+    export type SyncPlaidTransactionsMutationError = ErrorType<void>
+
+    /**
+ * @summary Sync transactions from Plaid for all connected items of the authenticated user
+ */
+export const useSyncPlaidTransactions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncPlaidTransactions>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncPlaidTransactions>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSyncPlaidTransactionsMutationOptions(options));
+    }
+
+export const getListPlaidTransactionsUrl = (params?: ListPlaidTransactionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/plaid/transactions?${stringifiedParams}` : `/api/plaid/transactions`
+}
+
+/**
+ * @summary List synced Plaid transactions for the authenticated user (most recent first)
+ */
+export const listPlaidTransactions = async (params?: ListPlaidTransactionsParams, options?: RequestInit): Promise<PlaidTransaction[]> => {
+
+  return customFetch<PlaidTransaction[]>(getListPlaidTransactionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPlaidTransactionsQueryKey = (params?: ListPlaidTransactionsParams,) => {
+    return [
+    `/api/plaid/transactions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPlaidTransactionsQueryOptions = <TData = Awaited<ReturnType<typeof listPlaidTransactions>>, TError = ErrorType<unknown>>(params?: ListPlaidTransactionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPlaidTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPlaidTransactionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPlaidTransactions>>> = ({ signal }) => listPlaidTransactions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPlaidTransactions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPlaidTransactionsQueryResult = NonNullable<Awaited<ReturnType<typeof listPlaidTransactions>>>
+export type ListPlaidTransactionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List synced Plaid transactions for the authenticated user (most recent first)
+ */
+
+export function useListPlaidTransactions<TData = Awaited<ReturnType<typeof listPlaidTransactions>>, TError = ErrorType<unknown>>(
+ params?: ListPlaidTransactionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPlaidTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPlaidTransactionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getPlaidWebhookUrl = () => {
+
+
+
+
+  return `/api/plaid/webhook`
+}
+
+/**
+ * @summary Public Plaid webhook receiver (no auth: identified by Plaid item_id)
+ */
+export const plaidWebhook = async (plaidWebhookInput: PlaidWebhookInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getPlaidWebhookUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(plaidWebhookInput)
+  }
+);}
+
+
+
+
+export const getPlaidWebhookMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof plaidWebhook>>, TError,{data: BodyType<PlaidWebhookInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof plaidWebhook>>, TError,{data: BodyType<PlaidWebhookInput>}, TContext> => {
+
+const mutationKey = ['plaidWebhook'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof plaidWebhook>>, {data: BodyType<PlaidWebhookInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  plaidWebhook(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PlaidWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof plaidWebhook>>>
+    export type PlaidWebhookMutationBody = BodyType<PlaidWebhookInput>
+    export type PlaidWebhookMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Public Plaid webhook receiver (no auth: identified by Plaid item_id)
+ */
+export const usePlaidWebhook = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof plaidWebhook>>, TError,{data: BodyType<PlaidWebhookInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof plaidWebhook>>,
+        TError,
+        {data: BodyType<PlaidWebhookInput>},
+        TContext
+      > => {
+      return useMutation(getPlaidWebhookMutationOptions(options));
     }
 
 export const getDisconnectPlaidAccountUrl = () => {

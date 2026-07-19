@@ -1405,6 +1405,59 @@ export const ExchangePlaidTokenResponse = zod.object({
 
 
 /**
+ * @summary Sync transactions from Plaid for all connected items of the authenticated user
+ */
+export const SyncPlaidTransactionsResponse = zod.object({
+  "added": zod.number(),
+  "modified": zod.number(),
+  "removed": zod.number(),
+  "lastSyncedAt": zod.string().nullable()
+})
+
+
+/**
+ * @summary List synced Plaid transactions for the authenticated user (most recent first)
+ */
+export const listPlaidTransactionsQueryLimitDefault = 100;
+
+export const ListPlaidTransactionsQueryParams = zod.object({
+  "limit": zod.coerce.number().default(listPlaidTransactionsQueryLimitDefault)
+})
+
+export const ListPlaidTransactionsResponseItem = zod.object({
+  "id": zod.number(),
+  "accountId": zod.string().describe('Plaid account_id'),
+  "plaidTransactionId": zod.string(),
+  "amount": zod.number().describe('Plaid sign convention: positive = money out, negative = money in'),
+  "date": zod.string(),
+  "name": zod.string().nullish(),
+  "merchantName": zod.string().nullish(),
+  "category": zod.array(zod.string()).nullish(),
+  "personalFinanceCategory": zod.string().nullish(),
+  "personalFinanceCategoryDetailed": zod.string().nullish(),
+  "paymentChannel": zod.string().nullish(),
+  "pending": zod.boolean(),
+  "transactionType": zod.string().nullish(),
+  "currencyCode": zod.string().nullish(),
+  "accountName": zod.string().nullish(),
+  "accountType": zod.string().nullish()
+})
+export const ListPlaidTransactionsResponse = zod.array(ListPlaidTransactionsResponseItem)
+
+
+/**
+ * @summary Public Plaid webhook receiver (no auth: identified by Plaid item_id)
+ */
+export const PlaidWebhookBody = zod.object({
+  "webhook_type": zod.string().optional(),
+  "webhook_code": zod.string().optional(),
+  "item_id": zod.string().optional()
+})
+
+export const PlaidWebhookResponse = zod.unknown()
+
+
+/**
  * @summary Disconnect an account from Plaid but keep it as a manual account
  */
 export const DisconnectPlaidAccountBody = zod.object({

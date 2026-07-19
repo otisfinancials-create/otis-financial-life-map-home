@@ -1,15 +1,18 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { CountryCode, Products, DepositoryAccountSubtype, CreditAccountSubtype, InvestmentAccountSubtype } from "plaid";
-import { db, accountsTable, plaidItemsTable } from "@workspace/db";
+import { db, accountsTable, plaidItemsTable, plaidTransactionsTable } from "@workspace/db";
 import {
   CreatePlaidLinkTokenResponse,
   ExchangePlaidTokenBody,
   ExchangePlaidTokenResponse,
   DisconnectPlaidAccountBody,
   DisconnectPlaidAccountResponse,
+  SyncPlaidTransactionsResponse,
+  ListPlaidTransactionsResponse,
 } from "@workspace/api-zod";
 import { plaidClient, mapPlaidAccountType } from "../lib/plaid";
+import { syncAllItemsForUser } from "../services/plaid-sync";
 
 const router: IRouter = Router();
 
@@ -34,6 +37,9 @@ router.post("/plaid/create-link-token", async (req, res): Promise<void> => {
       },
       country_codes: [CountryCode.Us],
       language: "en",
+      ...(process.env["REPLIT_DOMAINS"]
+        ? { webhook: `https://${process.env["REPLIT_DOMAINS"].split(",")[0]}/api/plaid/webhook` }
+        : {}),
     });
     res.json(CreatePlaidLinkTokenResponse.parse({ linkToken: response.data.link_token }));
   } catch (err) {
@@ -138,6 +144,62 @@ router.post("/plaid/exchange-token", async (req, res): Promise<void> => {
     req.log.error({ err: sanitizePlaidError(err) }, "Plaid token exchange failed");
     res.status(502).json({ error: "Failed to connect your bank" });
   }
+});
+
+router.post("/plaid/sync", async (req, res): Promise<void> => {
+  req.log.info("Manual Plaid transaction sync requested");
+  try {
+    const counts = await syncAllItemsForUser(req.userId);
+    res.json(
+      SyncPlaidTransactionsResponse.parse({
+        added: counts.added,
+        modified: counts.modified,
+        removed: counts.removed,
+        lastSyncedAt: new Date().toISOString(),
+      }),
+    );
+  } catch (err) {
+    req.log.error({ err: sanitizePlaidError(err) }, "Plaid transaction sync failed");
+    res.status(502).json({ error: "Failed to sync transactions" });
+  }
+});
+
+router.get("/plaid/transactions", async (req, res): Promise<void> => {
+  const rawLimit = Number(req.query["limit"]);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 100;
+  const rows = await db
+    .select({
+      txn: plaidTransactionsTable,
+      accountName: accountsTable.accountName,
+      accountType: accountsTable.accountType,
+    })
+    .from(plaidTransactionsTable)
+    .leftJoin(accountsTable, eq(accountsTable.plaidAccountId, plaidTransactionsTable.accountId))
+    .where(eq(plaidTransactionsTable.userId, req.userId))
+    .orderBy(desc(plaidTransactionsTable.date), desc(plaidTransactionsTable.id))
+    .limit(limit);
+  res.json(
+    ListPlaidTransactionsResponse.parse(
+      rows.map(({ txn, accountName, accountType }) => ({
+        id: txn.id,
+        accountId: txn.accountId,
+        plaidTransactionId: txn.plaidTransactionId,
+        amount: parseFloat(String(txn.amount)),
+        date: txn.date,
+        name: txn.name,
+        merchantName: txn.merchantName,
+        category: txn.category,
+        personalFinanceCategory: txn.personalFinanceCategory,
+        personalFinanceCategoryDetailed: txn.personalFinanceCategoryDetailed,
+        paymentChannel: txn.paymentChannel,
+        pending: txn.pending,
+        transactionType: txn.transactionType,
+        currencyCode: txn.currencyCode,
+        accountName,
+        accountType,
+      })),
+    ),
+  );
 });
 
 router.post("/plaid/disconnect", async (req, res): Promise<void> => {

@@ -15,6 +15,7 @@ import retirementRouter from "./retirement";
 import otisRouter from "./otis";
 import scenariosRouter from "./scenarios";
 import plaidRouter from "./plaid";
+import plaidWebhookRouter from "./plaid_webhook";
 import { invalidateOtisCache } from "../lib/otis-cache";
 
 const router: IRouter = Router();
@@ -33,6 +34,7 @@ const otisCacheInvalidation: import("express").RequestHandler = (req, res, next)
 
 router.use(healthRouter);
 router.use(subscribeRouter);
+router.use(plaidWebhookRouter);
 router.use(requireAuth);
 router.use(otisCacheInvalidation);
 router.use(dashboardRouter);

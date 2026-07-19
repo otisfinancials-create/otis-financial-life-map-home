@@ -1,5 +1,7 @@
+import cron from "node-cron";
 import app from "./app";
 import { logger } from "./lib/logger";
+import { syncAllUsers } from "./services/plaid-sync";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +24,12 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+});
+
+// Nightly Plaid transaction sync at 2:00 AM.
+cron.schedule("0 2 * * *", () => {
+  logger.info("Starting nightly Plaid transaction sync");
+  void syncAllUsers()
+    .then(() => logger.info("Nightly Plaid sync complete"))
+    .catch((err) => logger.error({ err }, "Nightly Plaid sync error"));
 });
