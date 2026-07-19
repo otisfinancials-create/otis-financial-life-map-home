@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { CountryCode, Products } from "plaid";
+import { CountryCode, Products, DepositoryAccountSubtype, CreditAccountSubtype, InvestmentAccountSubtype } from "plaid";
 import { db, accountsTable, plaidItemsTable } from "@workspace/db";
 import {
   CreatePlaidLinkTokenResponse,
@@ -19,8 +19,19 @@ router.post("/plaid/create-link-token", async (req, res): Promise<void> => {
     const response = await plaidClient.linkTokenCreate({
       user: { client_user_id: req.userId },
       client_name: "Otis Financial",
-      products: [Products.Transactions, Products.Auth, Products.Identity],
-      optional_products: [Products.Liabilities, Products.Investments],
+      products: [Products.Transactions],
+      optional_products: [Products.Liabilities, Products.Investments, Products.Identity],
+      account_filters: {
+        depository: {
+          account_subtypes: [DepositoryAccountSubtype.Checking, DepositoryAccountSubtype.Savings],
+        },
+        credit: {
+          account_subtypes: [CreditAccountSubtype.CreditCard],
+        },
+        investment: {
+          account_subtypes: [InvestmentAccountSubtype.All],
+        },
+      },
       country_codes: [CountryCode.Us],
       language: "en",
     });
