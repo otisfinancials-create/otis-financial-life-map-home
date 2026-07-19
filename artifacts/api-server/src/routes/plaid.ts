@@ -19,7 +19,8 @@ router.post("/plaid/create-link-token", async (req, res): Promise<void> => {
     const response = await plaidClient.linkTokenCreate({
       user: { client_user_id: req.userId },
       client_name: "Otis Financial",
-      products: [Products.Transactions, Products.Liabilities],
+      products: [Products.Transactions, Products.Auth, Products.Identity],
+      optional_products: [Products.Liabilities, Products.Investments],
       country_codes: [CountryCode.Us],
       language: "en",
     });
