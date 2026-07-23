@@ -1405,6 +1405,93 @@ export const ExchangePlaidTokenResponse = zod.object({
 
 
 /**
+ * @summary Run smart bill detection over synced Plaid transactions
+ */
+export const DetectBillsResponse = zod.object({
+  "detected": zod.number(),
+  "pending": zod.number(),
+  "duplicates": zod.number(),
+  "excludedTransfers": zod.number()
+})
+
+
+/**
+ * @summary List pending/duplicate detected bills, highest confidence first
+ */
+export const ListDetectedBillsResponseItem = zod.object({
+  "id": zod.number(),
+  "merchantKey": zod.string(),
+  "displayName": zod.string(),
+  "amount": zod.number(),
+  "amountMin": zod.number().nullish(),
+  "amountMax": zod.number().nullish(),
+  "isVariable": zod.boolean(),
+  "frequency": zod.enum(['weekly', 'biweekly', 'monthly', 'quarterly', 'annual']),
+  "occurrenceCount": zod.number(),
+  "firstSeen": zod.string().nullish(),
+  "lastSeen": zod.string().nullish(),
+  "nextExpectedDate": zod.string().nullish(),
+  "confidence": zod.number(),
+  "status": zod.enum(['pending', 'confirmed', 'dismissed', 'duplicate']),
+  "duplicateOf": zod.number().nullish()
+})
+export const ListDetectedBillsResponse = zod.array(ListDetectedBillsResponseItem)
+
+
+/**
+ * @summary Confirm a detected bill and create a real bill from it
+ */
+export const ConfirmDetectedBillParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ConfirmDetectedBillResponse = zod.object({
+  "id": zod.number(),
+  "billName": zod.string(),
+  "category": zod.string(),
+  "amount": zod.number(),
+  "frequency": zod.string(),
+  "dueDay": zod.number(),
+  "amountType": zod.enum(['positive', 'negative']),
+  "paymentMethod": zod.string().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "companyUrl": zod.string().nullish(),
+  "isVariable": zod.boolean(),
+  "isActive": zod.boolean(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Dismiss a detected bill
+ */
+export const DismissDetectedBillParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DismissDetectedBillResponse = zod.object({
+  "id": zod.number(),
+  "merchantKey": zod.string(),
+  "displayName": zod.string(),
+  "amount": zod.number(),
+  "amountMin": zod.number().nullish(),
+  "amountMax": zod.number().nullish(),
+  "isVariable": zod.boolean(),
+  "frequency": zod.enum(['weekly', 'biweekly', 'monthly', 'quarterly', 'annual']),
+  "occurrenceCount": zod.number(),
+  "firstSeen": zod.string().nullish(),
+  "lastSeen": zod.string().nullish(),
+  "nextExpectedDate": zod.string().nullish(),
+  "confidence": zod.number(),
+  "status": zod.enum(['pending', 'confirmed', 'dismissed', 'duplicate']),
+  "duplicateOf": zod.number().nullish()
+})
+
+
+/**
  * @summary Sync transactions from Plaid for all connected items of the authenticated user
  */
 export const SyncPlaidTransactionsResponse = zod.object({

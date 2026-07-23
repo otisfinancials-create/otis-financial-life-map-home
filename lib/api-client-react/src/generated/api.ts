@@ -32,9 +32,11 @@ import type {
   AssetsSummary,
   BalanceSync,
   Bill,
+  BillDetectionSummary,
   BillInput,
   BillUpdate,
   DashboardSummary,
+  DetectedBill,
   ForecastedTransaction,
   ForecastedTransactionInput,
   ForecastedTransactionUpdate,
@@ -4665,6 +4667,293 @@ export const useExchangePlaidToken = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getExchangePlaidTokenMutationOptions(options));
+    }
+
+export const getDetectBillsUrl = () => {
+
+
+
+
+  return `/api/bills/detect`
+}
+
+/**
+ * @summary Run smart bill detection over synced Plaid transactions
+ */
+export const detectBills = async ( options?: RequestInit): Promise<BillDetectionSummary> => {
+
+  return customFetch<BillDetectionSummary>(getDetectBillsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getDetectBillsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof detectBills>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof detectBills>>, TError,void, TContext> => {
+
+const mutationKey = ['detectBills'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof detectBills>>, void> = () => {
+
+
+          return  detectBills(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DetectBillsMutationResult = NonNullable<Awaited<ReturnType<typeof detectBills>>>
+
+    export type DetectBillsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Run smart bill detection over synced Plaid transactions
+ */
+export const useDetectBills = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof detectBills>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof detectBills>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDetectBillsMutationOptions(options));
+    }
+
+export const getListDetectedBillsUrl = () => {
+
+
+
+
+  return `/api/bills/detected`
+}
+
+/**
+ * @summary List pending/duplicate detected bills, highest confidence first
+ */
+export const listDetectedBills = async ( options?: RequestInit): Promise<DetectedBill[]> => {
+
+  return customFetch<DetectedBill[]>(getListDetectedBillsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDetectedBillsQueryKey = () => {
+    return [
+    `/api/bills/detected`
+    ] as const;
+    }
+
+
+export const getListDetectedBillsQueryOptions = <TData = Awaited<ReturnType<typeof listDetectedBills>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDetectedBills>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDetectedBillsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDetectedBills>>> = ({ signal }) => listDetectedBills({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDetectedBills>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDetectedBillsQueryResult = NonNullable<Awaited<ReturnType<typeof listDetectedBills>>>
+export type ListDetectedBillsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List pending/duplicate detected bills, highest confidence first
+ */
+
+export function useListDetectedBills<TData = Awaited<ReturnType<typeof listDetectedBills>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDetectedBills>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDetectedBillsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getConfirmDetectedBillUrl = (id: number,) => {
+
+
+
+
+  return `/api/bills/detected/${id}/confirm`
+}
+
+/**
+ * @summary Confirm a detected bill and create a real bill from it
+ */
+export const confirmDetectedBill = async (id: number, options?: RequestInit): Promise<Bill> => {
+
+  return customFetch<Bill>(getConfirmDetectedBillUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getConfirmDetectedBillMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedBill>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedBill>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['confirmDetectedBill'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmDetectedBill>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  confirmDetectedBill(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmDetectedBillMutationResult = NonNullable<Awaited<ReturnType<typeof confirmDetectedBill>>>
+
+    export type ConfirmDetectedBillMutationError = ErrorType<void>
+
+    /**
+ * @summary Confirm a detected bill and create a real bill from it
+ */
+export const useConfirmDetectedBill = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedBill>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmDetectedBill>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getConfirmDetectedBillMutationOptions(options));
+    }
+
+export const getDismissDetectedBillUrl = (id: number,) => {
+
+
+
+
+  return `/api/bills/detected/${id}/dismiss`
+}
+
+/**
+ * @summary Dismiss a detected bill
+ */
+export const dismissDetectedBill = async (id: number, options?: RequestInit): Promise<DetectedBill> => {
+
+  return customFetch<DetectedBill>(getDismissDetectedBillUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getDismissDetectedBillMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissDetectedBill>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof dismissDetectedBill>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['dismissDetectedBill'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dismissDetectedBill>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  dismissDetectedBill(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DismissDetectedBillMutationResult = NonNullable<Awaited<ReturnType<typeof dismissDetectedBill>>>
+
+    export type DismissDetectedBillMutationError = ErrorType<void>
+
+    /**
+ * @summary Dismiss a detected bill
+ */
+export const useDismissDetectedBill = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissDetectedBill>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof dismissDetectedBill>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDismissDetectedBillMutationOptions(options));
     }
 
 export const getSyncPlaidTransactionsUrl = () => {

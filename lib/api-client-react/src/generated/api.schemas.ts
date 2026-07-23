@@ -881,6 +881,52 @@ export interface PlaidDisconnectResult {
   success: boolean;
 }
 
+export interface BillDetectionSummary {
+  detected: number;
+  pending: number;
+  duplicates: number;
+  excludedTransfers: number;
+}
+
+export type DetectedBillFrequency = typeof DetectedBillFrequency[keyof typeof DetectedBillFrequency];
+
+
+export const DetectedBillFrequency = {
+  weekly: 'weekly',
+  biweekly: 'biweekly',
+  monthly: 'monthly',
+  quarterly: 'quarterly',
+  annual: 'annual',
+} as const;
+
+export type DetectedBillStatus = typeof DetectedBillStatus[keyof typeof DetectedBillStatus];
+
+
+export const DetectedBillStatus = {
+  pending: 'pending',
+  confirmed: 'confirmed',
+  dismissed: 'dismissed',
+  duplicate: 'duplicate',
+} as const;
+
+export interface DetectedBill {
+  id: number;
+  merchantKey: string;
+  displayName: string;
+  amount: number;
+  amountMin?: number | null;
+  amountMax?: number | null;
+  isVariable: boolean;
+  frequency: DetectedBillFrequency;
+  occurrenceCount: number;
+  firstSeen?: string | null;
+  lastSeen?: string | null;
+  nextExpectedDate?: string | null;
+  confidence: number;
+  status: DetectedBillStatus;
+  duplicateOf?: number | null;
+}
+
 export interface PlaidWebhookInput {
   webhook_type?: string;
   webhook_code?: string;

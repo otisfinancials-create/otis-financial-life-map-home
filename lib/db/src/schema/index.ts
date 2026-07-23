@@ -13,3 +13,4 @@ export * from "./account_goals";
 export * from "./otis_conversations";
 export * from "./plaid_items";
 export * from "./plaid_transactions";
+export * from "./detected_bills";

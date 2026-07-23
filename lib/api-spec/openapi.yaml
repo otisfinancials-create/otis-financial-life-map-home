@@ -1115,6 +1115,78 @@ paths:
         "502":
           description: Plaid error
 
+  /bills/detect:
+    post:
+      operationId: detectBills
+      tags: [bills]
+      summary: Run smart bill detection over synced Plaid transactions
+      responses:
+        "200":
+          description: Detection run summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillDetectionSummary"
+
+  /bills/detected:
+    get:
+      operationId: listDetectedBills
+      tags: [bills]
+      summary: List pending/duplicate detected bills, highest confidence first
+      responses:
+        "200":
+          description: Detected bills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DetectedBill"
+
+  /bills/detected/{id}/confirm:
+    post:
+      operationId: confirmDetectedBill
+      tags: [bills]
+      summary: Confirm a detected bill and create a real bill from it
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bill created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+        "404":
+          description: Not found
+        "409":
+          description: Already confirmed or dismissed
+
+  /bills/detected/{id}/dismiss:
+    post:
+      operationId: dismissDetectedBill
+      tags: [bills]
+      summary: Dismiss a detected bill
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Dismissed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetectedBill"
+        "404":
+          description: Not found
+
   /plaid/sync:
     post:
       operationId: syncPlaidTransactions
@@ -2408,6 +2480,62 @@ components:
       properties:
         success:
           type: boolean
+
+    BillDetectionSummary:
+      type: object
+      required: [detected, pending, duplicates, excludedTransfers]
+      properties:
+        detected:
+          type: integer
+        pending:
+          type: integer
+        duplicates:
+          type: integer
+        excludedTransfers:
+          type: integer
+
+    DetectedBill:
+      type: object
+      required: [id, merchantKey, displayName, amount, isVariable, frequency, occurrenceCount, confidence, status]
+      properties:
+        id:
+          type: integer
+        merchantKey:
+          type: string
+        displayName:
+          type: string
+        amount:
+          type: number
+        amountMin:
+          type: number
+          nullable: true
+        amountMax:
+          type: number
+          nullable: true
+        isVariable:
+          type: boolean
+        frequency:
+          type: string
+          enum: [weekly, biweekly, monthly, quarterly, annual]
+        occurrenceCount:
+          type: integer
+        firstSeen:
+          type: string
+          nullable: true
+        lastSeen:
+          type: string
+          nullable: true
+        nextExpectedDate:
+          type: string
+          nullable: true
+        confidence:
+          type: number
+        status:
+          type: string
+          enum: [pending, confirmed, dismissed, duplicate]
+        duplicateOf:
+          type: integer
+          nullable: true
 
     PlaidWebhookInput:
       type: object
