@@ -43,6 +43,7 @@ router.post("/bills/detect", async (req, res): Promise<void> => {
       pending: summary.pending,
       duplicates: summary.duplicates,
       excludedTransfers: summary.excludedTransfers,
+      mergesPerformed: summary.mergesPerformed,
     }),
   );
 });

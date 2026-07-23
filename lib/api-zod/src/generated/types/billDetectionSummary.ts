@@ -11,4 +11,5 @@ export interface BillDetectionSummary {
   pending: number;
   duplicates: number;
   excludedTransfers: number;
+  mergesPerformed: number;
 }
