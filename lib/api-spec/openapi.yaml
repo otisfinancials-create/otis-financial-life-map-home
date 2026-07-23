@@ -2483,7 +2483,7 @@ components:
 
     BillDetectionSummary:
       type: object
-      required: [detected, pending, duplicates, excludedTransfers, mergesPerformed]
+      required: [detected, pending, duplicates, excludedTransfers, mergesPerformed, excludedByMerchantPattern]
       properties:
         detected:
           type: integer
@@ -2494,6 +2494,8 @@ components:
         excludedTransfers:
           type: integer
         mergesPerformed:
+          type: integer
+        excludedByMerchantPattern:
           type: integer
 
     DetectedBill:

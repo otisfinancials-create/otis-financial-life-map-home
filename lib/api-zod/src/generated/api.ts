@@ -1412,7 +1412,8 @@ export const DetectBillsResponse = zod.object({
   "pending": zod.number(),
   "duplicates": zod.number(),
   "excludedTransfers": zod.number(),
-  "mergesPerformed": zod.number()
+  "mergesPerformed": zod.number(),
+  "excludedByMerchantPattern": zod.number()
 })
 
 

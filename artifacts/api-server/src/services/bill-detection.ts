@@ -72,6 +72,29 @@ const CARD_ISSUER_NAMES = [
   "us bank",
   "usbank",
 ];
+/** Merchants that are never bills: P2P payments, brokerage transfers, marketplaces.
+ *  Matched (case-insensitive) against the normalized merchant key AND raw name. */
+const EXCLUDED_MERCHANT_PATTERNS = [
+  "zelle",
+  "venmo",
+  "cash app",
+  "cashapp",
+  "paypal transfer",
+  "morgan stanley",
+  "fidelity",
+  "vanguard",
+  "schwab",
+  "e*trade",
+  "ebay",
+];
+/** Confidence floor for strong-evidence detections (Change 3). */
+const CONFIDENCE_FLOOR = 0.6;
+const CONFIDENCE_FLOOR_MIN_OCCURRENCES = 5;
+const CONFIDENCE_FLOOR_MAX_CV = 0.2;
+/** Monthly band for the >=2-gaps-in-band cadence override (Change 2c). */
+const MONTHLY_BAND_MIN = 25;
+const MONTHLY_BAND_MAX = 35;
+const MONTHLY_BAND_MIN_GAPS = 2;
 /** Never exclude a transaction whose normalized name contains one of these.
  *  Groups containing these words also get the raised CV ceiling — insurance
  *  premiums and utilities legitimately vary in amount (e.g. USAA CV ≈ 0.44). */
@@ -83,6 +106,7 @@ export interface DetectionSummary {
   duplicates: number;
   excludedTransfers: number;
   mergesPerformed: number;
+  excludedByMerchantPattern: number;
 }
 
 /** Normalize a raw merchant string into a stable grouping key. */
@@ -233,8 +257,9 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
       ),
     );
 
-  // Exclude transfers / CC payments (narrow rule), normalize, group.
+  // Exclude transfers / CC payments (narrow rule) + never-bill merchants, normalize, group.
   let excludedTransfers = 0;
+  let excludedByMerchantPattern = 0;
   const rawGroups = new Map<string, MerchantGroup>();
   const samplePairs: string[] = [];
   for (const txn of txns) {
@@ -243,6 +268,13 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
     const key = normalizeMerchant(rawSource);
     if (!key) continue;
     if (samplePairs.length < 15) samplePairs.push(`"${rawSource}" -> "${key}"`);
+    const rawLower = `${txn.name ?? ""} ${txn.merchantName ?? ""}`.toLowerCase();
+    const merchantPattern = EXCLUDED_MERCHANT_PATTERNS.find((p) => key.includes(p) || rawLower.includes(p));
+    if (merchantPattern) {
+      excludedByMerchantPattern++;
+      logger.info({ key, pattern: merchantPattern }, "Bill detection: excluded by merchant pattern");
+      continue;
+    }
     const excluded = isExcluded(txn, key);
     if (excluded) {
       excludedTransfers++;
@@ -292,8 +324,46 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
     for (let i = 1; i < sorted.length; i++) gaps.push(dayGap(sorted[i - 1]!.date, sorted[i]!.date));
     if (gaps.length === 0) continue;
     const medGap = median(gaps);
-    const bucket = CADENCE_BUCKETS.find((b) => Math.abs(medGap - b.days) <= b.tolerance);
-    if (!bucket) continue;
+    // Change 2: robust cadence classification.
+    //   a) implied cadence = span / (occurrences - 1)
+    //   b) if median-gap bucket and implied-cadence bucket disagree by more than
+    //      one bucket, prefer the implied cadence (robust to irregular gaps)
+    //   c) >=2 gaps inside the monthly band force a monthly classification
+    const span = dayGap(sorted[0]!.date, sorted[sorted.length - 1]!.date);
+    const impliedCadence = span / (sorted.length - 1);
+    const medianBucketIdx = CADENCE_BUCKETS.findIndex((b) => Math.abs(medGap - b.days) <= b.tolerance);
+    const nearestBucketIdx = (days: number) => {
+      let best = 0;
+      for (let i = 1; i < CADENCE_BUCKETS.length; i++) {
+        if (Math.abs(days - CADENCE_BUCKETS[i]!.days) < Math.abs(days - CADENCE_BUCKETS[best]!.days)) best = i;
+      }
+      return best;
+    };
+    const impliedBucketIdx = nearestBucketIdx(impliedCadence);
+    const monthlyBandGaps = gaps.filter((g) => g >= MONTHLY_BAND_MIN && g <= MONTHLY_BAND_MAX).length;
+    let bucketIdx = medianBucketIdx;
+    let cadenceRule = "median";
+    if (monthlyBandGaps >= MONTHLY_BAND_MIN_GAPS) {
+      bucketIdx = CADENCE_BUCKETS.findIndex((b) => b.frequency === "monthly");
+      cadenceRule = "monthly-band";
+    } else if (medianBucketIdx === -1) {
+      bucketIdx = -1;
+    } else if (Math.abs(impliedBucketIdx - medianBucketIdx) > 1) {
+      bucketIdx = impliedBucketIdx;
+      cadenceRule = "implied";
+    }
+    if (bucketIdx === -1) continue;
+    const bucket = CADENCE_BUCKETS[bucketIdx]!;
+    logger.info(
+      {
+        merchantKey,
+        medianGap: medGap,
+        impliedCadence: Number(impliedCadence.toFixed(1)),
+        chosenFrequency: bucket.frequency,
+        rule: cadenceRule,
+      },
+      "Bill detection: cadence classification",
+    );
     const minOccurrences = SHORT_FREQUENCIES.has(bucket.frequency) ? MIN_OCCURRENCES_SHORT : MIN_OCCURRENCES_LONG;
     if (sorted.length < minOccurrences) continue;
 
@@ -322,7 +392,11 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
       WEIGHT_CADENCE * cadenceScore + WEIGHT_AMOUNT * amountScore + WEIGHT_OCCURRENCES * occurrenceScore,
     );
     // Change 4: thin-evidence penalty so 2- and 3-occurrence detections rank lower.
-    const confidence = rawConfidence * (OCCURRENCE_PENALTY[sorted.length] ?? 1);
+    let confidence = rawConfidence * (OCCURRENCE_PENALTY[sorted.length] ?? 1);
+    // Confidence floor for strong-evidence detections (>=5 occurrences, stable amounts).
+    if (sorted.length >= CONFIDENCE_FLOOR_MIN_OCCURRENCES && cv <= CONFIDENCE_FLOOR_MAX_CV) {
+      confidence = Math.max(confidence, CONFIDENCE_FLOOR);
+    }
 
     // Display name: best merchant_name in the merged group, else most common raw name.
     const merchantNames = sorted.map((t) => t.merchantName).filter((v): v is string => Boolean(v));
@@ -405,7 +479,7 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
     .from(detectedBillsTable)
     .where(and(eq(detectedBillsTable.userId, userId), eq(detectedBillsTable.status, "pending")))) as [{ pending: number }];
 
-  return { detected, pending, duplicates, excludedTransfers, mergesPerformed: merges };
+  return { detected, pending, duplicates, excludedTransfers, mergesPerformed: merges, excludedByMerchantPattern };
 }
 
 /** App-side fallback name similarity (Levenshtein ratio) when pg_trgm is unavailable. */

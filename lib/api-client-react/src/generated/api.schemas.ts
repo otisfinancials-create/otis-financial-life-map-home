@@ -887,6 +887,7 @@ export interface BillDetectionSummary {
   duplicates: number;
   excludedTransfers: number;
   mergesPerformed: number;
+  excludedByMerchantPattern: number;
 }
 
 export type DetectedBillFrequency = typeof DetectedBillFrequency[keyof typeof DetectedBillFrequency];

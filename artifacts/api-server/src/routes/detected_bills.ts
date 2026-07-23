@@ -44,6 +44,7 @@ router.post("/bills/detect", async (req, res): Promise<void> => {
       duplicates: summary.duplicates,
       excludedTransfers: summary.excludedTransfers,
       mergesPerformed: summary.mergesPerformed,
+      excludedByMerchantPattern: summary.excludedByMerchantPattern,
     }),
   );
 });

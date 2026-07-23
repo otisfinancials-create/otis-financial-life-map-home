@@ -12,4 +12,5 @@ export interface BillDetectionSummary {
   duplicates: number;
   excludedTransfers: number;
   mergesPerformed: number;
+  excludedByMerchantPattern: number;
 }
