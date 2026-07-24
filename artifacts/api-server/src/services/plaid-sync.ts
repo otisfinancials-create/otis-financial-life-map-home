@@ -14,9 +14,15 @@ export interface SyncCounts {
 /** Sync transactions for a single plaid_items row using /transactions/sync with cursor pagination. */
 export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCounts> {
   let cursor = item.transactionsCursor ?? undefined;
+  const isInitialSync = cursor === undefined;
   let hasMore = true;
   const counts: SyncCounts = { added: 0, modified: 0, removed: 0, balances_captured: 0 };
   let latestAccounts: AccountBase[] | undefined;
+  // On an initial sync, Plaid may report has_more=false before the historical
+  // backfill finishes. Saving that cursor would permanently skip history, so we
+  // poll (bounded) until transactions_update_status is HISTORICAL_UPDATE_COMPLETE.
+  let historicalWaitAttempts = 0;
+  const MAX_HISTORICAL_WAIT_ATTEMPTS = 30;
 
   while (hasMore) {
     const response = await plaidClient.transactionsSync({
@@ -25,8 +31,6 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
       count: 100,
     });
     const data = response.data;
-    console.log('SYNC RESPONSE KEYS:', Object.keys(data));
-    console.log('ACCOUNTS SAMPLE:', JSON.stringify(data.accounts?.slice(0, 2), null, 2));
 
     for (const txn of [...data.added, ...data.modified]) {
       await upsertTransaction(item.userId, item.id, txn);
@@ -46,6 +50,24 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
     cursor = data.next_cursor;
     hasMore = data.has_more;
     latestAccounts = data.accounts;
+
+    if (
+      !hasMore &&
+      isInitialSync &&
+      data.transactions_update_status !== "HISTORICAL_UPDATE_COMPLETE"
+    ) {
+      if (historicalWaitAttempts >= MAX_HISTORICAL_WAIT_ATTEMPTS) {
+        // Give up waiting; do NOT persist the cursor so the next sync retries from scratch.
+        logger.warn(
+          { plaidItemId: item.id, status: data.transactions_update_status },
+          "Initial Plaid sync: historical update did not complete in time; cursor not saved",
+        );
+        return counts;
+      }
+      historicalWaitAttempts++;
+      hasMore = true;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
   }
 
   // P4: capture end-of-day balances from the final transactionsSync response (no extra Plaid call).
@@ -60,14 +82,12 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
     { plaidItemId: item.id, ...counts },
     "Plaid transaction sync complete for item",
   );
-  console.log('BALANCE CAPTURE SUMMARY', { plaid_item_id: item.id, balances_captured: counts.balances_captured });
   return counts;
 }
 
 /** Upsert one balance_snapshots row per account for today (last write wins for the day). */
 async function captureBalanceSnapshots(item: PlaidItem, accounts: AccountBase[] | undefined): Promise<number> {
   if (!accounts || accounts.length === 0) {
-    console.log('BALANCE CAPTURE: no accounts array in response');
     return 0;
   }
   // Server local date, YYYY-MM-DD
@@ -75,13 +95,6 @@ async function captureBalanceSnapshots(item: PlaidItem, accounts: AccountBase[] 
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   let captured = 0;
   for (const acct of accounts) {
-    console.log('BALANCE CAPTURE', {
-      account_id: acct.account_id,
-      name: acct.name,
-      type: acct.type,
-      subtype: acct.subtype,
-      balances: acct.balances,
-    });
     const values = {
       userId: item.userId,
       plaidItemId: item.id,

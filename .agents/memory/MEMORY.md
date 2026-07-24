@@ -13,3 +13,7 @@
 - [Forecast balance anchoring](forecast-balance-anchoring.md) — sync-adjustment rows must skip the past back-fill and survive regenerate/delete, or rebaselining silently breaks.
 - [pnpm @types/react hoist](pnpm-types-react-hoist.md) — duplicate @types/react (Expo pin vs catalog) breaks web typecheck via pnpm hidden hoist; align all pins to catalog:.
 - [Mobile AI tab dead endpoints](mobile-ai-dead-endpoints.md) — mobile ai.tsx targets /api/anthropic/* routes that never existed; typecheck patched with local hooks, real fix must retarget /api/otis SSE with auth plumbing.
+- [Plaid webhook verification](plaid-webhook-verification.md) — public webhooks must verify the Plaid JWT (raw-body sha256) and per-item debounce sync, or they are a DoS vector.
+- [Plaid initial sync historical wait](plaid-initial-sync-historical.md) — never persist an initial cursor before HISTORICAL_UPDATE_COMPLETE, or the item silently skips all history; fix by nulling the cursor.
+- [Plaid transactionsSync accounts array](plaid-sync-accounts-array.md) — accounts[] is empty on caught-up runs; balance snapshots only accrue when a sync has new transactions.
+- [Drizzle db.execute result shape](drizzle-execute-rows.md) — raw SQL returns {rows}; destructuring as array throws "not iterable".
