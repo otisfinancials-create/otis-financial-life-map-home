@@ -32,16 +32,26 @@ router.get("/accounts", async (req, res): Promise<void> => {
     .where(eq(accountsTable.userId, req.userId))
     .orderBy(accountsTable.accountType, accountsTable.accountName);
   const items = await db
-    .select({ id: plaidItemsTable.id, institutionLogo: plaidItemsTable.institutionLogo })
+    .select({ id: plaidItemsTable.id, institutionLogo: plaidItemsTable.institutionLogo, lastSyncedAt: plaidItemsTable.lastSyncedAt })
     .from(plaidItemsTable)
     .where(eq(plaidItemsTable.userId, req.userId));
-  const logoByItem = new Map(items.map((i) => [i.id, i.institutionLogo]));
+  const itemById = new Map(items.map((i) => [i.id, i]));
   res.json(
     ListAccountsResponse.parse(
-      accounts.map((a) => ({
-        ...serialize(a),
-        institutionLogo: a.plaidItemId != null ? (logoByItem.get(a.plaidItemId) ?? null) : null,
-      })),
+      accounts.map((a) => {
+        const item = a.plaidItemId != null ? itemById.get(a.plaidItemId) : undefined;
+        return {
+          ...serialize(a),
+          institutionLogo: item?.institutionLogo ?? null,
+          // The item-level timestamp is the source of truth for when this
+          // connection last synced; the per-account column can go stale.
+          lastSyncedAt: item?.lastSyncedAt
+            ? item.lastSyncedAt.toISOString()
+            : a.lastSyncedAt
+              ? a.lastSyncedAt.toISOString()
+              : null,
+        };
+      }),
     ),
   );
 });
