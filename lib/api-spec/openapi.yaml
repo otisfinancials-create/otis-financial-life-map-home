@@ -383,6 +383,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/AccountsSummary"
 
+  /accounts/balances:
+    get:
+      operationId: listAccountBalances
+      tags: [accounts]
+      summary: Latest daily balance snapshot per connected account (from transactionsSync captures)
+      responses:
+        "200":
+          description: Latest balance snapshots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountBalanceSnapshot"
+
   /account-goals:
     get:
       operationId: listAccountGoals
@@ -2554,7 +2569,7 @@ components:
 
     PlaidSyncResult:
       type: object
-      required: [added, modified, removed, lastSyncedAt]
+      required: [added, modified, removed, balancesCaptured, lastSyncedAt]
       properties:
         added:
           type: integer
@@ -2562,9 +2577,38 @@ components:
           type: integer
         removed:
           type: integer
+        balancesCaptured:
+          type: integer
         lastSyncedAt:
           type: string
           nullable: true
+
+    AccountBalanceSnapshot:
+      type: object
+      required: [accountId, snapshotDate, current, available, creditLimit, currencyCode, capturedAt]
+      properties:
+        accountId:
+          type: string
+          description: Plaid account_id
+        accountName:
+          type: string
+          nullable: true
+        snapshotDate:
+          type: string
+        current:
+          type: number
+          nullable: true
+        available:
+          type: number
+          nullable: true
+        creditLimit:
+          type: number
+          nullable: true
+        currencyCode:
+          type: string
+          nullable: true
+        capturedAt:
+          type: string
 
     PlaidTransaction:
       type: object

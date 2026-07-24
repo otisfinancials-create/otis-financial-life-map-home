@@ -7,6 +7,7 @@
  */
 
 export * from './account';
+export * from './accountBalanceSnapshot';
 export * from './accountGoal';
 export * from './accountGoalInput';
 export * from './accountInput';

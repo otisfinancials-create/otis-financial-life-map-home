@@ -155,6 +155,7 @@ router.post("/plaid/sync", async (req, res): Promise<void> => {
         added: counts.added,
         modified: counts.modified,
         removed: counts.removed,
+        balancesCaptured: counts.balances_captured,
         lastSyncedAt: new Date().toISOString(),
       }),
     );

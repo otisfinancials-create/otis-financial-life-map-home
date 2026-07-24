@@ -21,6 +21,7 @@ import type {
 
 import type {
   Account,
+  AccountBalanceSnapshot,
   AccountGoal,
   AccountGoalInput,
   AccountInput,
@@ -1572,6 +1573,83 @@ export function useGetAccountsSummary<TData = Awaited<ReturnType<typeof getAccou
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAccountsSummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAccountBalancesUrl = () => {
+
+
+
+
+  return `/api/accounts/balances`
+}
+
+/**
+ * @summary Latest daily balance snapshot per connected account (from transactionsSync captures)
+ */
+export const listAccountBalances = async ( options?: RequestInit): Promise<AccountBalanceSnapshot[]> => {
+
+  return customFetch<AccountBalanceSnapshot[]>(getListAccountBalancesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAccountBalancesQueryKey = () => {
+    return [
+    `/api/accounts/balances`
+    ] as const;
+    }
+
+
+export const getListAccountBalancesQueryOptions = <TData = Awaited<ReturnType<typeof listAccountBalances>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountBalances>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAccountBalancesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAccountBalances>>> = ({ signal }) => listAccountBalances({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAccountBalances>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAccountBalancesQueryResult = NonNullable<Awaited<ReturnType<typeof listAccountBalances>>>
+export type ListAccountBalancesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Latest daily balance snapshot per connected account (from transactionsSync captures)
+ */
+
+export function useListAccountBalances<TData = Awaited<ReturnType<typeof listAccountBalances>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountBalances>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAccountBalancesQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

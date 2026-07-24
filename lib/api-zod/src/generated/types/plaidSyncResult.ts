@@ -10,5 +10,6 @@ export interface PlaidSyncResult {
   added: number;
   modified: number;
   removed: number;
+  balancesCaptured: number;
   lastSyncedAt: string | null;
 }

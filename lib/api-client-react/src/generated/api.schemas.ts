@@ -940,7 +940,20 @@ export interface PlaidSyncResult {
   added: number;
   modified: number;
   removed: number;
+  balancesCaptured: number;
   lastSyncedAt: string | null;
+}
+
+export interface AccountBalanceSnapshot {
+  /** Plaid account_id */
+  accountId: string;
+  accountName?: string | null;
+  snapshotDate: string;
+  current: number | null;
+  available: number | null;
+  creditLimit: number | null;
+  currencyCode: string | null;
+  capturedAt: string;
 }
 
 export interface PlaidTransaction {

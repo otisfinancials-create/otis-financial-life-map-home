@@ -515,6 +515,22 @@ export const GetAccountsSummaryResponse = zod.object({
 
 
 /**
+ * @summary Latest daily balance snapshot per connected account (from transactionsSync captures)
+ */
+export const ListAccountBalancesResponseItem = zod.object({
+  "accountId": zod.string().describe('Plaid account_id'),
+  "accountName": zod.string().nullish(),
+  "snapshotDate": zod.string(),
+  "current": zod.number().nullable(),
+  "available": zod.number().nullable(),
+  "creditLimit": zod.number().nullable(),
+  "currencyCode": zod.string().nullable(),
+  "capturedAt": zod.string()
+})
+export const ListAccountBalancesResponse = zod.array(ListAccountBalancesResponseItem)
+
+
+/**
  * @summary List savings goals for the user's accounts
  */
 export const ListAccountGoalsResponseItem = zod.object({
@@ -1500,6 +1516,7 @@ export const SyncPlaidTransactionsResponse = zod.object({
   "added": zod.number(),
   "modified": zod.number(),
   "removed": zod.number(),
+  "balancesCaptured": zod.number(),
   "lastSyncedAt": zod.string().nullable()
 })
 

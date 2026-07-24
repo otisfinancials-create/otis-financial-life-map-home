@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
-import { db, accountsTable, savingsSnapshotsTable, accountGoalsTable, plaidItemsTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
+import { db, accountsTable, savingsSnapshotsTable, accountGoalsTable, plaidItemsTable, balanceSnapshotsTable } from "@workspace/db";
 import {
   CreateAccountBody,
   UpdateAccountBody,
@@ -17,6 +17,7 @@ import {
   SetAccountGoalParams,
   SetAccountGoalBody,
   SetAccountGoalResponse,
+  ListAccountBalancesResponse,
 } from "@workspace/api-zod";
 
 const SAVINGS_INVESTMENT_TYPES = ["savings", "investment", "brokerage"];
@@ -40,6 +41,51 @@ router.get("/accounts", async (req, res): Promise<void> => {
       accounts.map((a) => ({
         ...serialize(a),
         institutionLogo: a.plaidItemId != null ? (logoByItem.get(a.plaidItemId) ?? null) : null,
+      })),
+    ),
+  );
+});
+
+// P4: latest daily balance snapshot per connected account (must precede /accounts/:id).
+router.get("/accounts/balances", async (req, res): Promise<void> => {
+  req.log.info("Fetching latest account balance snapshots");
+  const rows = await db
+    .select({
+      accountId: balanceSnapshotsTable.accountId,
+      snapshotDate: balanceSnapshotsTable.snapshotDate,
+      current: balanceSnapshotsTable.current,
+      available: balanceSnapshotsTable.available,
+      creditLimit: balanceSnapshotsTable.creditLimit,
+      currencyCode: balanceSnapshotsTable.currencyCode,
+      capturedAt: balanceSnapshotsTable.capturedAt,
+      accountName: accountsTable.accountName,
+    })
+    .from(balanceSnapshotsTable)
+    .leftJoin(
+      accountsTable,
+      and(eq(accountsTable.plaidAccountId, balanceSnapshotsTable.accountId), eq(accountsTable.userId, req.userId)),
+    )
+    .where(
+      and(
+        eq(balanceSnapshotsTable.userId, req.userId),
+        sql`(${balanceSnapshotsTable.accountId}, ${balanceSnapshotsTable.snapshotDate}) IN (
+          SELECT account_id, MAX(snapshot_date) FROM balance_snapshots
+          WHERE user_id = ${req.userId} GROUP BY account_id
+        )`,
+      ),
+    )
+    .orderBy(sql`COALESCE(${accountsTable.accountName}, ${balanceSnapshotsTable.accountId})`);
+  res.json(
+    ListAccountBalancesResponse.parse(
+      rows.map((r) => ({
+        accountId: r.accountId,
+        accountName: r.accountName ?? null,
+        snapshotDate: r.snapshotDate,
+        current: r.current != null ? parseFloat(String(r.current)) : null,
+        available: r.available != null ? parseFloat(String(r.available)) : null,
+        creditLimit: r.creditLimit != null ? parseFloat(String(r.creditLimit)) : null,
+        currencyCode: r.currencyCode ?? null,
+        capturedAt: r.capturedAt.toISOString(),
       })),
     ),
   );
