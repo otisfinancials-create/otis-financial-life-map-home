@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Plus, MoreHorizontal, Landmark, CreditCard, PiggyBank, Briefcase, TrendingUp, Home, Banknote, Trash2, Pencil, Link2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useListAccounts, useGetAccountsSummary, useDeleteAccount, useDisconnectPlaidAccount, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { useListAccounts, useListAccountBalances, useDeleteAccount, useDisconnectPlaidAccount, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import type { Account } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
@@ -92,7 +92,7 @@ export default function Accounts() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: accounts, isLoading: isLoadingAccounts } = useListAccounts();
-  const { data: summary, isLoading: isLoadingSummary } = useGetAccountsSummary();
+  const { data: balanceSnapshots } = useListAccountBalances();
   const deleteAccount = useDeleteAccount();
   const disconnectPlaid = useDisconnectPlaidAccount();
 
@@ -131,12 +131,29 @@ export default function Accounts() {
     });
   };
 
+  // Latest balance snapshot per Plaid account (endpoint returns the most recent
+  // snapshot_date per account). Prefer this over the stale accounts.currentBalance.
+  const snapshotByPlaidAccountId = new Map(
+    (balanceSnapshots ?? [])
+      .filter((s) => s.current != null)
+      .map((s) => [s.accountId, s.current as number]),
+  );
+
+  const displayBalance = (account: Account) =>
+    (account.plaidAccountId ? snapshotByPlaidAccountId.get(account.plaidAccountId) : undefined) ??
+    account.currentBalance;
+
   // Signed balance: liabilities (credit cards, loans, mortgages) display as negative
   const signedBalance = (account: Account) =>
-    account.isAsset ? account.currentBalance : -account.currentBalance;
+    account.isAsset ? displayBalance(account) : -displayBalance(account);
 
   const assetAccounts = accounts?.filter((a) => a.isAsset) || [];
   const liabilityAccounts = accounts?.filter((a) => !a.isAsset) || [];
+
+  // Totals must match the per-row balances (snapshot-adjusted), so compute them
+  // from the same displayBalance source rather than the stale summary fields.
+  const totalAssets = assetAccounts.reduce((sum, a) => sum + displayBalance(a), 0);
+  const totalLiabilities = liabilityAccounts.reduce((sum, a) => sum + displayBalance(a), 0);
 
   const renderAccountCard = (account: Account) => (
     <Card key={account.id} className="bg-card border-border overflow-hidden rounded-xl">
@@ -248,11 +265,11 @@ export default function Accounts() {
               <Card className="bg-card border-border rounded-xl">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 py-4">
                   <CardTitle className="text-base font-semibold">Total Assets</CardTitle>
-                  {isLoadingSummary ? (
+                  {isLoadingAccounts ? (
                     <Skeleton className="h-8 w-[120px]" />
                   ) : (
                     <div className="text-2xl font-bold tracking-tight text-[#059669]">
-                      <FormatCurrency amount={summary?.totalAssets || 0} />
+                      <FormatCurrency amount={totalAssets} />
                     </div>
                   )}
                 </CardHeader>
@@ -269,12 +286,12 @@ export default function Accounts() {
               <Card className="bg-card border-border rounded-xl">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 py-4">
                   <CardTitle className="text-base font-semibold">Total Liabilities</CardTitle>
-                  {isLoadingSummary ? (
+                  {isLoadingAccounts ? (
                     <Skeleton className="h-8 w-[120px]" />
                   ) : (
                     <div className="text-2xl font-bold tracking-tight text-red-600">
-                      {(summary?.totalLiabilities || 0) > 0 ? (
-                        <FormatCurrency amount={-(summary?.totalLiabilities || 0)} />
+                      {totalLiabilities > 0 ? (
+                        <FormatCurrency amount={-totalLiabilities} />
                       ) : (
                         <FormatCurrency amount={0} />
                       )}
