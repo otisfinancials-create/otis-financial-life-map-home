@@ -69,8 +69,30 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
     }
   }
 
-  // P4: capture end-of-day balances from the final transactionsSync response (no extra Plaid call).
-  counts.balances_captured = await captureBalanceSnapshots(item, latestAccounts);
+  // P4: capture end-of-day balances for every account on this item via
+  // /accounts/get (cached balances, free — NOT the paid /accounts/balance/get).
+  // transactionsSync only includes accounts that had transactions in the batch,
+  // so relying on it left inactive accounts with frozen balances.
+  let balanceAccounts = latestAccounts;
+  try {
+    const accountsResponse = await plaidClient.accountsGet({ access_token: item.accessToken });
+    balanceAccounts = accountsResponse.data.accounts;
+  } catch (err) {
+    logger.warn(
+      { plaidItemId: item.id, err: sanitizeSyncError(err) },
+      "Plaid /accounts/get failed; falling back to transactionsSync accounts for balance capture",
+    );
+  }
+  try {
+    counts.balances_captured = await captureBalanceSnapshots(item, balanceAccounts);
+  } catch (err) {
+    // Never fail the sync over balance persistence; transactions are already saved.
+    counts.balances_captured = 0;
+    logger.warn(
+      { plaidItemId: item.id, err: sanitizeSyncError(err) },
+      "Failed to persist balance snapshots; continuing sync",
+    );
+  }
 
   // Hard guard (all syncs, not just initial): never persist a cursor while
   // Plaid reports the historical backfill is still pending. Persisting one
