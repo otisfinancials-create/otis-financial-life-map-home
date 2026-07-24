@@ -23,6 +23,7 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
   // poll (bounded) until transactions_update_status is HISTORICAL_UPDATE_COMPLETE.
   let historicalWaitAttempts = 0;
   const MAX_HISTORICAL_WAIT_ATTEMPTS = 30;
+  let lastUpdateStatus: string | undefined;
 
   while (hasMore) {
     const response = await plaidClient.transactionsSync({
@@ -50,19 +51,17 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
     cursor = data.next_cursor;
     hasMore = data.has_more;
     latestAccounts = data.accounts;
+    lastUpdateStatus = data.transactions_update_status;
 
     if (
       !hasMore &&
       isInitialSync &&
-      data.transactions_update_status !== "HISTORICAL_UPDATE_COMPLETE"
+      lastUpdateStatus !== "HISTORICAL_UPDATE_COMPLETE"
     ) {
       if (historicalWaitAttempts >= MAX_HISTORICAL_WAIT_ATTEMPTS) {
-        // Give up waiting; do NOT persist the cursor so the next sync retries from scratch.
-        logger.warn(
-          { plaidItemId: item.id, status: data.transactions_update_status },
-          "Initial Plaid sync: historical update did not complete in time; cursor not saved",
-        );
-        return counts;
+        // Give up waiting; the guard below will refuse to persist the cursor,
+        // so the next sync retries from scratch.
+        break;
       }
       historicalWaitAttempts++;
       hasMore = true;
@@ -72,6 +71,17 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
 
   // P4: capture end-of-day balances from the final transactionsSync response (no extra Plaid call).
   counts.balances_captured = await captureBalanceSnapshots(item, latestAccounts);
+
+  // Hard guard (all syncs, not just initial): never persist a cursor while
+  // Plaid reports the historical backfill is still pending. Persisting one
+  // would permanently skip the item's history.
+  if (lastUpdateStatus !== "HISTORICAL_UPDATE_COMPLETE") {
+    logger.warn(
+      { plaidItemId: item.id, status: lastUpdateStatus, isInitialSync },
+      "Plaid sync: historical update not complete; cursor not saved (will retry next sync)",
+    );
+    return counts;
+  }
 
   await db
     .update(plaidItemsTable)
