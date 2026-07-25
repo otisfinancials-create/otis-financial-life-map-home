@@ -26,6 +26,11 @@ export interface Envelope {
   /** @nullable */
   weeklyRate?: number | null;
   isCarryover: boolean;
+  /**
+     * Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)
+     * @nullable
+     */
+  matchCategories?: string[] | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -23,4 +23,6 @@ export interface EnvelopeInput {
   /** @nullable */
   note?: string | null;
   scope?: EnvelopeInputScope;
+  /** @nullable */
+  matchCategories?: string[] | null;
 }

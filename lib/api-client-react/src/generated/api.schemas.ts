@@ -421,6 +421,11 @@ export interface Envelope {
   /** @nullable */
   weeklyRate?: number | null;
   isCarryover: boolean;
+  /**
+     * Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)
+     * @nullable
+     */
+  matchCategories?: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -466,6 +471,8 @@ export interface EnvelopeInput {
   /** @nullable */
   note?: string | null;
   scope?: EnvelopeInputScope;
+  /** @nullable */
+  matchCategories?: string[] | null;
 }
 
 /**
@@ -491,6 +498,8 @@ export interface EnvelopeUpdate {
   cadence?: EnvelopeUpdateCadence;
   /** @nullable */
   note?: string | null;
+  /** @nullable */
+  matchCategories?: string[] | null;
 }
 
 /**

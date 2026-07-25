@@ -797,6 +797,7 @@ export const ListCycleEnvelopesResponseItem = zod.object({
   "recurring": zod.boolean(),
   "weeklyRate": zod.number().nullish(),
   "isCarryover": zod.boolean(),
+  "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -821,7 +822,8 @@ export const CreateCycleEnvelopeBody = zod.object({
   "envelopeType": zod.enum(['standard', 'food']).optional(),
   "weeklyRate": zod.number().nullish(),
   "note": zod.string().nullish(),
-  "scope": zod.enum(['this-cycle', 'all-future']).default(createCycleEnvelopeBodyScopeDefault)
+  "scope": zod.enum(['this-cycle', 'all-future']).default(createCycleEnvelopeBodyScopeDefault),
+  "matchCategories": zod.array(zod.string()).nullish()
 })
 
 export const CreateCycleEnvelopeResponse = zod.object({
@@ -838,6 +840,7 @@ export const CreateCycleEnvelopeResponse = zod.object({
   "recurring": zod.boolean(),
   "weeklyRate": zod.number().nullish(),
   "isCarryover": zod.boolean(),
+  "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -881,7 +884,8 @@ export const UpdateEnvelopeBody = zod.object({
   "plannedAmount": zod.number().optional(),
   "weeklyRate": zod.number().nullish(),
   "cadence": zod.union([zod.literal('weekly'),zod.literal('one-time'),zod.literal(null)]).nullish(),
-  "note": zod.string().nullish()
+  "note": zod.string().nullish(),
+  "matchCategories": zod.array(zod.string()).nullish()
 })
 
 export const UpdateEnvelopeResponse = zod.object({
@@ -898,6 +902,7 @@ export const UpdateEnvelopeResponse = zod.object({
   "recurring": zod.boolean(),
   "weeklyRate": zod.number().nullish(),
   "isCarryover": zod.boolean(),
+  "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })

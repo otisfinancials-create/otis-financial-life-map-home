@@ -33,6 +33,7 @@ function serializeEnvelope(e: Envelope) {
     recurring: e.recurring ?? false,
     weeklyRate: e.weeklyRate != null ? parseFloat(String(e.weeklyRate)) : null,
     isCarryover: e.isCarryover ?? false,
+    matchCategories: e.matchCategories ?? null,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
   };
@@ -98,7 +99,7 @@ router.post("/cycles/:cycleId/envelopes", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Cycle not found" });
     return;
   }
-  const { scope = "this-cycle", envelopeType = "standard", weeklyRate, plannedAmount, ...rest } = body.data;
+  const { scope = "this-cycle", envelopeType = "standard", weeklyRate, plannedAmount, matchCategories, ...rest } = body.data;
   const recurring = scope === "all-future";
 
   const plannedFor = (c: CardCycle): string => {
@@ -115,6 +116,7 @@ router.post("/cycles/:cycleId/envelopes", async (req, res): Promise<void> => {
     envelopeType,
     recurring,
     weeklyRate: weeklyRate != null ? String(weeklyRate) : null,
+    matchCategories: matchCategories ?? null,
   };
 
   const [created] = await db

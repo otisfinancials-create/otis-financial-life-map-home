@@ -19,4 +19,6 @@ export interface EnvelopeUpdate {
   cadence?: EnvelopeUpdateCadence;
   /** @nullable */
   note?: string | null;
+  /** @nullable */
+  matchCategories?: string[] | null;
 }

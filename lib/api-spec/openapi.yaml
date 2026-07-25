@@ -1938,6 +1938,11 @@ components:
           type: ["number", "null"]
         isCarryover:
           type: boolean
+        matchCategories:
+          type: ["array", "null"]
+          items:
+            type: string
+          description: Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)
         createdAt:
           type: string
         updatedAt:
@@ -1968,6 +1973,10 @@ components:
           type: string
           enum: [this-cycle, all-future]
           default: this-cycle
+        matchCategories:
+          type: ["array", "null"]
+          items:
+            type: string
 
     EnvelopeUpdate:
       type: object
@@ -1986,6 +1995,10 @@ components:
           enum: [weekly, one-time, null]
         note:
           type: ["string", "null"]
+        matchCategories:
+          type: ["array", "null"]
+          items:
+            type: string
 
     AccountInput:
       type: object

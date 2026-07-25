@@ -38,6 +38,9 @@ export const envelopesTable = pgTable("envelopes", {
   recurring: boolean("recurring").default(false), // seeds into future cycles when true
   weeklyRate: numeric("weekly_rate", { precision: 15, scale: 2 }), // food: per-week amount
   isCarryover: boolean("is_carryover").default(false), // carryover child (Stage 3)
+  // Plaid DETAILED category codes this envelope catches (e.g.
+  // TRANSPORTATION_GAS). When set, takes precedence over free-text `category`.
+  matchCategories: text("match_categories").array(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

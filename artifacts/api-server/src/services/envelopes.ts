@@ -39,6 +39,7 @@ export async function seedDefaultEnvelopes(cardCycleId: number): Promise<Envelop
       cardCycleId,
       name: "Food",
       category: "Food",
+      matchCategories: ["FOOD_AND_DRINK_GROCERIES"], // groceries only; dining falls to Misc
       envelopeType: "food",
       cadence: "weekly",
       recurring: true,
@@ -53,6 +54,7 @@ export async function seedDefaultEnvelopes(cardCycleId: number): Promise<Envelop
       cardCycleId,
       name: "Gas",
       category: "Transportation",
+      matchCategories: ["TRANSPORTATION_GAS"], // fuel only; transit/parking fall to Misc
       envelopeType: "standard",
       cadence: "one-time",
       recurring: true,
@@ -126,6 +128,7 @@ export async function populateNewCycle(cycle: CardCycle): Promise<void> {
         isCatchall: env.isCatchall,
         recurring: true,
         weeklyRate: env.weeklyRate,
+        matchCategories: env.matchCategories,
       }).onConflictDoNothing();
       existingNames.add(env.name.trim().toLowerCase());
     }

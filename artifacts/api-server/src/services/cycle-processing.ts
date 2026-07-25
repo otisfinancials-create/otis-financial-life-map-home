@@ -79,13 +79,27 @@ function namesSimilar(bill: { billName: string }, txn: PlaidTransaction): boolea
   return billTokens.some((t) => txnTokens.has(t));
 }
 
-/** Category match: normalized equality or containment either way, e.g.
- * envelope "Food" matches Plaid "FOOD_AND_DRINK". */
+/** Free-text fallback match: normalized equality or containment either way,
+ * e.g. envelope "Food" matches Plaid primary "FOOD_AND_DRINK". */
 function categoryMatches(envelopeCategory: string | null, plaidCategory: string | null): boolean {
   const e = normalize(envelopeCategory).replace(/ /g, "");
   const p = normalize(plaidCategory).replace(/ /g, "");
   if (!e || !p) return false;
   return e === p || e.includes(p) || p.includes(e);
+}
+
+/**
+ * Named-envelope match. When the envelope declares match_categories (Plaid
+ * DETAILED codes, e.g. TRANSPORTATION_GAS), the charge's detailed category
+ * must be in that list — precise, no containment. Otherwise fall back to the
+ * legacy free-text match against the PRIMARY category.
+ */
+function envelopeMatches(env: Envelope, txn: PlaidTransaction): boolean {
+  if (env.matchCategories && env.matchCategories.length > 0) {
+    const detailed = (txn.personalFinanceCategoryDetailed ?? "").toUpperCase();
+    return detailed !== "" && env.matchCategories.some((c) => c.toUpperCase() === detailed);
+  }
+  return categoryMatches(env.category, txn.personalFinanceCategory);
 }
 
 export interface AllocationSummary {
@@ -186,7 +200,7 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
     if (bestBill) {
       cardCycleBillId = bestBill.id;
     } else {
-      const env = named.find((e) => categoryMatches(e.category, txn.personalFinanceCategory));
+      const env = named.find((e) => envelopeMatches(e, txn));
       envelopeId = env ? env.id : catchall.id;
     }
 
