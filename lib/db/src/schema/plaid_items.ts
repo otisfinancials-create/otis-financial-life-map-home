@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 /**
  * A linked Plaid Item (one bank connection). The access token is sensitive:
@@ -14,6 +14,7 @@ export const plaidItemsTable = pgTable("plaid_items", {
   institutionLogo: text("institution_logo"),
   transactionsCursor: text("transactions_cursor"),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  needsReauth: boolean("needs_reauth").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [unique("plaid_items_user_item_unique").on(t.userId, t.itemId)]);

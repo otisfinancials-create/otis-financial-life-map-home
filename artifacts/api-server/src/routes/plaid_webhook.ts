@@ -13,6 +13,8 @@ import { verifyPlaidWebhook } from "../lib/plaid-webhook-verify";
 const router: IRouter = Router();
 
 const SYNC_CODES = new Set(["SYNC_UPDATES_AVAILABLE", "DEFAULT_UPDATE", "INITIAL_UPDATE", "HISTORICAL_UPDATE"]);
+/** ITEM webhook codes that mean the user must re-authenticate the connection. */
+const REAUTH_CODES = new Set(["ITEM_LOGIN_REQUIRED", "PENDING_EXPIRATION", "PENDING_DISCONNECT"]);
 
 /** Per-item concurrency lock + debounce so webhook floods can't fan out sync loops. */
 const inFlight = new Set<string>();
@@ -30,6 +32,23 @@ router.post("/plaid/webhook", async (req, res): Promise<void> => {
 
   const body = (req.body ?? {}) as { webhook_type?: string; webhook_code?: string; item_id?: string };
   req.log.info({ webhookType: body.webhook_type, webhookCode: body.webhook_code }, "Plaid webhook received");
+
+  // ITEM lifecycle: flag items needing re-auth; clear the flag when repaired.
+  if (body.webhook_type === "ITEM" && typeof body.item_id === "string") {
+    const code = body.webhook_code ?? "";
+    if (REAUTH_CODES.has(code) || code === "LOGIN_REPAIRED") {
+      const needsReauth = code !== "LOGIN_REPAIRED";
+      db.update(plaidItemsTable)
+        .set({ needsReauth, updatedAt: new Date() })
+        .where(eq(plaidItemsTable.itemId, body.item_id))
+        .then(() => {
+          req.log.info({ webhookCode: code, needsReauth }, "Updated Plaid item re-auth flag");
+        })
+        .catch((err) => {
+          req.log.error({ err: sanitizeSyncError(err) }, "Failed to update Plaid item re-auth flag");
+        });
+    }
+  }
 
   if (body.webhook_type === "TRANSACTIONS" && SYNC_CODES.has(body.webhook_code ?? "") && typeof body.item_id === "string") {
     const itemId = body.item_id;
