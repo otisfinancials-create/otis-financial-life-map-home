@@ -700,6 +700,83 @@ export const DeleteAccountResponse = zod.void()
 
 
 /**
+ * @summary Set a card's statement/due days and regenerate its cycles
+ */
+export const UpdateAccountCycleConfigParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateAccountCycleConfigBodyStatementDayMax = 31;
+
+export const updateAccountCycleConfigBodyDueDayMax = 31;
+
+
+
+export const UpdateAccountCycleConfigBody = zod.object({
+  "statementDay": zod.number().min(1).max(updateAccountCycleConfigBodyStatementDayMax),
+  "dueDay": zod.number().min(1).max(updateAccountCycleConfigBodyDueDayMax)
+})
+
+export const UpdateAccountCycleConfigResponseItem = zod.object({
+  "id": zod.number(),
+  "accountId": zod.number(),
+  "cycleStart": zod.string(),
+  "cycleEnd": zod.string(),
+  "dueDate": zod.string(),
+  "plannedTotal": zod.number(),
+  "accumulatedTotal": zod.number(),
+  "status": zod.enum(['open', 'closed', 'paid']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const UpdateAccountCycleConfigResponse = zod.array(UpdateAccountCycleConfigResponseItem)
+
+
+/**
+ * @summary List a card's cycles ordered by cycle start
+ */
+export const ListAccountCyclesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListAccountCyclesResponseItem = zod.object({
+  "id": zod.number(),
+  "accountId": zod.number(),
+  "cycleStart": zod.string(),
+  "cycleEnd": zod.string(),
+  "dueDate": zod.string(),
+  "plannedTotal": zod.number(),
+  "accumulatedTotal": zod.number(),
+  "status": zod.enum(['open', 'closed', 'paid']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListAccountCyclesResponse = zod.array(ListAccountCyclesResponseItem)
+
+
+/**
+ * @summary Manually trigger cycle generation for a card
+ */
+export const GenerateAccountCyclesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GenerateAccountCyclesResponseItem = zod.object({
+  "id": zod.number(),
+  "accountId": zod.number(),
+  "cycleStart": zod.string(),
+  "cycleEnd": zod.string(),
+  "dueDate": zod.string(),
+  "plannedTotal": zod.number(),
+  "accumulatedTotal": zod.number(),
+  "status": zod.enum(['open', 'closed', 'paid']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const GenerateAccountCyclesResponse = zod.array(GenerateAccountCyclesResponseItem)
+
+
+/**
  * @summary List all assets and liabilities
  */
 export const ListAssetsResponseItem = zod.object({

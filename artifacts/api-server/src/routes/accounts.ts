@@ -18,7 +18,16 @@ import {
   SetAccountGoalBody,
   SetAccountGoalResponse,
   ListAccountBalancesResponse,
+  UpdateAccountCycleConfigParams,
+  UpdateAccountCycleConfigBody,
+  UpdateAccountCycleConfigResponse,
+  ListAccountCyclesParams,
+  ListAccountCyclesResponse,
+  GenerateAccountCyclesParams,
+  GenerateAccountCyclesResponse,
 } from "@workspace/api-zod";
+import { cardCyclesTable, type CardCycle } from "@workspace/db";
+import { generateCyclesForAccount } from "../services/card-cycles";
 
 const SAVINGS_INVESTMENT_TYPES = ["savings", "investment", "brokerage"];
 
@@ -299,6 +308,89 @@ router.delete("/accounts/:id", async (req, res): Promise<void> => {
     return;
   }
   res.sendStatus(204);
+});
+
+// ── P5 Stage 1: card cycle config + generation ─────────────────────────────
+
+function serializeCycle(c: CardCycle) {
+  return {
+    id: c.id,
+    accountId: c.accountId,
+    cycleStart: c.cycleStart,
+    cycleEnd: c.cycleEnd,
+    dueDate: c.dueDate,
+    plannedTotal: c.plannedTotal != null ? parseFloat(String(c.plannedTotal)) : 0,
+    accumulatedTotal: c.accumulatedTotal != null ? parseFloat(String(c.accumulatedTotal)) : 0,
+    status: c.status ?? "open",
+    createdAt: c.createdAt.toISOString(),
+    updatedAt: c.updatedAt.toISOString(),
+  };
+}
+
+async function ownedAccount(id: number, userId: string) {
+  const [account] = await db
+    .select()
+    .from(accountsTable)
+    .where(and(eq(accountsTable.id, id), eq(accountsTable.userId, userId)));
+  return account;
+}
+
+router.patch("/accounts/:id/cycle-config", async (req, res): Promise<void> => {
+  const params = UpdateAccountCycleConfigParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = UpdateAccountCycleConfigBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const account = await ownedAccount(params.data.id, req.userId);
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  await db
+    .update(accountsTable)
+    .set({ statementDay: body.data.statementDay, dueDay: body.data.dueDay, updatedAt: new Date() })
+    .where(eq(accountsTable.id, account.id));
+  const cycles = await generateCyclesForAccount(account.id);
+  res.json(UpdateAccountCycleConfigResponse.parse(cycles.map(serializeCycle)));
+});
+
+router.get("/accounts/:id/cycles", async (req, res): Promise<void> => {
+  const params = ListAccountCyclesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const account = await ownedAccount(params.data.id, req.userId);
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  const cycles = await db
+    .select()
+    .from(cardCyclesTable)
+    .where(and(eq(cardCyclesTable.accountId, account.id), eq(cardCyclesTable.userId, req.userId)))
+    .orderBy(cardCyclesTable.cycleStart);
+  res.json(ListAccountCyclesResponse.parse(cycles.map(serializeCycle)));
+});
+
+router.post("/accounts/:id/generate-cycles", async (req, res): Promise<void> => {
+  const params = GenerateAccountCyclesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const account = await ownedAccount(params.data.id, req.userId);
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  const cycles = await generateCyclesForAccount(account.id);
+  res.json(GenerateAccountCyclesResponse.parse(cycles.map(serializeCycle)));
 });
 
 function serialize(a: typeof accountsTable.$inferSelect) {

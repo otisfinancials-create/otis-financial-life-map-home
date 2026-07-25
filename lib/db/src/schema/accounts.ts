@@ -17,6 +17,9 @@ export const accountsTable = pgTable("accounts", {
   ccCycleStartDate: integer("cc_cycle_start_date"),
   ccCycleEndDate: integer("cc_cycle_end_date"),
   ccPaymentDueDate: integer("cc_payment_due_date"),
+  // P5 card-cycle config: day of month the statement closes / payment is due (1-31).
+  statementDay: integer("statement_day"),
+  dueDay: integer("due_day"),
   notes: text("notes"),
   plaidAccountId: text("plaid_account_id"),
   plaidItemId: integer("plaid_item_id"),

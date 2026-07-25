@@ -36,6 +36,8 @@ import type {
   BillDetectionSummary,
   BillInput,
   BillUpdate,
+  CardCycle,
+  CycleConfigInput,
   DashboardSummary,
   DetectedBill,
   ForecastedTransaction,
@@ -2103,6 +2105,224 @@ export const useDeleteAccount = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteAccountMutationOptions(options));
+    }
+
+export const getUpdateAccountCycleConfigUrl = (id: number,) => {
+
+
+
+
+  return `/api/accounts/${id}/cycle-config`
+}
+
+/**
+ * @summary Set a card's statement/due days and regenerate its cycles
+ */
+export const updateAccountCycleConfig = async (id: number,
+    cycleConfigInput: CycleConfigInput, options?: RequestInit): Promise<CardCycle[]> => {
+
+  return customFetch<CardCycle[]>(getUpdateAccountCycleConfigUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cycleConfigInput)
+  }
+);}
+
+
+
+
+export const getUpdateAccountCycleConfigMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountCycleConfig>>, TError,{id: number;data: BodyType<CycleConfigInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAccountCycleConfig>>, TError,{id: number;data: BodyType<CycleConfigInput>}, TContext> => {
+
+const mutationKey = ['updateAccountCycleConfig'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAccountCycleConfig>>, {id: number;data: BodyType<CycleConfigInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAccountCycleConfig(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAccountCycleConfigMutationResult = NonNullable<Awaited<ReturnType<typeof updateAccountCycleConfig>>>
+    export type UpdateAccountCycleConfigMutationBody = BodyType<CycleConfigInput>
+    export type UpdateAccountCycleConfigMutationError = ErrorType<void>
+
+    /**
+ * @summary Set a card's statement/due days and regenerate its cycles
+ */
+export const useUpdateAccountCycleConfig = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountCycleConfig>>, TError,{id: number;data: BodyType<CycleConfigInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAccountCycleConfig>>,
+        TError,
+        {id: number;data: BodyType<CycleConfigInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAccountCycleConfigMutationOptions(options));
+    }
+
+export const getListAccountCyclesUrl = (id: number,) => {
+
+
+
+
+  return `/api/accounts/${id}/cycles`
+}
+
+/**
+ * @summary List a card's cycles ordered by cycle start
+ */
+export const listAccountCycles = async (id: number, options?: RequestInit): Promise<CardCycle[]> => {
+
+  return customFetch<CardCycle[]>(getListAccountCyclesUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAccountCyclesQueryKey = (id: number,) => {
+    return [
+    `/api/accounts/${id}/cycles`
+    ] as const;
+    }
+
+
+export const getListAccountCyclesQueryOptions = <TData = Awaited<ReturnType<typeof listAccountCycles>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountCycles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAccountCyclesQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAccountCycles>>> = ({ signal }) => listAccountCycles(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAccountCycles>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAccountCyclesQueryResult = NonNullable<Awaited<ReturnType<typeof listAccountCycles>>>
+export type ListAccountCyclesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List a card's cycles ordered by cycle start
+ */
+
+export function useListAccountCycles<TData = Awaited<ReturnType<typeof listAccountCycles>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountCycles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAccountCyclesQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGenerateAccountCyclesUrl = (id: number,) => {
+
+
+
+
+  return `/api/accounts/${id}/generate-cycles`
+}
+
+/**
+ * @summary Manually trigger cycle generation for a card
+ */
+export const generateAccountCycles = async (id: number, options?: RequestInit): Promise<CardCycle[]> => {
+
+  return customFetch<CardCycle[]>(getGenerateAccountCyclesUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getGenerateAccountCyclesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateAccountCycles>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateAccountCycles>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['generateAccountCycles'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateAccountCycles>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  generateAccountCycles(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateAccountCyclesMutationResult = NonNullable<Awaited<ReturnType<typeof generateAccountCycles>>>
+
+    export type GenerateAccountCyclesMutationError = ErrorType<void>
+
+    /**
+ * @summary Manually trigger cycle generation for a card
+ */
+export const useGenerateAccountCycles = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateAccountCycles>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateAccountCycles>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getGenerateAccountCyclesMutationOptions(options));
     }
 
 export const getListAssetsUrl = () => {

@@ -510,6 +510,81 @@ paths:
         "204":
           description: Deleted
 
+  /accounts/{id}/cycle-config:
+    patch:
+      operationId: updateAccountCycleConfig
+      tags: [accounts]
+      summary: Set a card's statement/due days and regenerate its cycles
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CycleConfigInput"
+      responses:
+        "200":
+          description: Generated cycles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CardCycle"
+        "404":
+          description: Not found
+
+  /accounts/{id}/cycles:
+    get:
+      operationId: listAccountCycles
+      tags: [accounts]
+      summary: List a card's cycles ordered by cycle start
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Card cycles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CardCycle"
+        "404":
+          description: Not found
+
+  /accounts/{id}/generate-cycles:
+    post:
+      operationId: generateAccountCycles
+      tags: [accounts]
+      summary: Manually trigger cycle generation for a card
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Generated cycles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CardCycle"
+        "404":
+          description: Not found
+
   # ── Assets & Liabilities ──────────────────────────────────────────────────
   /assets:
     get:
@@ -1644,6 +1719,45 @@ components:
           description: Base64 institution logo from Plaid, if available
         lastSyncedAt:
           type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    CycleConfigInput:
+      type: object
+      required: [statementDay, dueDay]
+      properties:
+        statementDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+        dueDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+
+    CardCycle:
+      type: object
+      required: [id, accountId, cycleStart, cycleEnd, dueDate, plannedTotal, accumulatedTotal, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        accountId:
+          type: integer
+        cycleStart:
+          type: string
+        cycleEnd:
+          type: string
+        dueDate:
+          type: string
+        plannedTotal:
+          type: number
+        accumulatedTotal:
+          type: number
+        status:
+          type: string
+          enum: [open, closed, paid]
         createdAt:
           type: string
         updatedAt:
