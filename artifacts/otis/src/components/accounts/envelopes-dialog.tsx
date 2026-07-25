@@ -50,6 +50,15 @@ function formatCycleRange(startIso: string, endIso: string): string {
   return `${fmtDay(startIso)} – ${fmtDay(endIso)}`;
 }
 
+// Client failures throw ApiError with the server payload on `.data`
+// (e.g. { error: "..." }) and a readable `.message` fallback.
+function apiErrorMessage(err: unknown, fallback: string): string {
+  const data = (err as { data?: { error?: string } | null })?.data;
+  if (data?.error) return data.error;
+  const message = (err as { message?: string })?.message;
+  return message || fallback;
+}
+
 const EMPTY_FORM = { name: "", category: "", plannedAmount: "", cadence: "one-time", scope: "this-cycle" };
 const EMPTY_CHARGE = { amount: "", txnDate: "", description: "", target: "" };
 
@@ -122,19 +131,19 @@ export function EnvelopesDialog({ account, open, onOpenChange }: {
   const deleteEnvelope = useDeleteEnvelope({
     mutation: {
       onSuccess: invalidate,
-      onError: () => toast({ title: "This envelope can't be deleted", variant: "destructive" }),
+      onError: (err: unknown) => toast({ title: apiErrorMessage(err, "This envelope can't be deleted"), variant: "destructive" }),
     },
   });
   const createCharge = useCreateCycleCharge({
     mutation: {
       onSuccess: invalidate,
-      onError: (err: unknown) => toast({ title: (err as { error?: string })?.error ?? "Failed to add charge", variant: "destructive" }),
+      onError: (err: unknown) => toast({ title: apiErrorMessage(err, "Failed to add charge"), variant: "destructive" }),
     },
   });
   const updateCharge = useUpdateCycleCharge({
     mutation: {
       onSuccess: invalidate,
-      onError: (err: unknown) => toast({ title: (err as { error?: string })?.error ?? "Failed to update charge", variant: "destructive" }),
+      onError: (err: unknown) => toast({ title: apiErrorMessage(err, "Failed to update charge"), variant: "destructive" }),
     },
   });
   const deleteCharge = useDeleteCycleCharge({ mutation: { onSuccess: invalidate } });

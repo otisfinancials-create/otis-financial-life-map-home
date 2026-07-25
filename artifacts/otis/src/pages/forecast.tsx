@@ -29,7 +29,12 @@ import {
   getListBalanceSyncsQueryKey,
   useGetCycleBreakdown,
   getGetCycleBreakdownQueryKey,
+  useCreateCycleEnvelope,
+  useUpdateEnvelope,
+  useDeleteEnvelope,
+  getListCycleEnvelopesQueryKey,
   type BalanceSync,
+  type Envelope,
 } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
@@ -129,12 +134,72 @@ function StatusPill({ bg, text, children }: { bg: string; text: string; children
   );
 }
 
-// P5 cycle payment drill-down: read-only composition of a card cycle's
-// due-date payment — its envelopes (Food, Gas, Misc, carryover) and bills.
+// Count Mondays between two YYYY-MM-DD dates, inclusive (mirrors server logic
+// for the Food envelope's rate × weeks computation).
+function mondaysBetween(startIso: string, endIso: string): number {
+  const start = new Date(startIso + "T00:00:00");
+  const end = new Date(endIso + "T00:00:00");
+  if (end < start) return 0;
+  const first = new Date(start);
+  first.setDate(first.getDate() + ((8 - first.getDay()) % 7));
+  if (first > end) return 0;
+  return Math.floor((end.getTime() - first.getTime()) / (7 * 86400000)) + 1;
+}
+
+const EMPTY_ENVELOPE_FORM = { name: "", category: "", plannedAmount: "", cadence: "one-time", scope: "this-cycle" };
+
+// Client failures throw ApiError with the server payload on `.data` (e.g.
+// { error: "..." }) and a readable `.message` fallback.
+function apiErrorMessage(err: unknown, fallback: string): string {
+  const data = (err as { data?: { error?: string } | null })?.data;
+  if (data?.error) return data.error;
+  const message = (err as { message?: string })?.message;
+  return message || fallback;
+}
+
+// P5 cycle payment drill-down: composition of a card cycle's due-date payment.
+// Envelope planned amounts are editable inline (the Food envelope edits its
+// weekly rate); envelopes can be added and deleted. Bill rows and posted
+// (auto) charges stay read-only. The server recomputes the cycle rollup and
+// regenerates the forecast on every envelope mutation, so invalidating the
+// forecast queries here refreshes the parent payment row live.
 function CycleBreakdownRows({ cycleId }: { cycleId: number }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data, isLoading } = useGetCycleBreakdown(cycleId, {
     query: { queryKey: getGetCycleBreakdownQueryKey(cycleId) },
   });
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: getGetCycleBreakdownQueryKey(cycleId) });
+    void queryClient.invalidateQueries({ queryKey: getListCycleEnvelopesQueryKey(cycleId) });
+    void queryClient.invalidateQueries({ queryKey: getListForecastQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: getGetMonthlyForecastQueryKey() });
+  };
+  const updateEnvelope = useUpdateEnvelope({
+    mutation: {
+      onSuccess: invalidate,
+      onError: (err: unknown) => toast({ title: apiErrorMessage(err, "Failed to update envelope"), variant: "destructive" }),
+    },
+  });
+  const createEnvelope = useCreateCycleEnvelope({
+    mutation: {
+      onSuccess: invalidate,
+      onError: (err: unknown) => toast({ title: apiErrorMessage(err, "Failed to add envelope"), variant: "destructive" }),
+    },
+  });
+  const deleteEnvelope = useDeleteEnvelope({
+    mutation: {
+      onSuccess: invalidate,
+      onError: (err: unknown) => toast({ title: apiErrorMessage(err, "This envelope can't be deleted"), variant: "destructive" }),
+    },
+  });
+
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState(EMPTY_ENVELOPE_FORM);
+
   if (isLoading) {
     return (
       <div className="px-10 py-2 text-[12px] text-muted-foreground bg-[#F8FAFC] border-b border-[#F2F4F7]">
@@ -143,40 +208,167 @@ function CycleBreakdownRows({ cycleId }: { cycleId: number }) {
     );
   }
   if (!data) return null;
-  const rows = [
-    ...data.envelopes.map((e) => ({
-      key: `env-${e.id}`,
-      label: e.isCarryover ? `${e.name} (carryover)` : e.name,
-      planned: e.plannedAmount,
-      amount: e.spentAmount,
-      kind: "Envelope",
-    })),
-    ...data.bills.map((b) => ({
-      key: `bill-${b.id}`,
-      label: b.billName,
-      planned: b.expectedAmount,
-      amount: b.actualAmount,
-      kind: b.status === "hit" ? "Bill · paid" : "Bill · pending",
-    })),
-  ];
+
+  const weeks = mondaysBetween(data.cycleStart, data.cycleEnd);
+
+  const startEdit = (e: Envelope) => {
+    setEditingId(e.id);
+    setEditValue(String(e.envelopeType === "food" ? (e.weeklyRate ?? 0) : e.plannedAmount));
+  };
+  const saveEdit = (e: Envelope) => {
+    const value = parseFloat(editValue);
+    if (!Number.isFinite(value) || value < 0) return;
+    const payload = e.envelopeType === "food" ? { weeklyRate: value } : { plannedAmount: value };
+    updateEnvelope.mutate({ id: e.id, data: payload }, { onSuccess: () => setEditingId(null) });
+  };
+  const submitAdd = () => {
+    if (!form.name.trim()) return;
+    createEnvelope.mutate(
+      {
+        cycleId,
+        data: {
+          name: form.name.trim(),
+          category: form.category.trim() || null,
+          plannedAmount: parseFloat(form.plannedAmount) || 0,
+          cadence: form.cadence as "weekly" | "one-time",
+          scope: form.scope as "this-cycle" | "all-future",
+        },
+      },
+      { onSuccess: () => { setAdding(false); setForm(EMPTY_ENVELOPE_FORM); } },
+    );
+  };
+
   return (
     <div className="bg-[#F8FAFC] border-b border-[#F2F4F7]">
       <div className="px-10 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
         Payment composition — cycle {format(new Date(data.cycleStart + "T00:00:00"), "MMM d")} – {format(new Date(data.cycleEnd + "T00:00:00"), "MMM d")}
       </div>
-      {rows.map((r) => (
-        <div key={r.key} className="flex items-center justify-between gap-3 px-10 py-1 text-[12px]">
+
+      {data.envelopes.map((e) => {
+        const isFood = e.envelopeType === "food";
+        const editing = editingId === e.id;
+        const liveValue = parseFloat(editValue);
+        return (
+          <div key={`env-${e.id}`} className="px-10 py-1 text-[12px]">
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="shrink-0 text-muted-foreground" aria-hidden>↳</span>
+                <span className="truncate font-medium" style={{ color: "#1A1A2E" }}>
+                  {e.isCarryover ? `${e.name} (carryover)` : e.name}
+                </span>
+                <span className="shrink-0 text-[10px] text-muted-foreground">Envelope</span>
+                {!e.isCatchall && (
+                  <button
+                    type="button"
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    aria-label={`Delete ${e.name} envelope`}
+                    onClick={() => deleteEnvelope.mutate({ id: e.id })}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
+              </span>
+              <span className="font-mono tabular-nums whitespace-nowrap text-muted-foreground">
+                {e.spentAmount != null ? <FormatCurrency amount={e.spentAmount} /> : "—"}
+                <span className="text-[10px]"> / planned </span>
+                {editing ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Input
+                      type="number"
+                      autoFocus
+                      value={editValue}
+                      onChange={(ev) => setEditValue(ev.target.value)}
+                      onKeyDown={(ev) => { if (ev.key === "Enter") saveEdit(e); if (ev.key === "Escape") setEditingId(null); }}
+                      className="h-6 w-20 px-1.5 text-[12px] font-mono inline-block"
+                      aria-label={isFood ? "Weekly rate" : "Planned amount"}
+                    />
+                    <button type="button" className="text-primary" aria-label="Save" onClick={() => saveEdit(e)} disabled={updateEnvelope.isPending}>
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" className="text-muted-foreground" aria-label="Cancel" onClick={() => setEditingId(null)}>
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                    aria-label={`Edit ${e.name} planned amount`}
+                    onClick={() => startEdit(e)}
+                  >
+                    <FormatCurrency amount={e.plannedAmount} />
+                  </button>
+                )}
+              </span>
+            </div>
+            {editing && isFood && (
+              <div className="pl-6 pt-0.5 text-[10px] text-muted-foreground">
+                Weekly rate × {weeks} weeks ={" "}
+                <span className="font-medium">
+                  <FormatCurrency amount={(Number.isFinite(liveValue) ? liveValue : 0) * weeks} />
+                </span>{" "}
+                for the cycle
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {data.bills.map((b) => (
+        <div key={`bill-${b.id}`} className="flex items-center justify-between gap-3 px-10 py-1 text-[12px]">
           <span className="flex items-center gap-2 min-w-0">
             <span className="shrink-0 text-muted-foreground" aria-hidden>↳</span>
-            <span className="truncate font-medium" style={{ color: "#1A1A2E" }}>{r.label}</span>
-            <span className="shrink-0 text-[10px] text-muted-foreground">{r.kind}</span>
+            <span className="truncate font-medium" style={{ color: "#1A1A2E" }}>{b.billName}</span>
+            <span className="shrink-0 text-[10px] text-muted-foreground">
+              {b.status === "hit" ? "Bill · paid" : b.status === "missed" ? "Bill · missed" : "Bill · pending"}
+            </span>
           </span>
           <span className="font-mono tabular-nums whitespace-nowrap text-muted-foreground">
-            {r.amount != null ? <FormatCurrency amount={r.amount} /> : "—"}
-            <span className="text-[10px]"> / planned <FormatCurrency amount={r.planned} /></span>
+            {b.actualAmount != null ? <FormatCurrency amount={b.actualAmount} /> : "—"}
+            <span className="text-[10px]"> / planned <FormatCurrency amount={b.expectedAmount} /></span>
           </span>
         </div>
       ))}
+
+      {adding ? (
+        <div className="mx-10 my-1.5 rounded border border-dashed border-[#D7DEE8] bg-white p-2 space-y-1.5 text-[12px]">
+          <div className="grid grid-cols-2 gap-1.5">
+            <Input placeholder="Name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="h-7 text-[12px]" />
+            <Input placeholder="Category (optional)" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="h-7 text-[12px]" />
+            <Input type="number" placeholder="Planned amount" value={form.plannedAmount} onChange={(e) => setForm((f) => ({ ...f, plannedAmount: e.target.value }))} className="h-7 text-[12px]" />
+            <Select value={form.cadence} onValueChange={(v) => setForm((f) => ({ ...f, cadence: v }))}>
+              <SelectTrigger className="h-7 text-[12px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="one-time">One-time</SelectItem>
+                <SelectItem value="weekly">Weekly</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-3 text-[11px]">
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input type="radio" checked={form.scope === "this-cycle"} onChange={() => setForm((f) => ({ ...f, scope: "this-cycle" }))} />
+              Just this cycle
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input type="radio" checked={form.scope === "all-future"} onChange={() => setForm((f) => ({ ...f, scope: "all-future" }))} />
+              This and all future cycles
+            </label>
+            <span className="ml-auto flex gap-1.5">
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={() => { setAdding(false); setForm(EMPTY_ENVELOPE_FORM); }}>Cancel</Button>
+              <Button size="sm" className="h-6 px-2 text-[11px]" onClick={submitAdd} disabled={!form.name.trim() || createEnvelope.isPending}>Add</Button>
+            </span>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="flex items-center gap-1 px-10 py-1 text-[11px] text-primary hover:underline"
+          onClick={() => setAdding(true)}
+        >
+          <Plus className="h-3 w-3" /> Add envelope
+        </button>
+      )}
+
       <div className="flex items-center justify-between px-10 py-1.5 text-[12px] border-t border-[#EEF1F5] font-semibold">
         <span>Accumulated so far / planned</span>
         <span className="font-mono tabular-nums">
