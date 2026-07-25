@@ -1,400 +1,283 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Otis — Coming Soon</title>
-  <meta name="description" content="Organize, Track, Invest, Save. Track bills, forecast cash flow, monitor net worth, and optimize savings — all in one place." />
-  <meta name="robots" content="index, follow" />
-  <meta property="og:title" content="Otis — Coming Soon" />
-  <meta property="og:description" content="Organize, Track, Invest, Save. Track bills, forecast cash flow, monitor net worth, and optimize savings — all in one place." />
-  <meta property="og:type" content="website" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Otis — Coming Soon" />
-  <meta name="twitter:description" content="Organize, Track, Invest, Save. Track bills, forecast cash flow, monitor net worth, and optimize savings — all in one place." />
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --bg: #f8f9fa;
-      --accent: #2D9B6F;
-      --accent-dark: #23815b;
-      --ink: #1a1f24;
-      --muted: #6b7280;
-      --card: #ffffff;
-      --border: #e7eaee;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Otis — One place for your entire financial life</title>
+<meta name="description" content="Otis is forward-looking cash-flow intelligence — one place for your entire financial life, projected twelve months out.">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="Otis — One place for your entire financial life">
+<meta property="og:description" content="Otis is forward-looking cash-flow intelligence — one place for your entire financial life, projected twelve months out.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Otis — One place for your entire financial life">
+<meta name="twitter:description" content="Otis is forward-looking cash-flow intelligence — one place for your entire financial life, projected twelve months out.">
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0A1628;
+    --navy-2:#0F2038;
+    --carolina:#56A0D3;
+    --carolina-deep:#2F6C99;
+    --page:#F4F6F9;
+    --card:#FFFFFF;
+    --ink:#0A1628;
+    --muted:#5A6B80;
+    --hair:#E4E9F0;
+    --serif:'Source Serif 4',Georgia,serif;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--sans);
+    color:var(--ink);
+    background:var(--page);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* top bar */
+  .topbar{
+    background:var(--navy);
+    height:52px;
+    display:flex;
+    align-items:center;
+    padding:0 28px;
+  }
+  .topbar .mark{
+    display:flex;align-items:center;gap:9px;
+  }
+  .topbar .rule{width:2px;height:20px;background:var(--carolina);border-radius:0}
+  .topbar .word{font-family:var(--serif);font-weight:600;font-size:19px;color:#fff;letter-spacing:-.01em}
 
-    html, body { height: 100%; }
+  /* hero */
+  .hero{
+    max-width:1080px;margin:0 auto;
+    padding:88px 28px 40px;
+    text-align:center;
+  }
+  .heromark{
+    display:flex;justify-content:center;
+    margin-bottom:24px;
+  }
+  .heromark .word{
+    font-family:var(--serif);font-weight:600;
+    font-size:clamp(46px,7.8vw,82px);
+    color:var(--navy);letter-spacing:-.025em;line-height:1;
+  }
+  .badge{
+    display:inline-flex;align-items:center;gap:7px;
+    background:rgba(86,160,211,.12);
+    color:var(--carolina-deep);
+    font-size:13px;font-weight:500;
+    padding:6px 14px;border-radius:100px;
+    margin-bottom:26px;
+  }
+  .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--carolina)}
 
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: var(--bg);
-      color: var(--ink);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      overflow-x: hidden;
-      -webkit-font-smoothing: antialiased;
-    }
+  .hero h1{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:clamp(38px,6.5vw,68px);
+    line-height:1.04;
+    letter-spacing:-.025em;
+    color:var(--navy);
+    margin-bottom:22px;
+  }
+  .hero h1 .accent{color:var(--carolina-deep)}
 
-    /* Animated background */
-    .bg-fx {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      overflow: hidden;
-      pointer-events: none;
-    }
+  .hero .sub{
+    font-size:clamp(17px,2.2vw,21px);
+    color:var(--muted);
+    max-width:560px;margin:0 auto 40px;
+    font-weight:400;
+  }
 
-    .blob {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(70px);
-      opacity: 0.5;
-      animation: float 18s ease-in-out infinite;
-    }
-    .blob.b1 {
-      width: 460px; height: 460px;
-      background: radial-gradient(circle at 30% 30%, rgba(45,155,111,0.35), rgba(45,155,111,0));
-      top: -140px; left: -120px;
-    }
-    .blob.b2 {
-      width: 520px; height: 520px;
-      background: radial-gradient(circle at 30% 30%, rgba(90,200,150,0.28), rgba(90,200,150,0));
-      bottom: -180px; right: -140px;
-      animation-delay: -6s;
-    }
-    .blob.b3 {
-      width: 360px; height: 360px;
-      background: radial-gradient(circle at 30% 30%, rgba(45,155,111,0.18), rgba(45,155,111,0));
-      top: 40%; left: 55%;
-      animation-delay: -11s;
-    }
+  /* signup */
+  .signup{
+    display:flex;gap:10px;justify-content:center;
+    max-width:520px;margin:0 auto 12px;
+    flex-wrap:wrap;
+  }
+  .signup input{
+    flex:1;min-width:240px;
+    height:52px;padding:0 18px;
+    border:1px solid var(--hair);
+    border-radius:12px;
+    font-family:var(--sans);font-size:16px;
+    color:var(--ink);background:var(--card);
+    transition:border-color .15s,box-shadow .15s;
+  }
+  .signup input::placeholder{color:#9AA7B8}
+  .signup input:focus{
+    outline:none;border-color:var(--carolina);
+    box-shadow:0 0 0 3px rgba(86,160,211,.15);
+  }
+  .signup button{
+    height:52px;padding:0 26px;
+    background:var(--navy);color:#fff;
+    border:none;border-radius:12px;
+    font-family:var(--sans);font-size:16px;font-weight:600;
+    cursor:pointer;white-space:nowrap;
+    transition:background .15s,transform .1s;
+  }
+  .signup button:hover{background:var(--navy-2)}
+  .signup button:active{transform:scale(.985)}
+  .signup button:disabled{opacity:.7;cursor:default}
+  .nospam{font-size:13px;color:#9AA7B8;text-align:center}
+  .thanks{
+    display:none;
+    font-size:15px;font-weight:500;color:var(--carolina-deep);
+    text-align:center;margin:0 auto 12px;max-width:520px;
+  }
+  .thanks.show{display:block}
 
-    @keyframes float {
-      0%, 100% { transform: translate(0, 0) scale(1); }
-      33% { transform: translate(40px, -30px) scale(1.08); }
-      66% { transform: translate(-30px, 30px) scale(0.95); }
-    }
+  /* features */
+  .features{
+    max-width:1080px;margin:0 auto;
+    padding:64px 28px 72px;
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:20px;
+  }
+  .feature{
+    background:var(--card);
+    border:1px solid var(--hair);
+    border-radius:16px;
+    padding:26px 24px 28px;
+    position:relative;
+    transition:transform .18s,box-shadow .18s,border-color .18s;
+  }
+  .feature:hover{
+    transform:translateY(-3px);
+    box-shadow:0 12px 30px -12px rgba(10,22,40,.18);
+    border-color:#D3DEEA;
+  }
+  .feature .rule{
+    width:28px;height:2px;background:var(--carolina);
+    border-radius:0;margin-bottom:18px;
+  }
+  .feature .ficon{
+    width:40px;height:40px;border-radius:10px;
+    background:rgba(86,160,211,.12);
+    display:flex;align-items:center;justify-content:center;
+    margin-bottom:16px;
+  }
+  .feature .ficon svg{width:21px;height:21px;stroke:var(--carolina-deep);fill:none;stroke-width:1.7}
+  .feature h3{
+    font-family:var(--serif);
+    font-weight:600;font-size:19px;
+    color:var(--navy);margin-bottom:8px;letter-spacing:-.01em;
+  }
+  .feature p{font-size:14.5px;color:var(--muted);line-height:1.55}
 
-    /* Layout */
-    .wrap {
-      position: relative;
-      z-index: 1;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 48px 24px 32px;
-      width: 100%;
-      max-width: 760px;
-      margin: 0 auto;
-    }
+  /* footer */
+  footer{
+    background:var(--navy);
+    color:#fff;
+    padding:44px 28px 40px;
+    text-align:center;
+  }
+  footer .fmark{
+    display:inline-flex;align-items:center;gap:9px;margin-bottom:18px;
+  }
+  footer .rule{width:2px;height:18px;background:var(--carolina);border-radius:0}
+  footer .word{font-family:var(--serif);font-weight:600;font-size:17px;color:#fff}
+  footer .tagline{font-size:14px;color:#8CA0B8;margin-bottom:22px}
+  footer .social{display:flex;gap:22px;justify-content:center;margin-bottom:22px}
+  footer .social a{color:#B8C6D8;text-decoration:none;font-size:14px;transition:color .15s}
+  footer .social a:hover{color:var(--carolina)}
+  footer .copy{font-size:12.5px;color:#5D7086}
 
-    /* Fade-in on load */
-    .reveal {
-      opacity: 0;
-      transform: translateY(16px);
-      animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    }
-    .d1 { animation-delay: 0.05s; }
-    .d2 { animation-delay: 0.15s; }
-    .d3 { animation-delay: 0.25s; }
-    .d4 { animation-delay: 0.35s; }
-    .d5 { animation-delay: 0.45s; }
-    .d6 { animation-delay: 0.55s; }
+  @media(max-width:860px){
+    .features{grid-template-columns:1fr;max-width:440px}
+    .hero{padding-top:56px}
+  }
 
-    @keyframes rise {
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .wordmark {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 30px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      color: var(--ink);
-    }
-    .wordmark .paw { font-size: 26px; }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      margin-top: 30px;
-      padding: 6px 14px;
-      font-size: 12.5px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      color: var(--accent-dark);
-      background: rgba(45,155,111,0.10);
-      border: 1px solid rgba(45,155,111,0.25);
-      border-radius: 999px;
-    }
-    .badge .dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--accent);
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.8); }
-    }
-
-    .d-badge { animation-delay: 0.10s; }
-
-    .tagline {
-      margin-top: 18px;
-      font-size: clamp(22px, 3.4vw, 34px);
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      line-height: 1.12;
-      color: var(--ink);
-      white-space: nowrap;
-    }
-    .tagline .accent { color: var(--accent); }
-
-    .subheading {
-      margin: 20px auto 0;
-      max-width: 540px;
-      font-size: clamp(15px, 2.4vw, 18px);
-      line-height: 1.6;
-      color: var(--muted);
-    }
-
-    /* Form */
-    .form {
-      margin-top: 36px;
-      width: 100%;
-      max-width: 480px;
-    }
-    .form-row {
-      display: flex;
-      gap: 10px;
-    }
-    .form input[type="email"] {
-      flex: 1;
-      min-width: 0;
-      padding: 14px 16px;
-      font-family: inherit;
-      font-size: 15px;
-      color: var(--ink);
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-    .form input[type="email"]:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(45,155,111,0.15);
-    }
-    .form button {
-      flex-shrink: 0;
-      padding: 14px 22px;
-      font-family: inherit;
-      font-size: 15px;
-      font-weight: 600;
-      color: #fff;
-      background: var(--accent);
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background 0.2s, transform 0.1s;
-    }
-    .form button:hover { background: var(--accent-dark); }
-    .form button:active { transform: scale(0.98); }
-
-    .fineprint {
-      margin-top: 12px;
-      font-size: 13px;
-      color: #9aa1a9;
-    }
-
-    .thanks {
-      margin-top: 36px;
-      width: 100%;
-      max-width: 480px;
-      padding: 20px 24px;
-      background: rgba(45,155,111,0.08);
-      border: 1px solid rgba(45,155,111,0.25);
-      border-radius: 14px;
-      color: var(--accent-dark);
-      font-size: 16px;
-      font-weight: 600;
-      display: none;
-      animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    }
-    .thanks.show { display: block; }
-
-    /* Features */
-    .features {
-      margin-top: 56px;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-      width: 100%;
-    }
-    .feature {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      text-align: left;
-      height: 100%;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 22px 20px;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .feature:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 10px 30px -12px rgba(26,31,36,0.14);
-    }
-    .feature .icon {
-      font-size: 26px;
-      line-height: 1;
-    }
-    .feature .title {
-      margin-top: 12px;
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--ink);
-      line-height: 1.3;
-    }
-    .feature .desc {
-      margin-top: 6px;
-      font-size: 13px;
-      font-weight: 400;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-
-    /* Footer */
-    footer {
-      position: relative;
-      z-index: 1;
-      text-align: center;
-      padding: 28px 24px 36px;
-      font-size: 13px;
-      color: var(--muted);
-    }
-    footer .links {
-      margin-top: 8px;
-      display: flex;
-      justify-content: center;
-      gap: 18px;
-      flex-wrap: wrap;
-    }
-    footer a {
-      color: var(--muted);
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-    footer a:hover { color: var(--accent); }
-
-    @media (max-width: 640px) {
-      .tagline { white-space: normal; font-size: clamp(22px, 7vw, 30px); }
-      .form-row { flex-direction: column; }
-      .form button { width: 100%; }
-      .features { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-      .feature { padding: 16px 14px; }
-    }
-  </style>
+  .paw{display:inline-flex}
+  .paw svg{width:22px;height:22px}
+</style>
 </head>
 <body>
-  <div class="bg-fx" aria-hidden="true">
-    <div class="blob b1"></div>
-    <div class="blob b2"></div>
-    <div class="blob b3"></div>
+
+  <div class="topbar">
+    <div class="mark">
+      <span class="rule"></span>
+      <span class="word">Otis</span>
+    </div>
   </div>
 
-  <main class="wrap">
-    <div class="wordmark reveal d1">
-      <span class="paw">🐾</span>
-      <span>Otis</span>
+  <section class="hero">
+    <div class="heromark">
+      <span class="word">Otis</span>
     </div>
+    <div class="badge"><span class="dot"></span> Now in development</div>
+    <h1>See your money<br><span class="accent">before</span> it happens.</h1>
+    <p class="sub">Otis is forward-looking cash-flow intelligence — one place for your entire financial life, projected twelve months out.</p>
 
-    <div class="badge reveal d-badge">
-      <span class="dot" aria-hidden="true"></span>
-      <span>Now in Development</span>
-    </div>
-
-    <h1 class="tagline reveal d2">
-      Organize <span class="accent">·</span> Track <span class="accent">·</span> Inform <span class="accent">·</span> Simulate
-    </h1>
-
-    <p class="subheading reveal d3">
-      One place for your entire financial life
-    </p>
-
-    <form class="form reveal d4" id="notifyForm" novalidate>
-      <div class="form-row">
-        <input type="email" id="email" name="email" placeholder="you@example.com" aria-label="Email address" required />
-        <button type="submit">Notify Me When We Launch</button>
-      </div>
-      <p class="fineprint">No spam. Just one email when we're ready.</p>
+    <form class="signup" id="notifyForm">
+      <input type="email" id="email" placeholder="you@example.com" aria-label="Email address">
+      <button type="submit">Notify me at launch</button>
     </form>
+    <p class="thanks" id="thanks" role="status"></p>
+    <p class="nospam">No spam. Just one email when we're ready.</p>
+  </section>
 
-    <div class="thanks reveal" id="thanks">
-      You're on the list! We'll be in touch.
+  <section class="features">
+    <div class="feature">
+      <div class="rule"></div>
+      <div class="ficon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></div>
+      <h3>Bill tracking</h3>
+      <p>Never miss a payment. Every bill, every due date, organized and detected automatically.</p>
     </div>
-
-    <section class="features reveal d5" aria-label="Feature highlights">
-      <div class="feature">
-        <span class="icon">📅</span>
-        <span class="title">Bill Tracking</span>
-        <span class="desc">Never miss a payment. Every bill, every due date, organized.</span>
-      </div>
-      <div class="feature">
-        <span class="icon">💵</span>
-        <span class="title">Pay Schedules</span>
-        <span class="desc">Know exactly when money lands in your account.</span>
-      </div>
-      <div class="feature">
-        <span class="icon">📈</span>
-        <span class="title">12-Month Forecast</span>
-        <span class="desc">See your financial future, 12 months out.</span>
-      </div>
-      <div class="feature">
-        <span class="icon">📊</span>
-        <span class="title">Net Worth Tracking</span>
-        <span class="desc">Assets, accounts, and liabilities in one view.</span>
-      </div>
-      <div class="feature">
-        <span class="icon">⏰</span>
-        <span class="title">Loan Amortization</span>
-        <span class="desc">Track payoff dates and simulate extra payments.</span>
-      </div>
-      <div class="feature">
-        <span class="icon">🤖</span>
-        <span class="title">Otis AI</span>
-        <span class="desc">Ask your AI advisor anything about your finances.</span>
-      </div>
-    </section>
-  </main>
-
-  <footer class="reveal d6">
-    <div>© 2026 Otis Financial. yourotis.com</div>
-    <div class="links">
-      <a href="https://linkedin.com/company/yourotis" target="_blank" rel="noopener">LinkedIn</a>
-      <a href="https://instagram.com/yourotisapp" target="_blank" rel="noopener">Instagram</a>
-      <a href="https://x.com/yourotisapp" target="_blank" rel="noopener">X</a>
+    <div class="feature">
+      <div class="rule"></div>
+      <div class="ficon"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
+      <h3>Pay schedules</h3>
+      <p>Know exactly when money lands in your account, and how it lines up with what's due.</p>
     </div>
+    <div class="feature">
+      <div class="rule"></div>
+      <div class="ficon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-5 3 3 5-7"/></svg></div>
+      <h3>12-month forecast</h3>
+      <p>See your financial future, a full year out, updated as real spending unfolds.</p>
+    </div>
+    <div class="feature">
+      <div class="rule"></div>
+      <div class="ficon"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg></div>
+      <h3>Net worth tracking</h3>
+      <p>Assets, accounts, and liabilities in one clear view that stays current daily.</p>
+    </div>
+    <div class="feature">
+      <div class="rule"></div>
+      <div class="ficon"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M12 2h0M5 4L3 6M19 4l2 2"/></svg></div>
+      <h3>Loan amortization</h3>
+      <p>Track payoff dates and simulate the impact of extra payments before you make them.</p>
+    </div>
+    <div class="feature">
+      <div class="rule"></div>
+      <div class="ficon"><svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 14h.01M15 14h.01M2 13v2M22 13v2"/></svg></div>
+      <h3>Otis AI</h3>
+      <p>Ask your AI advisor anything about your finances, and simulate the what-ifs.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="fmark">
+      <span class="rule"></span>
+      <span class="word">Otis</span>
+    </div>
+    <p class="tagline">One place for your entire financial life.</p>
+    <div class="social">
+      <a href="#">LinkedIn</a>
+      <a href="#">Instagram</a>
+      <a href="#">X</a>
+    </div>
+    <p class="copy">© 2026 Otis Financial LLC · yourotis.com</p>
   </footer>
 
   <script>
