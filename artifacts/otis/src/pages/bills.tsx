@@ -56,15 +56,12 @@ import {
 
 function formatPaymentMethod(raw: string | null | undefined): string {
   if (!raw) return "";
-  if (raw.startsWith("credit-card:")) {
-    const card = raw.slice("credit-card:".length).trim();
-    return card ? `Credit Card – ${card}` : "Credit Card";
-  }
   const map: Record<string, string> = {
-    "auto-pay": "Bank Draft",
-    "bank-draft": "Bank Draft",
-    "manual": "Manual",
     "credit-card": "Credit Card",
+    "debit-card": "Debit Card",
+    "bank-transfer": "Bank Transfer",
+    "check": "Check",
+    "cash": "Cash",
   };
   return map[raw] ?? raw;
 }

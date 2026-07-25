@@ -1310,7 +1310,7 @@ components:
     # ── Bills ────────────────────────────────────────────────────────────────
     Bill:
       type: object
-      required: [id, billName, category, amount, frequency, dueDay, amountType, isVariable, isActive, createdAt, updatedAt]
+      required: [id, billName, category, amount, frequency, dueDay, amountType, isVariable, isActive, isAutopay, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -1329,6 +1329,11 @@ components:
           enum: [positive, negative]
         paymentMethod:
           type: ["string", "null"]
+          enum: [credit-card, debit-card, bank-transfer, check, cash, null]
+        paymentAccountId:
+          type: ["integer", "null"]
+        isAutopay:
+          type: boolean
         startDate:
           type: ["string", "null"]
         endDate:
@@ -1364,7 +1369,12 @@ components:
           type: string
           enum: [positive, negative]
         paymentMethod:
-          type: string
+          type: ["string", "null"]
+          enum: [credit-card, debit-card, bank-transfer, check, cash, null]
+        paymentAccountId:
+          type: ["integer", "null"]
+        isAutopay:
+          type: boolean
         startDate:
           type: string
         endDate:
@@ -1395,7 +1405,12 @@ components:
           type: string
           enum: [positive, negative]
         paymentMethod:
-          type: string
+          type: ["string", "null"]
+          enum: [credit-card, debit-card, bank-transfer, check, cash, null]
+        paymentAccountId:
+          type: ["integer", "null"]
+        isAutopay:
+          type: boolean
         startDate:
           type: string
         endDate:

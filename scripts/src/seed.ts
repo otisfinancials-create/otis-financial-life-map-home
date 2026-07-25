@@ -139,7 +139,8 @@ async function seed() {
         dueDay: 1,
         isActive: true,
         isVariable: false,
-        paymentMethod: "auto-pay",
+        paymentMethod: "bank-transfer",
+        isAutopay: true,
       },
       {
         userId,

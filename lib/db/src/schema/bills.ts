@@ -1,5 +1,6 @@
 import { pgTable, serial, text, numeric, boolean, timestamp, date, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
+import { accountsTable } from "./accounts";
 import { z } from "zod/v4";
 
 export const billsTable = pgTable("bills", {
@@ -10,7 +11,12 @@ export const billsTable = pgTable("bills", {
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   frequency: text("frequency").notNull(),
   dueDay: integer("due_day").notNull(),
+  // Constrained set: 'credit-card' | 'debit-card' | 'bank-transfer' | 'check' | 'cash'
+  // (enforced at the API layer; null = unknown/pending manual review).
   paymentMethod: text("payment_method"),
+  // Which account pays this bill (nullable: cash/check bills may have none).
+  paymentAccountId: integer("payment_account_id").references(() => accountsTable.id),
+  isAutopay: boolean("is_autopay").notNull().default(false),
   amountType: text("amount_type").notNull().default("negative"),
   startDate: date("start_date", { mode: "string" }),
   endDate: date("end_date", { mode: "string" }),

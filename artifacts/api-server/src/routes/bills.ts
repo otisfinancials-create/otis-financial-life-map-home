@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, billsTable, forecastedTransactionsTable } from "@workspace/db";
+import { db, billsTable, forecastedTransactionsTable, accountsTable } from "@workspace/db";
 import {
   CreateBillBody,
   UpdateBillBody,
@@ -29,6 +29,16 @@ function canonicalizeDueDay<T extends { frequency?: string | null; startDate?: s
   return data;
 }
 
+/** Reject paymentAccountId values that don't belong to the requesting user. */
+async function paymentAccountBelongsToUser(userId: string, paymentAccountId: number | null | undefined): Promise<boolean> {
+  if (paymentAccountId == null) return true;
+  const [account] = await db
+    .select({ id: accountsTable.id })
+    .from(accountsTable)
+    .where(and(eq(accountsTable.id, paymentAccountId), eq(accountsTable.userId, userId)));
+  return !!account;
+}
+
 router.get("/bills", async (req, res): Promise<void> => {
   req.log.info("Fetching bills");
   const bills = await db
@@ -46,6 +56,10 @@ router.post("/bills", async (req, res): Promise<void> => {
     return;
   }
   const data = canonicalizeDueDay(parsed.data);
+  if (!(await paymentAccountBelongsToUser(req.userId, data.paymentAccountId))) {
+    res.status(400).json({ error: "Invalid paying account" });
+    return;
+  }
   const [bill] = await db.insert(billsTable).values({
     ...data,
     userId: req.userId,
@@ -117,6 +131,10 @@ router.patch("/bills/:id", async (req, res): Promise<void> => {
   }
   // Canonicalize dueDay when frequency + startDate are being set together.
   const canonicalized = canonicalizeDueDay(parsed.data);
+  if (!(await paymentAccountBelongsToUser(req.userId, canonicalized.paymentAccountId))) {
+    res.status(400).json({ error: "Invalid paying account" });
+    return;
+  }
   const { amount: rawBillAmount, ...restBillData } = canonicalized;
   const [bill] = await db
     .update(billsTable)

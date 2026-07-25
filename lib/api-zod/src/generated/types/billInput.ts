@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BillInputAmountType } from './billInputAmountType';
+import type { BillInputPaymentMethod } from './billInputPaymentMethod';
 
 export interface BillInput {
   billName: string;
@@ -14,7 +15,11 @@ export interface BillInput {
   frequency: string;
   dueDay: number;
   amountType?: BillInputAmountType;
-  paymentMethod?: string;
+  /** @nullable */
+  paymentMethod?: BillInputPaymentMethod;
+  /** @nullable */
+  paymentAccountId?: number | null;
+  isAutopay?: boolean;
   startDate?: string;
   endDate?: string;
   companyUrl?: string;

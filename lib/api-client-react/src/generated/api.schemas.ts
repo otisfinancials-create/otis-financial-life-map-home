@@ -29,6 +29,20 @@ export const BillAmountType = {
   negative: 'negative',
 } as const;
 
+/**
+ * @nullable
+ */
+export type BillPaymentMethod = typeof BillPaymentMethod[keyof typeof BillPaymentMethod] | null;
+
+
+export const BillPaymentMethod = {
+  'credit-card': 'credit-card',
+  'debit-card': 'debit-card',
+  'bank-transfer': 'bank-transfer',
+  check: 'check',
+  cash: 'cash',
+} as const;
+
 export interface Bill {
   id: number;
   billName: string;
@@ -38,7 +52,10 @@ export interface Bill {
   dueDay: number;
   amountType: BillAmountType;
   /** @nullable */
-  paymentMethod?: string | null;
+  paymentMethod?: BillPaymentMethod;
+  /** @nullable */
+  paymentAccountId?: number | null;
+  isAutopay: boolean;
   /** @nullable */
   startDate?: string | null;
   /** @nullable */
@@ -61,6 +78,20 @@ export const BillInputAmountType = {
   negative: 'negative',
 } as const;
 
+/**
+ * @nullable
+ */
+export type BillInputPaymentMethod = typeof BillInputPaymentMethod[keyof typeof BillInputPaymentMethod] | null;
+
+
+export const BillInputPaymentMethod = {
+  'credit-card': 'credit-card',
+  'debit-card': 'debit-card',
+  'bank-transfer': 'bank-transfer',
+  check: 'check',
+  cash: 'cash',
+} as const;
+
 export interface BillInput {
   billName: string;
   category: string;
@@ -68,7 +99,11 @@ export interface BillInput {
   frequency: string;
   dueDay: number;
   amountType?: BillInputAmountType;
-  paymentMethod?: string;
+  /** @nullable */
+  paymentMethod?: BillInputPaymentMethod;
+  /** @nullable */
+  paymentAccountId?: number | null;
+  isAutopay?: boolean;
   startDate?: string;
   endDate?: string;
   companyUrl?: string;
@@ -85,6 +120,20 @@ export const BillUpdateAmountType = {
   negative: 'negative',
 } as const;
 
+/**
+ * @nullable
+ */
+export type BillUpdatePaymentMethod = typeof BillUpdatePaymentMethod[keyof typeof BillUpdatePaymentMethod] | null;
+
+
+export const BillUpdatePaymentMethod = {
+  'credit-card': 'credit-card',
+  'debit-card': 'debit-card',
+  'bank-transfer': 'bank-transfer',
+  check: 'check',
+  cash: 'cash',
+} as const;
+
 export interface BillUpdate {
   billName?: string;
   category?: string;
@@ -92,7 +141,11 @@ export interface BillUpdate {
   frequency?: string;
   dueDay?: number;
   amountType?: BillUpdateAmountType;
-  paymentMethod?: string;
+  /** @nullable */
+  paymentMethod?: BillUpdatePaymentMethod;
+  /** @nullable */
+  paymentAccountId?: number | null;
+  isAutopay?: boolean;
   startDate?: string;
   /** @nullable */
   endDate?: string | null;

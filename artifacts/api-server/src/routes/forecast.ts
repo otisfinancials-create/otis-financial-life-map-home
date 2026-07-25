@@ -175,10 +175,10 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
       eq(accountsTable.userId, userId),
       eq(accountsTable.accountType, "credit_card"),
     ));
-  const ccByName = new Map<string, typeof ccAccounts[number]>();
+  const ccById = new Map<number, typeof ccAccounts[number]>();
   for (const acct of ccAccounts) {
     if (acct.ccCycleStartDate != null && acct.ccCycleEndDate != null && acct.ccPaymentDueDate != null) {
-      ccByName.set(acct.accountName.trim().toLowerCase(), acct);
+      ccById.set(acct.id, acct);
     }
   }
 
@@ -224,10 +224,12 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
 
   for (const bill of bills) {
     const amount = parseFloat(String(bill.amount));
-    const cardName = bill.paymentMethod?.startsWith("credit-card:")
-      ? bill.paymentMethod.slice("credit-card:".length).trim().toLowerCase()
-      : null;
-    const card = cardName ? ccByName.get(cardName) : undefined;
+    // Bills paid by a configured credit card (structured link via
+    // paymentAccountId) group into that card's payment cycle.
+    const card =
+      bill.paymentMethod === "credit-card" && bill.paymentAccountId != null
+        ? ccById.get(bill.paymentAccountId)
+        : undefined;
 
     for (const dateStr of generateBillOccurrences(bill, todayStr, endStr)) {
       if (card) {

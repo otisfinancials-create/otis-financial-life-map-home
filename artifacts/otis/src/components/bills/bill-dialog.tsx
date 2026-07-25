@@ -37,11 +37,12 @@ import { useToast } from "@/hooks/use-toast";
 import {
   useCreateBill,
   useUpdateBill,
+  useListAccounts,
   getListBillsQueryKey,
   getGetUpcomingBillsQueryKey,
   getGetDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
-import type { Bill } from "@workspace/api-client-react";
+import type { Bill, BillInputPaymentMethod } from "@workspace/api-client-react";
 import { useSyncForecast } from "@/hooks/use-sync-forecast";
 
 const CATEGORIES = [
@@ -67,10 +68,17 @@ const FREQUENCIES = [
 ];
 
 const PAYMENT_METHODS = [
-  { value: "auto-pay", label: "Bank Draft" },
-  { value: "manual", label: "Manual" },
   { value: "credit-card", label: "Credit Card" },
+  { value: "debit-card", label: "Debit Card" },
+  { value: "bank-transfer", label: "Bank Transfer" },
+  { value: "check", label: "Check" },
+  { value: "cash", label: "Cash" },
 ];
+
+/** Methods that are paid from a specific account (paying account required). */
+const ACCOUNT_METHODS = new Set(["credit-card", "debit-card", "bank-transfer"]);
+const CARD_ACCOUNT_TYPES = new Set(["credit_card"]);
+const DEPOSITORY_ACCOUNT_TYPES = new Set(["checking", "savings"]);
 
 const MAX_TEXT = 100;
 
@@ -94,7 +102,8 @@ const billSchema = z
       z.number().int().min(1).max(31).optional(),
     ),
     paymentMethod: z.string().min(1, { message: "Please select a payment method." }),
-    creditCardName: z.string().optional(),
+    paymentAccountId: z.string().optional(),
+    isAutopay: z.boolean().default(false),
     companyUrl: z
       .string()
       .max(MAX_TEXT, { message: `URL must be ${MAX_TEXT} characters or fewer.` })
@@ -109,6 +118,11 @@ const billSchema = z
       .optional(),
   })
   .superRefine((data, ctx) => {
+    // Card/bank methods must say which account pays the bill.
+    if (ACCOUNT_METHODS.has(data.paymentMethod) && !data.paymentAccountId) {
+      ctx.addIssue({ path: ["paymentAccountId"], code: "custom", message: "Please select the paying account." });
+    }
+
     // Due-date requirement depends on frequency.
     if (data.frequency === "monthly") {
       if (data.dueDay == null) {
@@ -153,12 +167,12 @@ export function normalizeCompanyUrl(raw: string | undefined): string | undefined
   return `https://${url.toLowerCase().startsWith("www.") ? "" : "www."}${url}`;
 }
 
-function parsePaymentMethod(raw: string | null | undefined): { paymentMethod: string; creditCardName: string } {
-  if (!raw) return { paymentMethod: "", creditCardName: "" };
-  if (raw.startsWith("credit-card:")) {
-    return { paymentMethod: "credit-card", creditCardName: raw.slice("credit-card:".length).trim() };
-  }
-  return { paymentMethod: raw, creditCardName: "" };
+// Legacy values (pre-migration free text like "credit-card:Visa *4821") are
+// normalized to the constrained method set; unknown values map to "".
+function parsePaymentMethod(raw: string | null | undefined): string {
+  if (!raw) return "";
+  if (raw.startsWith("credit-card")) return "credit-card";
+  return PAYMENT_METHODS.some((m) => m.value === raw) ? raw : "";
 }
 
 // ── Occurrence preview helpers (mirror the server forecast engine) ───────────
@@ -251,7 +265,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
   const { sync: syncForecast } = useSyncForecast();
   const isEditing = !!bill;
 
-  const { paymentMethod: parsedMethod, creditCardName: parsedCard } = parsePaymentMethod(bill?.paymentMethod);
+  const { data: accounts } = useListAccounts();
 
   const form = useForm<BillFormValues>({
     resolver: zodResolver(billSchema),
@@ -262,8 +276,9 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       frequency: bill?.frequency || "monthly",
       amountType: (bill?.amountType as "positive" | "negative") || "negative",
       dueDay: bill?.dueDay,
-      paymentMethod: parsedMethod,
-      creditCardName: parsedCard,
+      paymentMethod: parsePaymentMethod(bill?.paymentMethod),
+      paymentAccountId: bill?.paymentAccountId != null ? String(bill.paymentAccountId) : "",
+      isAutopay: bill?.isAutopay ?? false,
       companyUrl: bill?.companyUrl || "",
       startDate: bill?.startDate || "",
       endDate: bill?.endDate || "",
@@ -274,7 +289,6 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
   });
 
   useEffect(() => {
-    const parsed = parsePaymentMethod(bill?.paymentMethod);
     form.reset({
       billName: bill?.billName || "",
       category: bill?.category || "",
@@ -282,8 +296,9 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       frequency: bill?.frequency || "monthly",
       amountType: (bill?.amountType as "positive" | "negative") || "negative",
       dueDay: bill?.dueDay,
-      paymentMethod: parsed.paymentMethod,
-      creditCardName: parsed.creditCardName,
+      paymentMethod: parsePaymentMethod(bill?.paymentMethod),
+      paymentAccountId: bill?.paymentAccountId != null ? String(bill.paymentAccountId) : "",
+      isAutopay: bill?.isAutopay ?? false,
       companyUrl: bill?.companyUrl || "",
       startDate: bill?.startDate || "",
       endDate: bill?.endDate || "",
@@ -311,13 +326,19 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
     watchedStartDate || undefined,
   );
 
-  function buildPaymentMethod(values: BillFormValues): string | undefined {
-    if (!values.paymentMethod) return undefined;
-    if (values.paymentMethod === "credit-card" && values.creditCardName?.trim()) {
-      return `credit-card:${values.creditCardName.trim()}`;
+  // Paying-account choices, narrowed by method to prevent contradictions
+  // (cards pay credit-card bills, depository accounts pay bank transfers).
+  // Falls back to all accounts when the narrowed list is empty.
+  const accountChoices = (() => {
+    const all = accounts ?? [];
+    let filtered = all;
+    if (watchedPaymentMethod === "credit-card") {
+      filtered = all.filter((a) => CARD_ACCOUNT_TYPES.has(a.accountType));
+    } else if (watchedPaymentMethod === "bank-transfer" || watchedPaymentMethod === "debit-card") {
+      filtered = all.filter((a) => DEPOSITORY_ACCOUNT_TYPES.has(a.accountType));
     }
-    return values.paymentMethod;
-  }
+    return filtered.length > 0 ? filtered : all;
+  })();
 
   function onSubmit(data: BillFormValues) {
     // dueDay is required by the API. For date-driven frequencies we derive it
@@ -334,7 +355,12 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       frequency: data.frequency,
       amountType: data.amountType,
       dueDay: dueDay ?? 1,
-      paymentMethod: buildPaymentMethod(data),
+      paymentMethod: (data.paymentMethod || null) as BillInputPaymentMethod | null,
+      paymentAccountId:
+        ACCOUNT_METHODS.has(data.paymentMethod) && data.paymentAccountId
+          ? Number(data.paymentAccountId)
+          : null,
+      isAutopay: data.isAutopay,
       companyUrl: normalizeCompanyUrl(data.companyUrl),
       startDate: data.startDate || undefined,
       isVariable: data.isVariable,
@@ -569,16 +595,28 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
                   </FormItem>
                 )}
               />
-              {watchedPaymentMethod === "credit-card" && (
+              {ACCOUNT_METHODS.has(watchedPaymentMethod) && (
                 <FormField
                   control={form.control}
-                  name="creditCardName"
+                  name="paymentAccountId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Which Card?</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Amex Blue Cash" maxLength={MAX_TEXT} {...field} />
-                      </FormControl>
+                      <FormLabel>Paying Account</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select account" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {accountChoices.map((a) => (
+                            <SelectItem key={a.id} value={String(a.id)}>
+                              {a.accountName}
+                              {a.institutionName ? ` — ${a.institutionName}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -653,6 +691,22 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
                     />
                   </FormControl>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="isAutopay"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border p-3">
+                  <div className="space-y-0.5">
+                    <FormLabel>Auto Pay</FormLabel>
+                    <FormDescription className="text-xs">This bill is paid automatically</FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
                 </FormItem>
               )}
             />
