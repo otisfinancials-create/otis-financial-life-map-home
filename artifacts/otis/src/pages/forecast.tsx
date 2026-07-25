@@ -27,6 +27,8 @@ import {
   getGetMonthlyForecastQueryKey,
   getGetUserSettingsQueryKey,
   getListBalanceSyncsQueryKey,
+  useGetCycleBreakdown,
+  getGetCycleBreakdownQueryKey,
   type BalanceSync,
 } from "@workspace/api-client-react";
 
@@ -127,6 +129,64 @@ function StatusPill({ bg, text, children }: { bg: string; text: string; children
   );
 }
 
+// P5 cycle payment drill-down: read-only composition of a card cycle's
+// due-date payment — its envelopes (Food, Gas, Misc, carryover) and bills.
+function CycleBreakdownRows({ cycleId }: { cycleId: number }) {
+  const { data, isLoading } = useGetCycleBreakdown(cycleId, {
+    query: { queryKey: getGetCycleBreakdownQueryKey(cycleId) },
+  });
+  if (isLoading) {
+    return (
+      <div className="px-10 py-2 text-[12px] text-muted-foreground bg-[#F8FAFC] border-b border-[#F2F4F7]">
+        Loading breakdown…
+      </div>
+    );
+  }
+  if (!data) return null;
+  const rows = [
+    ...data.envelopes.map((e) => ({
+      key: `env-${e.id}`,
+      label: e.isCarryover ? `${e.name} (carryover)` : e.name,
+      planned: e.plannedAmount,
+      amount: e.spentAmount,
+      kind: "Envelope",
+    })),
+    ...data.bills.map((b) => ({
+      key: `bill-${b.id}`,
+      label: b.billName,
+      planned: b.expectedAmount,
+      amount: b.actualAmount,
+      kind: b.status === "hit" ? "Bill · paid" : "Bill · pending",
+    })),
+  ];
+  return (
+    <div className="bg-[#F8FAFC] border-b border-[#F2F4F7]">
+      <div className="px-10 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+        Payment composition — cycle {format(new Date(data.cycleStart + "T00:00:00"), "MMM d")} – {format(new Date(data.cycleEnd + "T00:00:00"), "MMM d")}
+      </div>
+      {rows.map((r) => (
+        <div key={r.key} className="flex items-center justify-between gap-3 px-10 py-1 text-[12px]">
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="shrink-0 text-muted-foreground" aria-hidden>↳</span>
+            <span className="truncate font-medium" style={{ color: "#1A1A2E" }}>{r.label}</span>
+            <span className="shrink-0 text-[10px] text-muted-foreground">{r.kind}</span>
+          </span>
+          <span className="font-mono tabular-nums whitespace-nowrap text-muted-foreground">
+            {r.amount != null ? <FormatCurrency amount={r.amount} /> : "—"}
+            <span className="text-[10px]"> / planned <FormatCurrency amount={r.planned} /></span>
+          </span>
+        </div>
+      ))}
+      <div className="flex items-center justify-between px-10 py-1.5 text-[12px] border-t border-[#EEF1F5] font-semibold">
+        <span>Accumulated so far / planned</span>
+        <span className="font-mono tabular-nums">
+          <FormatCurrency amount={data.accumulatedTotal} /> / <FormatCurrency amount={data.plannedTotal} />
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // Running-balance color: red when negative, green when healthy, navy otherwise.
 const balanceColor = (n: number) => (n < 0 ? "var(--color-negative)" : n >= 1000 ? "var(--color-positive)" : "var(--color-navy)");
 
@@ -152,6 +212,8 @@ type TxRow = {
   sourceBalanceSyncId?: number | null;
   ccAccountId?: number | null;
   isCcParent: boolean;
+  sourceCardCycleId?: number | null;
+  ccBasis?: string | null;
   isActual: boolean;
   isCommitted: boolean;
   status?: string | null;
@@ -643,6 +705,16 @@ export default function Forecast() {
     setCollapsedCc((prev) => {
       const next = new Set(prev);
       if (next.has(parentId)) next.delete(parentId); else next.add(parentId);
+      return next;
+    });
+  };
+
+  // Cycle-based card payments (P5): expandable read-only breakdown.
+  const [expandedCycles, setExpandedCycles] = useState<Set<number>>(new Set());
+  const toggleCycle = (cycleId: number) => {
+    setExpandedCycles((prev) => {
+      const next = new Set(prev);
+      if (next.has(cycleId)) next.delete(cycleId); else next.add(cycleId);
       return next;
     });
   };
@@ -1212,6 +1284,10 @@ export default function Forecast() {
                           // Collapse: skip child rows whose parent is collapsed.
                           if (ccChild && ccParentId != null && collapsedCc.has(ccParentId)) return null;
                           const ccCollapsed = isCcParent && collapsedCc.has(tx.id);
+                          // Cycle-based payment row (P5): no child rows; the
+                          // chevron toggles a read-only breakdown instead.
+                          const isCyclePayment = tx.sourceCardCycleId != null;
+                          const cycleExpanded = isCyclePayment && expandedCycles.has(tx.sourceCardCycleId!);
 
                           // Day header: shown once per date (before the first
                           // row of a new day within this month group).
@@ -1274,14 +1350,14 @@ export default function Forecast() {
                               <div
                                 className="py-[11px] flex items-center justify-center"
                                 style={{ fontSize: "16px", lineHeight: 1 }}
-                                onClick={isCcParent ? (e) => { e.stopPropagation(); toggleCc(tx.id); } : undefined}
+                                onClick={isCcParent ? (e) => { e.stopPropagation(); if (isCyclePayment) toggleCycle(tx.sourceCardCycleId!); else toggleCc(tx.id); } : undefined}
                               >
                                 {isCcParent ? (
                                   <button
-                                    aria-label={ccCollapsed ? "Expand credit-card charges" : "Collapse credit-card charges"}
+                                    aria-label={isCyclePayment ? (cycleExpanded ? "Collapse payment breakdown" : "Expand payment breakdown") : ccCollapsed ? "Expand credit-card charges" : "Collapse credit-card charges"}
                                     className="text-muted-foreground hover:text-foreground transition-colors"
                                   >
-                                    <ChevronRight className={`h-4 w-4 transition-transform ${ccCollapsed ? "" : "rotate-90"}`} />
+                                    <ChevronRight className={`h-4 w-4 transition-transform ${(isCyclePayment ? cycleExpanded : !ccCollapsed) ? "rotate-90" : ""}`} />
                                   </button>
                                 ) : (
                                   getCategoryEmoji(tx.category, tx.description)
@@ -1315,6 +1391,14 @@ export default function Forecast() {
                                   >
                                     <ExternalLink className="h-3 w-3" />
                                   </a>
+                                )}
+                                {isCyclePayment && tx.ccBasis && (
+                                  <StatusPill
+                                    bg={tx.ccBasis === "actual" ? "#E7F6EC" : "#FFF4E5"}
+                                    text={tx.ccBasis === "actual" ? "#059669" : "#B45309"}
+                                  >
+                                    {tx.ccBasis === "actual" ? "Actual" : "Projected"}
+                                  </StatusPill>
                                 )}
                                 {tx.isActual && (
                                   <StatusPill bg="var(--color-carolina-muted)" text="var(--color-primary)">
@@ -1453,7 +1537,7 @@ export default function Forecast() {
                                 className="px-3 py-[11px] flex items-center justify-end gap-1"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "expense" && (
+                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && tx.transactionType === "expense" && (
                                   <button
                                     title="Mark as paid"
                                     onClick={() => handleMarkPaid(tx)}
@@ -1471,7 +1555,7 @@ export default function Forecast() {
                                     Confirm <Check className="h-3 w-3" />
                                   </button>
                                 )}
-                                {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "expense" && tx.transactionDate <= todayStr && (
+                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && tx.transactionType === "expense" && tx.transactionDate <= todayStr && (
                                   <button
                                     title="Mark as missed"
                                     onClick={() => handleMarkMissed(tx)}
@@ -1500,6 +1584,9 @@ export default function Forecast() {
                                 )}
                               </div>
                             </div>
+                            {cycleExpanded && (
+                              <CycleBreakdownRows cycleId={tx.sourceCardCycleId!} />
+                            )}
                             </Fragment>
                           );
                         })}

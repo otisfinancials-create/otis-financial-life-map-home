@@ -21,6 +21,12 @@ export const forecastedTransactionsTable = pgTable("forecasted_transactions", {
   // amounts but do not affect the running balance.
   ccAccountId: integer("cc_account_id"),
   isCcParent: boolean("is_cc_parent").notNull().default(false),
+  // P5 cycle-based card payments: when set, this row IS the card cycle's
+  // due-date payment (isCcParent=true, no child rows). ccBasis records how the
+  // amount was determined: 'actual' (closed cycle — accumulated_total) or
+  // 'projected' (open cycle — max(accumulated, planned)).
+  sourceCardCycleId: integer("source_card_cycle_id"),
+  ccBasis: text("cc_basis"), // 'actual' | 'projected'
   isActual: boolean("is_actual").notNull().default(false),
   isCommitted: boolean("is_committed").notNull().default(false),
   // 'missed' = past bill the user marked as not paid; excluded from running balance.

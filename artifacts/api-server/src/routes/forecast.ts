@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, or, gte, lt, lte, gt, inArray, isNull, desc } from "drizzle-orm";
-import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable } from "@workspace/db";
+import { eq, and, or, gte, lt, lte, gt, inArray, isNull, isNotNull, desc } from "drizzle-orm";
+import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable, cardCyclesTable } from "@workspace/db";
 import {
   CreateForecastedTransactionBody,
   UpdateForecastedTransactionBody,
@@ -92,9 +92,11 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
     // Balance-update override rows are balance values, not cash flows; missed
     // rows never happened — both are excluded from monthly totals.
     if (row.sourceBalanceSyncId != null || row.status === "missed") continue;
-    // CC parent rows are payment aggregators — their children already carry
-    // the expense amounts, so counting the parent would double-count.
-    if (row.isCcParent) continue;
+    // Legacy CC parent rows are payment aggregators — their children already
+    // carry the expense amounts, so counting the parent would double-count.
+    // Cycle-based payments (sourceCardCycleId) have NO children: the parent
+    // IS the cash event and must count exactly once.
+    if (row.isCcParent && row.sourceCardCycleId == null) continue;
     const d = new Date(row.transactionDate);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     if (!monthlyMap[key]) continue;
@@ -182,6 +184,16 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     }
   }
 
+  // P5 cycle-backed cards: accounts with generated card_cycles get ONE
+  // forecast outflow per cycle on its due_date (Stage 4). Their card-paid
+  // bills and charges are NEVER standalone forecast lines — they live inside
+  // the cycle payment. Assumes the statement is paid in full each cycle
+  // (partial-payment / revolving balances are out of scope).
+  const allCycles = ccAccounts.length
+    ? await db.select().from(cardCyclesTable).where(inArray(cardCyclesTable.accountId, ccAccounts.map((a) => a.id)))
+    : [];
+  const cycleBackedAccountIds = new Set(allCycles.map((c) => c.accountId));
+
   // groups: key = `${accountId}|${dueDateStr}` → child rows for that CC payment
   const ccGroups = new Map<string, { account: typeof ccAccounts[number]; dueDate: string; children: Array<typeof forecastedTransactionsTable.$inferInsert> }>();
 
@@ -224,6 +236,11 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
 
   for (const bill of bills) {
     const amount = parseFloat(String(bill.amount));
+    // Bills paid by a cycle-backed card are represented inside the cycle's
+    // due-date payment (emitted below) — no standalone or grouped lines.
+    if (bill.paymentAccountId != null && cycleBackedAccountIds.has(bill.paymentAccountId)) {
+      continue;
+    }
     // Bills paid by a configured credit card (structured link via
     // paymentAccountId) group into that card's payment cycle.
     const card =
@@ -283,6 +300,8 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
   for (const [key, paidSum] of survivorsByGroup) {
     if (ccGroups.has(key)) continue;
     const [acctIdStr, dueDate] = key.split("|");
+    // Never recreate legacy parents for cycle-backed cards.
+    if (cycleBackedAccountIds.has(Number(acctIdStr))) continue;
     const account = ccAccounts.find((a) => a.id === Number(acctIdStr));
     if (account) ccGroups.set(key, { account, dueDate, children: [] });
     void paidSum;
@@ -306,6 +325,48 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     });
     group.children.forEach((child, i) => {
       toInsert.push({ ...child, sortOrder: i + 1 });
+    });
+  }
+
+  // P5 Stage 4: one cash outflow per card cycle, on its due_date.
+  //   Closed cycle (past cycle_end): amount = accumulated_total (the actual
+  //   statement) — basis 'actual'.
+  //   Open cycle: amount = max(accumulated so far, planned_total) — basis
+  //   'projected' (early in a cycle plan is the better estimate; late, actual
+  //   may exceed plan; max never understates the payment).
+  const acctNameById = new Map(ccAccounts.map((a) => [a.id, a.accountName]));
+  // Dedupe against surviving cycle rows (isActual/isCommitted rows are
+  // preserved by the delete above — never insert a second payment row for
+  // the same cycle).
+  const survivingCycleRows = await db
+    .select({ sourceCardCycleId: forecastedTransactionsTable.sourceCardCycleId })
+    .from(forecastedTransactionsTable)
+    .where(and(
+      eq(forecastedTransactionsTable.userId, userId),
+      isNotNull(forecastedTransactionsTable.sourceCardCycleId),
+    ));
+  const survivingCycleIds = new Set(survivingCycleRows.map((r) => r.sourceCardCycleId));
+  for (const cyc of allCycles) {
+    if (cyc.dueDate < todayStr || cyc.dueDate > endStr) continue;
+    if (survivingCycleIds.has(cyc.id)) continue;
+    const accumulated = parseFloat(String(cyc.accumulatedTotal ?? "0")) || 0;
+    const planned = parseFloat(String(cyc.plannedTotal ?? "0")) || 0;
+    const closed = todayStr > cyc.cycleEnd;
+    const amount = closed ? accumulated : Math.max(accumulated, planned);
+    toInsert.push({
+      userId,
+      transactionDate: cyc.dueDate,
+      description: `${acctNameById.get(cyc.accountId) ?? "Credit card"} payment`,
+      amount: String(Math.round(amount * 100) / 100),
+      transactionType: "expense",
+      category: "debt_payments",
+      ccAccountId: cyc.accountId,
+      isCcParent: true,
+      sourceCardCycleId: cyc.id,
+      ccBasis: closed ? "actual" : "projected",
+      isActual: false,
+      isCommitted: false,
+      sortOrder: 0,
     });
   }
 
@@ -674,6 +735,14 @@ router.patch("/forecast/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Cycle payment rows are derived from the card-cycle engine; editing or
+  // marking them paid would desync from the rollup and (since isActual /
+  // isCommitted rows survive regeneration) risk duplicate payment rows.
+  if (existing.sourceCardCycleId != null) {
+    res.status(400).json({ error: "Card cycle payments are managed automatically from the card's cycle — they can't be edited or marked paid here" });
+    return;
+  }
+
   const { amount: rawTxAmount, forecastedAmount: rawForecastedAmount, applyToFuture, ...restTxData } = parsed.data;
 
   // Future-dated rows cannot be marked as paid (TC-F12).
@@ -816,6 +885,9 @@ async function recomputeCcParent(
       eq(forecastedTransactionsTable.userId, userId),
       eq(forecastedTransactionsTable.ccAccountId, ccAccountId),
       eq(forecastedTransactionsTable.isCcParent, true),
+      // Cycle-based payment rows get their amount from the cycle rollup,
+      // never from child sums (they have no children).
+      isNull(forecastedTransactionsTable.sourceCardCycleId),
       eq(forecastedTransactionsTable.transactionDate, dateStr),
     ));
 }

@@ -402,6 +402,27 @@ export interface CloseCycleResult {
   foodRemaining: number;
 }
 
+export type CycleBreakdownBillsItem = {
+  id: number;
+  billName: string;
+  expectedAmount: number;
+  /** @nullable */
+  actualAmount?: number | null;
+  status: string;
+};
+
+export interface CycleBreakdown {
+  cycleId: number;
+  cycleStart: string;
+  cycleEnd: string;
+  dueDate: string;
+  status: string;
+  accumulatedTotal: number;
+  plannedTotal: number;
+  envelopes: Envelope[];
+  bills: CycleBreakdownBillsItem[];
+}
+
 export interface CycleConfigInput {
   /**
      * @minimum 1
@@ -790,6 +811,18 @@ export interface LoanAmortization {
   schedule: LoanAmortizationEntry[];
 }
 
+/**
+ * How a cycle payment amount was determined — 'actual' (closed cycle) or 'projected' (open cycle, max of accumulated and planned)
+ * @nullable
+ */
+export type ForecastedTransactionCcBasis = typeof ForecastedTransactionCcBasis[keyof typeof ForecastedTransactionCcBasis] | null;
+
+
+export const ForecastedTransactionCcBasis = {
+  actual: 'actual',
+  projected: 'projected',
+} as const;
+
 export interface ForecastedTransaction {
   id: number;
   transactionDate: string;
@@ -812,6 +845,16 @@ export interface ForecastedTransaction {
   ccAccountId?: number | null;
   /** True for the "Credit Card Payment" parent row of a CC group */
   isCcParent: boolean;
+  /**
+     * When set, this row is a card cycle's due-date payment (no child rows)
+     * @nullable
+     */
+  sourceCardCycleId?: number | null;
+  /**
+     * How a cycle payment amount was determined — 'actual' (closed cycle) or 'projected' (open cycle, max of accumulated and planned)
+     * @nullable
+     */
+  ccBasis?: ForecastedTransactionCcBasis;
   isActual: boolean;
   isCommitted: boolean;
   /**

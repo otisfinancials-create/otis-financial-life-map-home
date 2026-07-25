@@ -5,6 +5,7 @@
  * Otis Financial Life Map API
  * OpenAPI spec version: 0.1.0
  */
+import type { ForecastedTransactionCcBasis } from './forecastedTransactionCcBasis';
 
 export interface ForecastedTransaction {
   id: number;
@@ -28,6 +29,16 @@ export interface ForecastedTransaction {
   ccAccountId?: number | null;
   /** True for the "Credit Card Payment" parent row of a CC group */
   isCcParent: boolean;
+  /**
+     * When set, this row is a card cycle's due-date payment (no child rows)
+     * @nullable
+     */
+  sourceCardCycleId?: number | null;
+  /**
+     * How a cycle payment amount was determined — 'actual' (closed cycle) or 'projected' (open cycle, max of accumulated and planned)
+     * @nullable
+     */
+  ccBasis?: ForecastedTransactionCcBasis;
   isActual: boolean;
   isCommitted: boolean;
   /**

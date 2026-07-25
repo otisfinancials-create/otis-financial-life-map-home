@@ -900,6 +900,49 @@ export const CloseCycleResponse = zod.object({
 
 
 /**
+ * @summary Read-only composition of a cycle's payment — its envelopes and bills with amounts
+ */
+export const GetCycleBreakdownParams = zod.object({
+  "cycleId": zod.coerce.number()
+})
+
+export const GetCycleBreakdownResponse = zod.object({
+  "cycleId": zod.number(),
+  "cycleStart": zod.string(),
+  "cycleEnd": zod.string(),
+  "dueDate": zod.string(),
+  "status": zod.string(),
+  "accumulatedTotal": zod.number(),
+  "plannedTotal": zod.number(),
+  "envelopes": zod.array(zod.object({
+  "id": zod.number(),
+  "cardCycleId": zod.number(),
+  "name": zod.string(),
+  "category": zod.string().nullish(),
+  "plannedAmount": zod.number(),
+  "spentAmount": zod.number(),
+  "cadence": zod.union([zod.literal('weekly'),zod.literal('one-time'),zod.literal(null)]).nullish(),
+  "note": zod.string().nullish(),
+  "envelopeType": zod.enum(['standard', 'food', 'carryover']),
+  "isCatchall": zod.boolean(),
+  "recurring": zod.boolean(),
+  "weeklyRate": zod.number().nullish(),
+  "isCarryover": zod.boolean(),
+  "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),
+  "bills": zod.array(zod.object({
+  "id": zod.number(),
+  "billName": zod.string(),
+  "expectedAmount": zod.number(),
+  "actualAmount": zod.number().nullish(),
+  "status": zod.string()
+}))
+})
+
+
+/**
  * @summary Update an envelope
  */
 export const UpdateEnvelopeParams = zod.object({
@@ -1269,6 +1312,8 @@ export const ListForecastResponseItem = zod.object({
   "sourceBalanceSyncId": zod.number().nullish(),
   "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
   "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
+  "sourceCardCycleId": zod.number().nullish().describe('When set, this row is a card cycle\'s due-date payment (no child rows)'),
+  "ccBasis": zod.union([zod.literal('actual'),zod.literal('projected'),zod.literal(null)]).nullish().describe('How a cycle payment amount was determined — \'actual\' (closed cycle) or \'projected\' (open cycle, max of accumulated and planned)'),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
   "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
@@ -1308,6 +1353,8 @@ export const CreateForecastedTransactionResponse = zod.object({
   "sourceBalanceSyncId": zod.number().nullish(),
   "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
   "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
+  "sourceCardCycleId": zod.number().nullish().describe('When set, this row is a card cycle\'s due-date payment (no child rows)'),
+  "ccBasis": zod.union([zod.literal('actual'),zod.literal('projected'),zod.literal(null)]).nullish().describe('How a cycle payment amount was determined — \'actual\' (closed cycle) or \'projected\' (open cycle, max of accumulated and planned)'),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
   "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
@@ -1420,6 +1467,8 @@ export const UpdateForecastedTransactionResponse = zod.object({
   "sourceBalanceSyncId": zod.number().nullish(),
   "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
   "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
+  "sourceCardCycleId": zod.number().nullish().describe('When set, this row is a card cycle\'s due-date payment (no child rows)'),
+  "ccBasis": zod.union([zod.literal('actual'),zod.literal('projected'),zod.literal(null)]).nullish().describe('How a cycle payment amount was determined — \'actual\' (closed cycle) or \'projected\' (open cycle, max of accumulated and planned)'),
   "isActual": zod.boolean(),
   "isCommitted": zod.boolean(),
   "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),

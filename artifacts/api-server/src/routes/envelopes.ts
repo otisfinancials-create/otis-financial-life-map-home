@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, eq, gt, asc } from "drizzle-orm";
-import { db, cardCyclesTable, envelopesTable, type Envelope, type CardCycle } from "@workspace/db";
+import { db, cardCyclesTable, envelopesTable, cardCycleBillsTable, billsTable, type Envelope, type CardCycle } from "@workspace/db";
 import {
   ListCycleEnvelopesParams,
   ListCycleEnvelopesResponse,
@@ -14,7 +14,7 @@ import {
 } from "@workspace/api-zod";
 import { foodPlannedAmount } from "../services/envelopes";
 import { processCycle, closeCycle } from "../services/cycle-processing";
-import { ProcessCycleParams, ProcessCycleResponse, CloseCycleParams, CloseCycleResponse } from "@workspace/api-zod";
+import { ProcessCycleParams, ProcessCycleResponse, CloseCycleParams, CloseCycleResponse, GetCycleBreakdownParams, GetCycleBreakdownResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -103,6 +103,44 @@ router.post("/cycles/:cycleId/close", async (req, res): Promise<void> => {
     carryover: result.carryover ? serializeEnvelope(result.carryover) : null,
     nextCycleId: result.nextCycleId,
     foodRemaining: result.foodRemaining,
+  }));
+});
+
+// Read-only composition of a cycle's payment (forecast drill-down):
+// envelopes + bills with amounts. Full interactive cycle UI is Stage 5.
+router.get("/cycles/:cycleId/breakdown", async (req, res): Promise<void> => {
+  const params = GetCycleBreakdownParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const cycle = await ownedCycle(params.data.cycleId, req.userId);
+  if (!cycle) {
+    res.status(404).json({ error: "Cycle not found" });
+    return;
+  }
+  const envelopes = await db.select().from(envelopesTable).where(eq(envelopesTable.cardCycleId, cycle.id));
+  const cycleBills = await db
+    .select({ cb: cardCycleBillsTable, billName: billsTable.billName })
+    .from(cardCycleBillsTable)
+    .innerJoin(billsTable, eq(cardCycleBillsTable.billId, billsTable.id))
+    .where(eq(cardCycleBillsTable.cardCycleId, cycle.id));
+  res.json(GetCycleBreakdownResponse.parse({
+    cycleId: cycle.id,
+    cycleStart: cycle.cycleStart,
+    cycleEnd: cycle.cycleEnd,
+    dueDate: cycle.dueDate,
+    status: cycle.status ?? "open",
+    accumulatedTotal: parseFloat(String(cycle.accumulatedTotal ?? "0")) || 0,
+    plannedTotal: parseFloat(String(cycle.plannedTotal ?? "0")) || 0,
+    envelopes: orderEnvelopes(envelopes).map(serializeEnvelope),
+    bills: cycleBills.map(({ cb, billName }) => ({
+      id: cb.id,
+      billName,
+      expectedAmount: parseFloat(String(cb.expectedAmount ?? "0")) || 0,
+      actualAmount: cb.actualAmount == null ? null : parseFloat(String(cb.actualAmount)),
+      status: cb.status ?? "pending",
+    })),
   }));
 });
 

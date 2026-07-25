@@ -38,6 +38,7 @@ import type {
   BillUpdate,
   CardCycle,
   CloseCycleResult,
+  CycleBreakdown,
   CycleConfigInput,
   DashboardSummary,
   DetectedBill,
@@ -2617,6 +2618,83 @@ export const useCloseCycle = <TError = ErrorType<void>,
       > => {
       return useMutation(getCloseCycleMutationOptions(options));
     }
+
+export const getGetCycleBreakdownUrl = (cycleId: number,) => {
+
+
+
+
+  return `/api/cycles/${cycleId}/breakdown`
+}
+
+/**
+ * @summary Read-only composition of a cycle's payment — its envelopes and bills with amounts
+ */
+export const getCycleBreakdown = async (cycleId: number, options?: RequestInit): Promise<CycleBreakdown> => {
+
+  return customFetch<CycleBreakdown>(getGetCycleBreakdownUrl(cycleId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCycleBreakdownQueryKey = (cycleId: number,) => {
+    return [
+    `/api/cycles/${cycleId}/breakdown`
+    ] as const;
+    }
+
+
+export const getGetCycleBreakdownQueryOptions = <TData = Awaited<ReturnType<typeof getCycleBreakdown>>, TError = ErrorType<void>>(cycleId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCycleBreakdown>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCycleBreakdownQueryKey(cycleId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCycleBreakdown>>> = ({ signal }) => getCycleBreakdown(cycleId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: cycleId !== null && cycleId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCycleBreakdown>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCycleBreakdownQueryResult = NonNullable<Awaited<ReturnType<typeof getCycleBreakdown>>>
+export type GetCycleBreakdownQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read-only composition of a cycle's payment — its envelopes and bills with amounts
+ */
+
+export function useGetCycleBreakdown<TData = Awaited<ReturnType<typeof getCycleBreakdown>>, TError = ErrorType<void>>(
+ cycleId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCycleBreakdown>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCycleBreakdownQueryOptions(cycleId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getUpdateEnvelopeUrl = (id: number,) => {
 
