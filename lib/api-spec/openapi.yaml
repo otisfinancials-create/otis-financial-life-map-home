@@ -585,6 +585,98 @@ paths:
         "404":
           description: Not found
 
+  /cycles/{cycleId}/envelopes:
+    get:
+      operationId: listCycleEnvelopes
+      tags: [envelopes]
+      summary: List a cycle's envelopes (food first, misc catch-all last)
+      parameters:
+        - name: cycleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Envelopes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Not found
+    post:
+      operationId: createCycleEnvelope
+      tags: [envelopes]
+      summary: Create an envelope in a cycle (optionally in all future cycles)
+      parameters:
+        - name: cycleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnvelopeInput"
+      responses:
+        "201":
+          description: Created (the envelope in the requested cycle)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Not found
+
+  /envelopes/{id}:
+    patch:
+      operationId: updateEnvelope
+      tags: [envelopes]
+      summary: Update an envelope
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnvelopeUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteEnvelope
+      tags: [envelopes]
+      summary: Delete an envelope (the catch-all cannot be deleted)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          description: Catch-all envelope cannot be deleted
+        "404":
+          description: Not found
+
   # ── Assets & Liabilities ──────────────────────────────────────────────────
   /assets:
     get:
@@ -1762,6 +1854,87 @@ components:
           type: string
         updatedAt:
           type: string
+
+    Envelope:
+      type: object
+      required: [id, cardCycleId, name, plannedAmount, spentAmount, envelopeType, isCatchall, recurring, isCarryover, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        cardCycleId:
+          type: integer
+        name:
+          type: string
+        category:
+          type: ["string", "null"]
+        plannedAmount:
+          type: number
+        spentAmount:
+          type: number
+        cadence:
+          type: ["string", "null"]
+          enum: [weekly, one-time, null]
+        note:
+          type: ["string", "null"]
+        envelopeType:
+          type: string
+          enum: [standard, food, carryover]
+        isCatchall:
+          type: boolean
+        recurring:
+          type: boolean
+        weeklyRate:
+          type: ["number", "null"]
+        isCarryover:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    EnvelopeInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        category:
+          type: ["string", "null"]
+        plannedAmount:
+          type: number
+        cadence:
+          type: ["string", "null"]
+          enum: [weekly, one-time, null]
+        envelopeType:
+          type: string
+          enum: [standard, food]
+        weeklyRate:
+          type: ["number", "null"]
+        note:
+          type: ["string", "null"]
+        scope:
+          type: string
+          enum: [this-cycle, all-future]
+          default: this-cycle
+
+    EnvelopeUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        category:
+          type: ["string", "null"]
+        plannedAmount:
+          type: number
+        weeklyRate:
+          type: ["number", "null"]
+        cadence:
+          type: ["string", "null"]
+          enum: [weekly, one-time, null]
+        note:
+          type: ["string", "null"]
 
     AccountInput:
       type: object

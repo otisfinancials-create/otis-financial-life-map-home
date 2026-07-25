@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { db, accountsTable, cardCyclesTable, type CardCycle } from "@workspace/db";
+import { populateNewCycle } from "./envelopes";
 
 /** Last valid day of a month (monthIndex 0-11). */
 function daysInMonth(year: number, monthIndex: number): number {
@@ -40,6 +41,14 @@ export async function generateCyclesForAccount(accountId: number): Promise<CardC
   let endMonth = now.getMonth();
   if (clampedIso(endYear, endMonth, statementDay) < today) endMonth += 1;
 
+  // Track which cycle_starts already exist so newly created cycles (and only
+  // those) get their default/recurring envelopes seeded.
+  const existingCycles = await db
+    .select({ cycleStart: cardCyclesTable.cycleStart })
+    .from(cardCyclesTable)
+    .where(eq(cardCyclesTable.accountId, accountId));
+  const existingStarts = new Set(existingCycles.map((c) => c.cycleStart));
+
   const results: CardCycle[] = [];
   for (let i = 0; i < 4; i++) {
     const m = endMonth + i;
@@ -63,6 +72,9 @@ export async function generateCyclesForAccount(accountId: number): Promise<CardC
         set: { cycleEnd, dueDate, updatedAt: sql`now()` },
       })
       .returning();
+    if (!existingStarts.has(row.cycleStart)) {
+      await populateNewCycle(row); // seed defaults + copy forward recurring envelopes
+    }
     results.push(row);
   }
   return results;

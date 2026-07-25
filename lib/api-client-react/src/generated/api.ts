@@ -40,6 +40,9 @@ import type {
   CycleConfigInput,
   DashboardSummary,
   DetectedBill,
+  Envelope,
+  EnvelopeInput,
+  EnvelopeUpdate,
   ForecastedTransaction,
   ForecastedTransactionInput,
   ForecastedTransactionUpdate,
@@ -2323,6 +2326,295 @@ export const useGenerateAccountCycles = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getGenerateAccountCyclesMutationOptions(options));
+    }
+
+export const getListCycleEnvelopesUrl = (cycleId: number,) => {
+
+
+
+
+  return `/api/cycles/${cycleId}/envelopes`
+}
+
+/**
+ * @summary List a cycle's envelopes (food first, misc catch-all last)
+ */
+export const listCycleEnvelopes = async (cycleId: number, options?: RequestInit): Promise<Envelope[]> => {
+
+  return customFetch<Envelope[]>(getListCycleEnvelopesUrl(cycleId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCycleEnvelopesQueryKey = (cycleId: number,) => {
+    return [
+    `/api/cycles/${cycleId}/envelopes`
+    ] as const;
+    }
+
+
+export const getListCycleEnvelopesQueryOptions = <TData = Awaited<ReturnType<typeof listCycleEnvelopes>>, TError = ErrorType<void>>(cycleId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCycleEnvelopes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCycleEnvelopesQueryKey(cycleId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCycleEnvelopes>>> = ({ signal }) => listCycleEnvelopes(cycleId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: cycleId !== null && cycleId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCycleEnvelopes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCycleEnvelopesQueryResult = NonNullable<Awaited<ReturnType<typeof listCycleEnvelopes>>>
+export type ListCycleEnvelopesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List a cycle's envelopes (food first, misc catch-all last)
+ */
+
+export function useListCycleEnvelopes<TData = Awaited<ReturnType<typeof listCycleEnvelopes>>, TError = ErrorType<void>>(
+ cycleId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCycleEnvelopes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCycleEnvelopesQueryOptions(cycleId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateCycleEnvelopeUrl = (cycleId: number,) => {
+
+
+
+
+  return `/api/cycles/${cycleId}/envelopes`
+}
+
+/**
+ * @summary Create an envelope in a cycle (optionally in all future cycles)
+ */
+export const createCycleEnvelope = async (cycleId: number,
+    envelopeInput: EnvelopeInput, options?: RequestInit): Promise<Envelope> => {
+
+  return customFetch<Envelope>(getCreateCycleEnvelopeUrl(cycleId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(envelopeInput)
+  }
+);}
+
+
+
+
+export const getCreateCycleEnvelopeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCycleEnvelope>>, TError,{cycleId: number;data: BodyType<EnvelopeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCycleEnvelope>>, TError,{cycleId: number;data: BodyType<EnvelopeInput>}, TContext> => {
+
+const mutationKey = ['createCycleEnvelope'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCycleEnvelope>>, {cycleId: number;data: BodyType<EnvelopeInput>}> = (props) => {
+          const {cycleId,data} = props ?? {};
+
+          return  createCycleEnvelope(cycleId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCycleEnvelopeMutationResult = NonNullable<Awaited<ReturnType<typeof createCycleEnvelope>>>
+    export type CreateCycleEnvelopeMutationBody = BodyType<EnvelopeInput>
+    export type CreateCycleEnvelopeMutationError = ErrorType<void>
+
+    /**
+ * @summary Create an envelope in a cycle (optionally in all future cycles)
+ */
+export const useCreateCycleEnvelope = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCycleEnvelope>>, TError,{cycleId: number;data: BodyType<EnvelopeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCycleEnvelope>>,
+        TError,
+        {cycleId: number;data: BodyType<EnvelopeInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCycleEnvelopeMutationOptions(options));
+    }
+
+export const getUpdateEnvelopeUrl = (id: number,) => {
+
+
+
+
+  return `/api/envelopes/${id}`
+}
+
+/**
+ * @summary Update an envelope
+ */
+export const updateEnvelope = async (id: number,
+    envelopeUpdate: EnvelopeUpdate, options?: RequestInit): Promise<Envelope> => {
+
+  return customFetch<Envelope>(getUpdateEnvelopeUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(envelopeUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateEnvelopeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEnvelope>>, TError,{id: number;data: BodyType<EnvelopeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateEnvelope>>, TError,{id: number;data: BodyType<EnvelopeUpdate>}, TContext> => {
+
+const mutationKey = ['updateEnvelope'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEnvelope>>, {id: number;data: BodyType<EnvelopeUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateEnvelope(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateEnvelopeMutationResult = NonNullable<Awaited<ReturnType<typeof updateEnvelope>>>
+    export type UpdateEnvelopeMutationBody = BodyType<EnvelopeUpdate>
+    export type UpdateEnvelopeMutationError = ErrorType<void>
+
+    /**
+ * @summary Update an envelope
+ */
+export const useUpdateEnvelope = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEnvelope>>, TError,{id: number;data: BodyType<EnvelopeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateEnvelope>>,
+        TError,
+        {id: number;data: BodyType<EnvelopeUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateEnvelopeMutationOptions(options));
+    }
+
+export const getDeleteEnvelopeUrl = (id: number,) => {
+
+
+
+
+  return `/api/envelopes/${id}`
+}
+
+/**
+ * @summary Delete an envelope (the catch-all cannot be deleted)
+ */
+export const deleteEnvelope = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteEnvelopeUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteEnvelopeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEnvelope>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteEnvelope>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteEnvelope'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEnvelope>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteEnvelope(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteEnvelopeMutationResult = NonNullable<Awaited<ReturnType<typeof deleteEnvelope>>>
+
+    export type DeleteEnvelopeMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete an envelope (the catch-all cannot be deleted)
+ */
+export const useDeleteEnvelope = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEnvelope>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteEnvelope>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteEnvelopeMutationOptions(options));
     }
 
 export const getListAssetsUrl = () => {

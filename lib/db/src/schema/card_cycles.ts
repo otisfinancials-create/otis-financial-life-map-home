@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, integer, date, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, integer, date, timestamp, unique, boolean } from "drizzle-orm/pg-core";
 import { accountsTable } from "./accounts";
 import { billsTable } from "./bills";
 
@@ -31,9 +31,19 @@ export const envelopesTable = pgTable("envelopes", {
   spentAmount: numeric("spent_amount", { precision: 15, scale: 2 }).default("0"),
   cadence: text("cadence"), // 'weekly' | 'one-time'
   note: text("note"),
+  // Stage 2 extensions
+  envelopeType: text("envelope_type").default("standard"), // 'standard' | 'food' | 'carryover'
+  isCatchall: boolean("is_catchall").default(false), // true only for misc (undeletable)
+  recurring: boolean("recurring").default(false), // seeds into future cycles when true
+  weeklyRate: numeric("weekly_rate", { precision: 15, scale: 2 }), // food: per-week amount
+  isCarryover: boolean("is_carryover").default(false), // carryover child (Stage 3)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  // Guards against duplicate seeding/copy-forward under concurrent cycle
+  // generation: one envelope name per cycle.
+  unique("envelopes_cycle_name_unique").on(t.cardCycleId, t.name),
+]);
 
 /** Bills expected within a card cycle (populated in Stage 3). */
 export const cardCycleBillsTable = pgTable("card_cycle_bills", {

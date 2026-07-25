@@ -777,6 +777,121 @@ export const GenerateAccountCyclesResponse = zod.array(GenerateAccountCyclesResp
 
 
 /**
+ * @summary List a cycle's envelopes (food first, misc catch-all last)
+ */
+export const ListCycleEnvelopesParams = zod.object({
+  "cycleId": zod.coerce.number()
+})
+
+export const ListCycleEnvelopesResponseItem = zod.object({
+  "id": zod.number(),
+  "cardCycleId": zod.number(),
+  "name": zod.string(),
+  "category": zod.string().nullish(),
+  "plannedAmount": zod.number(),
+  "spentAmount": zod.number(),
+  "cadence": zod.union([zod.literal('weekly'),zod.literal('one-time'),zod.literal(null)]).nullish(),
+  "note": zod.string().nullish(),
+  "envelopeType": zod.enum(['standard', 'food', 'carryover']),
+  "isCatchall": zod.boolean(),
+  "recurring": zod.boolean(),
+  "weeklyRate": zod.number().nullish(),
+  "isCarryover": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListCycleEnvelopesResponse = zod.array(ListCycleEnvelopesResponseItem)
+
+
+/**
+ * @summary Create an envelope in a cycle (optionally in all future cycles)
+ */
+export const CreateCycleEnvelopeParams = zod.object({
+  "cycleId": zod.coerce.number()
+})
+
+
+export const createCycleEnvelopeBodyScopeDefault = `this-cycle`;
+
+export const CreateCycleEnvelopeBody = zod.object({
+  "name": zod.string().min(1),
+  "category": zod.string().nullish(),
+  "plannedAmount": zod.number().optional(),
+  "cadence": zod.union([zod.literal('weekly'),zod.literal('one-time'),zod.literal(null)]).nullish(),
+  "envelopeType": zod.enum(['standard', 'food']).optional(),
+  "weeklyRate": zod.number().nullish(),
+  "note": zod.string().nullish(),
+  "scope": zod.enum(['this-cycle', 'all-future']).default(createCycleEnvelopeBodyScopeDefault)
+})
+
+export const CreateCycleEnvelopeResponse = zod.object({
+  "id": zod.number(),
+  "cardCycleId": zod.number(),
+  "name": zod.string(),
+  "category": zod.string().nullish(),
+  "plannedAmount": zod.number(),
+  "spentAmount": zod.number(),
+  "cadence": zod.union([zod.literal('weekly'),zod.literal('one-time'),zod.literal(null)]).nullish(),
+  "note": zod.string().nullish(),
+  "envelopeType": zod.enum(['standard', 'food', 'carryover']),
+  "isCatchall": zod.boolean(),
+  "recurring": zod.boolean(),
+  "weeklyRate": zod.number().nullish(),
+  "isCarryover": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update an envelope
+ */
+export const UpdateEnvelopeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateEnvelopeBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "category": zod.string().nullish(),
+  "plannedAmount": zod.number().optional(),
+  "weeklyRate": zod.number().nullish(),
+  "cadence": zod.union([zod.literal('weekly'),zod.literal('one-time'),zod.literal(null)]).nullish(),
+  "note": zod.string().nullish()
+})
+
+export const UpdateEnvelopeResponse = zod.object({
+  "id": zod.number(),
+  "cardCycleId": zod.number(),
+  "name": zod.string(),
+  "category": zod.string().nullish(),
+  "plannedAmount": zod.number(),
+  "spentAmount": zod.number(),
+  "cadence": zod.union([zod.literal('weekly'),zod.literal('one-time'),zod.literal(null)]).nullish(),
+  "note": zod.string().nullish(),
+  "envelopeType": zod.enum(['standard', 'food', 'carryover']),
+  "isCatchall": zod.boolean(),
+  "recurring": zod.boolean(),
+  "weeklyRate": zod.number().nullish(),
+  "isCarryover": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete an envelope (the catch-all cannot be deleted)
+ */
+export const DeleteEnvelopeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteEnvelopeResponse = zod.void()
+
+
+/**
  * @summary List all assets and liabilities
  */
 export const ListAssetsResponseItem = zod.object({

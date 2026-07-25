@@ -362,6 +362,116 @@ export interface CardCycle {
 /**
  * @nullable
  */
+export type EnvelopeCadence = typeof EnvelopeCadence[keyof typeof EnvelopeCadence] | null;
+
+
+export const EnvelopeCadence = {
+  weekly: 'weekly',
+  'one-time': 'one-time',
+} as const;
+
+export type EnvelopeEnvelopeType = typeof EnvelopeEnvelopeType[keyof typeof EnvelopeEnvelopeType];
+
+
+export const EnvelopeEnvelopeType = {
+  standard: 'standard',
+  food: 'food',
+  carryover: 'carryover',
+} as const;
+
+export interface Envelope {
+  id: number;
+  cardCycleId: number;
+  name: string;
+  /** @nullable */
+  category?: string | null;
+  plannedAmount: number;
+  spentAmount: number;
+  /** @nullable */
+  cadence?: EnvelopeCadence;
+  /** @nullable */
+  note?: string | null;
+  envelopeType: EnvelopeEnvelopeType;
+  isCatchall: boolean;
+  recurring: boolean;
+  /** @nullable */
+  weeklyRate?: number | null;
+  isCarryover: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * @nullable
+ */
+export type EnvelopeInputCadence = typeof EnvelopeInputCadence[keyof typeof EnvelopeInputCadence] | null;
+
+
+export const EnvelopeInputCadence = {
+  weekly: 'weekly',
+  'one-time': 'one-time',
+} as const;
+
+export type EnvelopeInputEnvelopeType = typeof EnvelopeInputEnvelopeType[keyof typeof EnvelopeInputEnvelopeType];
+
+
+export const EnvelopeInputEnvelopeType = {
+  standard: 'standard',
+  food: 'food',
+} as const;
+
+export type EnvelopeInputScope = typeof EnvelopeInputScope[keyof typeof EnvelopeInputScope];
+
+
+export const EnvelopeInputScope = {
+  'this-cycle': 'this-cycle',
+  'all-future': 'all-future',
+} as const;
+
+export interface EnvelopeInput {
+  /** @minLength 1 */
+  name: string;
+  /** @nullable */
+  category?: string | null;
+  plannedAmount?: number;
+  /** @nullable */
+  cadence?: EnvelopeInputCadence;
+  envelopeType?: EnvelopeInputEnvelopeType;
+  /** @nullable */
+  weeklyRate?: number | null;
+  /** @nullable */
+  note?: string | null;
+  scope?: EnvelopeInputScope;
+}
+
+/**
+ * @nullable
+ */
+export type EnvelopeUpdateCadence = typeof EnvelopeUpdateCadence[keyof typeof EnvelopeUpdateCadence] | null;
+
+
+export const EnvelopeUpdateCadence = {
+  weekly: 'weekly',
+  'one-time': 'one-time',
+} as const;
+
+export interface EnvelopeUpdate {
+  /** @minLength 1 */
+  name?: string;
+  /** @nullable */
+  category?: string | null;
+  plannedAmount?: number;
+  /** @nullable */
+  weeklyRate?: number | null;
+  /** @nullable */
+  cadence?: EnvelopeUpdateCadence;
+  /** @nullable */
+  note?: string | null;
+}
+
+/**
+ * @nullable
+ */
 export type AccountInputRetirementSubtype = typeof AccountInputRetirementSubtype[keyof typeof AccountInputRetirementSubtype] | null;
 
 

@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AccountDialog } from "@/components/accounts/account-dialog";
+import { EnvelopesDialog } from "@/components/accounts/envelopes-dialog";
 import { PlaidConnectButton } from "@/components/accounts/plaid-connect-button";
 import {
   DropdownMenu,
@@ -88,6 +89,7 @@ export default function Accounts() {
   const [accountToEdit, setAccountToEdit] = useState<Account | undefined>(undefined);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<Account | undefined>(undefined);
+  const [envelopesAccount, setEnvelopesAccount] = useState<Account | undefined>(undefined);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -209,6 +211,12 @@ export default function Accounts() {
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
+              {account.accountType === "credit_card" && (
+                <DropdownMenuItem onClick={() => setEnvelopesAccount(account)}>
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Manage envelopes
+                </DropdownMenuItem>
+              )}
               {account.plaidAccountId && (
                 <DropdownMenuItem onClick={() => handleDisconnectPlaid(account)}>
                   <Link2 className="mr-2 h-4 w-4" />
@@ -320,6 +328,14 @@ export default function Accounts() {
           open={isEditDialogOpen}
           onOpenChange={setIsEditDialogOpen}
         />
+
+        {envelopesAccount && (
+          <EnvelopesDialog
+            account={envelopesAccount}
+            open={!!envelopesAccount}
+            onOpenChange={(open) => !open && setEnvelopesAccount(undefined)}
+          />
+        )}
 
         <AlertDialog open={!!accountToDelete} onOpenChange={(open) => !open && setAccountToDelete(undefined)}>
           <AlertDialogContent>
