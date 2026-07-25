@@ -12,7 +12,11 @@ import { verifyPlaidWebhook } from "../lib/plaid-webhook-verify";
  */
 const router: IRouter = Router();
 
-const SYNC_CODES = new Set(["SYNC_UPDATES_AVAILABLE", "DEFAULT_UPDATE", "INITIAL_UPDATE", "HISTORICAL_UPDATE"]);
+// Sync-flow webhooks only: /transactions/sync uses SYNC_UPDATES_AVAILABLE, plus
+// HISTORICAL_UPDATE (initial history ready). Legacy /transactions/get codes
+// (INITIAL_UPDATE, DEFAULT_UPDATE, TRANSACTIONS_REMOVED) are deliberately NOT
+// handled — they would double-process alongside the sync flow.
+const SYNC_CODES = new Set(["SYNC_UPDATES_AVAILABLE", "HISTORICAL_UPDATE"]);
 /** ITEM webhook codes that mean the user must re-authenticate the connection. */
 const REAUTH_CODES = new Set(["ITEM_LOGIN_REQUIRED", "PENDING_EXPIRATION", "PENDING_DISCONNECT"]);
 
