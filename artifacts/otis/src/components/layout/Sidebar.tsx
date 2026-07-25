@@ -114,37 +114,26 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
 
   return (
     <div className="flex h-full w-full flex-col bg-[var(--color-sidebar-bg)]">
-      {/* Logo area — off-white section at the top with a Georgia serif wordmark */}
-      <div
-        className="shrink-0"
-        style={{ background: "var(--color-logo-bg)", padding: "12px 14px 10px" }}
-      >
+      {/* Logo lockup — wordmark directly on the navy sidebar with a Carolina accent rule.
+          The 22px gap below the lockup comes from nav paddingTop (10) + first SectionLabel paddingTop (12). */}
+      <div className="shrink-0" style={{ padding: "22px 20px 0" }}>
         <span
           className="sidebar-logo-text"
           style={{
-            fontFamily: "Georgia, 'Times New Roman', serif",
-            fontSize: 28,
-            fontWeight: "bold",
-            color: "#0D2B45",
-            letterSpacing: "-0.5px",
+            fontFamily: "'Source Serif 4', Georgia, serif",
+            fontWeight: 600,
+            fontSize: 31,
+            lineHeight: 1,
+            letterSpacing: "-0.015em",
+            color: "#FFFFFF",
             display: "block",
+            borderLeft: "2px solid var(--color-carolina)",
+            paddingLeft: 14,
+            borderRadius: 0,
           }}
         >
           Otis
         </span>
-        <div
-          className="sidebar-tagline"
-          style={{
-            fontSize: 7,
-            color: "#94a3b8",
-            letterSpacing: "0.7px",
-            textTransform: "uppercase",
-            whiteSpace: "nowrap",
-            marginTop: 2,
-          }}
-        >
-          Organize · Track · Inform · Simulate
-        </div>
       </div>
 
       {/* Nav */}
