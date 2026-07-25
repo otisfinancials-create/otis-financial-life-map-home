@@ -422,6 +422,10 @@ export const listAccountsResponseCcCycleEndDateMax = 31;
 
 export const listAccountsResponseCcPaymentDueDateMax = 31;
 
+export const listAccountsResponseStatementDayMax = 31;
+
+export const listAccountsResponseDueDayMax = 31;
+
 
 
 export const ListAccountsResponseItem = zod.object({
@@ -439,6 +443,8 @@ export const ListAccountsResponseItem = zod.object({
   "ccCycleStartDate": zod.number().min(1).max(listAccountsResponseCcCycleStartDateMax).nullish(),
   "ccCycleEndDate": zod.number().min(1).max(listAccountsResponseCcCycleEndDateMax).nullish(),
   "ccPaymentDueDate": zod.number().min(1).max(listAccountsResponseCcPaymentDueDateMax).nullish(),
+  "statementDay": zod.number().min(1).max(listAccountsResponseStatementDayMax).nullish(),
+  "dueDay": zod.number().min(1).max(listAccountsResponseDueDayMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
   "plaidItemId": zod.number().nullish(),
   "availableBalance": zod.number().nullish(),
@@ -484,6 +490,10 @@ export const createAccountResponseCcCycleEndDateMax = 31;
 
 export const createAccountResponseCcPaymentDueDateMax = 31;
 
+export const createAccountResponseStatementDayMax = 31;
+
+export const createAccountResponseDueDayMax = 31;
+
 
 
 export const CreateAccountResponse = zod.object({
@@ -501,6 +511,8 @@ export const CreateAccountResponse = zod.object({
   "ccCycleStartDate": zod.number().min(1).max(createAccountResponseCcCycleStartDateMax).nullish(),
   "ccCycleEndDate": zod.number().min(1).max(createAccountResponseCcCycleEndDateMax).nullish(),
   "ccPaymentDueDate": zod.number().min(1).max(createAccountResponseCcPaymentDueDateMax).nullish(),
+  "statementDay": zod.number().min(1).max(createAccountResponseStatementDayMax).nullish(),
+  "dueDay": zod.number().min(1).max(createAccountResponseDueDayMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
   "plaidItemId": zod.number().nullish(),
   "availableBalance": zod.number().nullish(),
@@ -597,6 +609,10 @@ export const getAccountResponseCcCycleEndDateMax = 31;
 
 export const getAccountResponseCcPaymentDueDateMax = 31;
 
+export const getAccountResponseStatementDayMax = 31;
+
+export const getAccountResponseDueDayMax = 31;
+
 
 
 export const GetAccountResponse = zod.object({
@@ -614,6 +630,8 @@ export const GetAccountResponse = zod.object({
   "ccCycleStartDate": zod.number().min(1).max(getAccountResponseCcCycleStartDateMax).nullish(),
   "ccCycleEndDate": zod.number().min(1).max(getAccountResponseCcCycleEndDateMax).nullish(),
   "ccPaymentDueDate": zod.number().min(1).max(getAccountResponseCcPaymentDueDateMax).nullish(),
+  "statementDay": zod.number().min(1).max(getAccountResponseStatementDayMax).nullish(),
+  "dueDay": zod.number().min(1).max(getAccountResponseDueDayMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
   "plaidItemId": zod.number().nullish(),
   "availableBalance": zod.number().nullish(),
@@ -662,6 +680,10 @@ export const updateAccountResponseCcCycleEndDateMax = 31;
 
 export const updateAccountResponseCcPaymentDueDateMax = 31;
 
+export const updateAccountResponseStatementDayMax = 31;
+
+export const updateAccountResponseDueDayMax = 31;
+
 
 
 export const UpdateAccountResponse = zod.object({
@@ -679,6 +701,8 @@ export const UpdateAccountResponse = zod.object({
   "ccCycleStartDate": zod.number().min(1).max(updateAccountResponseCcCycleStartDateMax).nullish(),
   "ccCycleEndDate": zod.number().min(1).max(updateAccountResponseCcCycleEndDateMax).nullish(),
   "ccPaymentDueDate": zod.number().min(1).max(updateAccountResponseCcPaymentDueDateMax).nullish(),
+  "statementDay": zod.number().min(1).max(updateAccountResponseStatementDayMax).nullish(),
+  "dueDay": zod.number().min(1).max(updateAccountResponseDueDayMax).nullish(),
   "plaidAccountId": zod.string().nullish(),
   "plaidItemId": zod.number().nullish(),
   "availableBalance": zod.number().nullish(),
@@ -940,6 +964,101 @@ export const GetCycleBreakdownResponse = zod.object({
   "status": zod.string()
 }))
 })
+
+
+/**
+ * @summary List manual charges (allocations with source='manual') for a cycle
+ */
+export const ListCycleChargesParams = zod.object({
+  "cycleId": zod.coerce.number()
+})
+
+export const ListCycleChargesResponseItem = zod.object({
+  "id": zod.number(),
+  "amount": zod.number(),
+  "source": zod.string(),
+  "envelopeId": zod.number().nullable(),
+  "cardCycleBillId": zod.number().nullable(),
+  "txnDate": zod.string().nullable(),
+  "description": zod.string().nullable(),
+  "targetName": zod.string().describe('Name of the envelope or bill this charge applies to'),
+  "createdAt": zod.string()
+})
+export const ListCycleChargesResponse = zod.array(ListCycleChargesResponseItem)
+
+
+/**
+ * @summary Record a manual card charge against an envelope or a cycle bill
+ */
+export const CreateCycleChargeParams = zod.object({
+  "cycleId": zod.coerce.number()
+})
+
+export const createCycleChargeBodyAmountExclusiveMin = 0;
+
+
+
+export const CreateCycleChargeBody = zod.object({
+  "amount": zod.number().gt(createCycleChargeBodyAmountExclusiveMin),
+  "txnDate": zod.string().describe('YYYY-MM-DD, must fall within the cycle window'),
+  "description": zod.string().nullish(),
+  "envelopeId": zod.number().nullish().describe('Target envelope (exactly one of envelopeId \/ cardCycleBillId)'),
+  "cardCycleBillId": zod.number().nullish().describe('Target cycle bill (exactly one of envelopeId \/ cardCycleBillId)')
+})
+
+export const CreateCycleChargeResponse = zod.object({
+  "id": zod.number(),
+  "amount": zod.number(),
+  "source": zod.string(),
+  "envelopeId": zod.number().nullable(),
+  "cardCycleBillId": zod.number().nullable(),
+  "txnDate": zod.string().nullable(),
+  "description": zod.string().nullable(),
+  "targetName": zod.string().describe('Name of the envelope or bill this charge applies to'),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Edit a manual charge (auto allocations cannot be edited)
+ */
+export const UpdateCycleChargeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateCycleChargeBodyAmountExclusiveMin = 0;
+
+
+
+export const UpdateCycleChargeBody = zod.object({
+  "amount": zod.number().gt(updateCycleChargeBodyAmountExclusiveMin).optional(),
+  "txnDate": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "envelopeId": zod.number().nullish(),
+  "cardCycleBillId": zod.number().nullish()
+})
+
+export const UpdateCycleChargeResponse = zod.object({
+  "id": zod.number(),
+  "amount": zod.number(),
+  "source": zod.string(),
+  "envelopeId": zod.number().nullable(),
+  "cardCycleBillId": zod.number().nullable(),
+  "txnDate": zod.string().nullable(),
+  "description": zod.string().nullable(),
+  "targetName": zod.string().describe('Name of the envelope or bill this charge applies to'),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a manual charge (auto allocations cannot be deleted)
+ */
+export const DeleteCycleChargeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteCycleChargeResponse = zod.void()
 
 
 /**

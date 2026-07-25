@@ -698,6 +698,102 @@ paths:
         "404":
           description: Not found
 
+  /cycles/{cycleId}/charges:
+    get:
+      operationId: listCycleCharges
+      tags: [envelopes]
+      summary: List manual charges (allocations with source='manual') for a cycle
+      parameters:
+        - name: cycleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Manual charges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ManualCharge"
+        "404":
+          description: Not found
+    post:
+      operationId: createCycleCharge
+      tags: [envelopes]
+      summary: Record a manual card charge against an envelope or a cycle bill
+      parameters:
+        - name: cycleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualChargeInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualCharge"
+        "400":
+          description: Invalid input
+        "404":
+          description: Not found
+
+  /charges/{id}:
+    patch:
+      operationId: updateCycleCharge
+      tags: [envelopes]
+      summary: Edit a manual charge (auto allocations cannot be edited)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualChargeUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualCharge"
+        "400":
+          description: Invalid input or not a manual charge
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteCycleCharge
+      tags: [envelopes]
+      summary: Delete a manual charge (auto allocations cannot be deleted)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          description: Not a manual charge
+        "404":
+          description: Not found
+
   /envelopes/{id}:
     patch:
       operationId: updateEnvelope
@@ -1865,6 +1961,14 @@ components:
           type: ["integer", "null"]
           minimum: 1
           maximum: 31
+        statementDay:
+          type: ["integer", "null"]
+          minimum: 1
+          maximum: 31
+        dueDay:
+          type: ["integer", "null"]
+          minimum: 1
+          maximum: 31
         plaidAccountId:
           type: ["string", "null"]
         plaidItemId:
@@ -1923,6 +2027,64 @@ components:
           type: ["integer", "null"]
         foodRemaining:
           type: number
+
+    ManualCharge:
+      type: object
+      required: [id, amount, source, envelopeId, cardCycleBillId, txnDate, description, targetName, createdAt]
+      properties:
+        id:
+          type: integer
+        amount:
+          type: number
+        source:
+          type: string
+        envelopeId:
+          type: ["integer", "null"]
+        cardCycleBillId:
+          type: ["integer", "null"]
+        txnDate:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        targetName:
+          type: string
+          description: Name of the envelope or bill this charge applies to
+        createdAt:
+          type: string
+
+    ManualChargeInput:
+      type: object
+      required: [amount, txnDate]
+      properties:
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        txnDate:
+          type: string
+          description: YYYY-MM-DD, must fall within the cycle window
+        description:
+          type: ["string", "null"]
+        envelopeId:
+          type: ["integer", "null"]
+          description: Target envelope (exactly one of envelopeId / cardCycleBillId)
+        cardCycleBillId:
+          type: ["integer", "null"]
+          description: Target cycle bill (exactly one of envelopeId / cardCycleBillId)
+
+    ManualChargeUpdate:
+      type: object
+      properties:
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        txnDate:
+          type: string
+        description:
+          type: ["string", "null"]
+        envelopeId:
+          type: ["integer", "null"]
+        cardCycleBillId:
+          type: ["integer", "null"]
 
     CycleBreakdown:
       type: object

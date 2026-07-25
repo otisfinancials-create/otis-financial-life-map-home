@@ -41,6 +41,18 @@ export interface Account {
      * @nullable
      */
   ccPaymentDueDate?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  statementDay?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  dueDay?: number | null;
   /** @nullable */
   plaidAccountId?: string | null;
   /** @nullable */

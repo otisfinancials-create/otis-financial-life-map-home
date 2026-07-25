@@ -60,6 +60,9 @@ import type {
   LoanMutationResult,
   LoanUpdate,
   LoansSummary,
+  ManualCharge,
+  ManualChargeInput,
+  ManualChargeUpdate,
   MonthlyForecast,
   OtisChatRequest,
   OtisHistoryMessage,
@@ -2695,6 +2698,295 @@ export function useGetCycleBreakdown<TData = Awaited<ReturnType<typeof getCycleB
 
 
 
+
+export const getListCycleChargesUrl = (cycleId: number,) => {
+
+
+
+
+  return `/api/cycles/${cycleId}/charges`
+}
+
+/**
+ * @summary List manual charges (allocations with source='manual') for a cycle
+ */
+export const listCycleCharges = async (cycleId: number, options?: RequestInit): Promise<ManualCharge[]> => {
+
+  return customFetch<ManualCharge[]>(getListCycleChargesUrl(cycleId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCycleChargesQueryKey = (cycleId: number,) => {
+    return [
+    `/api/cycles/${cycleId}/charges`
+    ] as const;
+    }
+
+
+export const getListCycleChargesQueryOptions = <TData = Awaited<ReturnType<typeof listCycleCharges>>, TError = ErrorType<void>>(cycleId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCycleCharges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCycleChargesQueryKey(cycleId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCycleCharges>>> = ({ signal }) => listCycleCharges(cycleId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: cycleId !== null && cycleId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCycleCharges>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCycleChargesQueryResult = NonNullable<Awaited<ReturnType<typeof listCycleCharges>>>
+export type ListCycleChargesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List manual charges (allocations with source='manual') for a cycle
+ */
+
+export function useListCycleCharges<TData = Awaited<ReturnType<typeof listCycleCharges>>, TError = ErrorType<void>>(
+ cycleId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCycleCharges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCycleChargesQueryOptions(cycleId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateCycleChargeUrl = (cycleId: number,) => {
+
+
+
+
+  return `/api/cycles/${cycleId}/charges`
+}
+
+/**
+ * @summary Record a manual card charge against an envelope or a cycle bill
+ */
+export const createCycleCharge = async (cycleId: number,
+    manualChargeInput: ManualChargeInput, options?: RequestInit): Promise<ManualCharge> => {
+
+  return customFetch<ManualCharge>(getCreateCycleChargeUrl(cycleId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(manualChargeInput)
+  }
+);}
+
+
+
+
+export const getCreateCycleChargeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCycleCharge>>, TError,{cycleId: number;data: BodyType<ManualChargeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCycleCharge>>, TError,{cycleId: number;data: BodyType<ManualChargeInput>}, TContext> => {
+
+const mutationKey = ['createCycleCharge'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCycleCharge>>, {cycleId: number;data: BodyType<ManualChargeInput>}> = (props) => {
+          const {cycleId,data} = props ?? {};
+
+          return  createCycleCharge(cycleId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCycleChargeMutationResult = NonNullable<Awaited<ReturnType<typeof createCycleCharge>>>
+    export type CreateCycleChargeMutationBody = BodyType<ManualChargeInput>
+    export type CreateCycleChargeMutationError = ErrorType<void>
+
+    /**
+ * @summary Record a manual card charge against an envelope or a cycle bill
+ */
+export const useCreateCycleCharge = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCycleCharge>>, TError,{cycleId: number;data: BodyType<ManualChargeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCycleCharge>>,
+        TError,
+        {cycleId: number;data: BodyType<ManualChargeInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCycleChargeMutationOptions(options));
+    }
+
+export const getUpdateCycleChargeUrl = (id: number,) => {
+
+
+
+
+  return `/api/charges/${id}`
+}
+
+/**
+ * @summary Edit a manual charge (auto allocations cannot be edited)
+ */
+export const updateCycleCharge = async (id: number,
+    manualChargeUpdate: ManualChargeUpdate, options?: RequestInit): Promise<ManualCharge> => {
+
+  return customFetch<ManualCharge>(getUpdateCycleChargeUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(manualChargeUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateCycleChargeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCycleCharge>>, TError,{id: number;data: BodyType<ManualChargeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCycleCharge>>, TError,{id: number;data: BodyType<ManualChargeUpdate>}, TContext> => {
+
+const mutationKey = ['updateCycleCharge'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCycleCharge>>, {id: number;data: BodyType<ManualChargeUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateCycleCharge(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCycleChargeMutationResult = NonNullable<Awaited<ReturnType<typeof updateCycleCharge>>>
+    export type UpdateCycleChargeMutationBody = BodyType<ManualChargeUpdate>
+    export type UpdateCycleChargeMutationError = ErrorType<void>
+
+    /**
+ * @summary Edit a manual charge (auto allocations cannot be edited)
+ */
+export const useUpdateCycleCharge = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCycleCharge>>, TError,{id: number;data: BodyType<ManualChargeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCycleCharge>>,
+        TError,
+        {id: number;data: BodyType<ManualChargeUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateCycleChargeMutationOptions(options));
+    }
+
+export const getDeleteCycleChargeUrl = (id: number,) => {
+
+
+
+
+  return `/api/charges/${id}`
+}
+
+/**
+ * @summary Delete a manual charge (auto allocations cannot be deleted)
+ */
+export const deleteCycleCharge = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteCycleChargeUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteCycleChargeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCycleCharge>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCycleCharge>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteCycleCharge'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCycleCharge>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteCycleCharge(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCycleChargeMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCycleCharge>>>
+
+    export type DeleteCycleChargeMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete a manual charge (auto allocations cannot be deleted)
+ */
+export const useDeleteCycleCharge = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCycleCharge>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCycleCharge>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteCycleChargeMutationOptions(options));
+    }
 
 export const getUpdateEnvelopeUrl = (id: number,) => {
 

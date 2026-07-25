@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
-import { useCreateAccount, useUpdateAccount, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { useCreateAccount, useUpdateAccount, useUpdateAccountCycleConfig, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey, getListAccountCyclesQueryKey } from "@workspace/api-client-react";
 import type { Account } from "@workspace/api-client-react";
 
 export const ACCOUNT_TYPE_OPTIONS = [
@@ -73,10 +73,16 @@ const accountSchema = z
     ccCycleStartDate: z.string(),
     ccCycleEndDate: z.string(),
     ccPaymentDueDate: z.string(),
+    statementDay: z.string(),
+    dueDay: z.string(),
   })
   .superRefine((vals, ctx) => {
     if (vals.accountType === "credit_card") {
-      for (const key of ["ccCycleStartDate", "ccCycleEndDate", "ccPaymentDueDate"] as const) {
+      // Envelope cycles need both days or neither.
+      if ((vals.statementDay === "") !== (vals.dueDay === "")) {
+        ctx.addIssue({ code: "custom", path: [vals.statementDay === "" ? "statementDay" : "dueDay"], message: "Set both statement and due day, or neither." });
+      }
+      for (const key of ["ccCycleStartDate", "ccCycleEndDate", "ccPaymentDueDate", "statementDay", "dueDay"] as const) {
         const v = vals[key];
         if (v !== "" && !(/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 31)) {
           ctx.addIssue({ code: "custom", path: [key], message: "Enter a day of month (1-31)." });
@@ -112,6 +118,7 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
   const queryClient = useQueryClient();
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
+  const updateCycleConfig = useUpdateAccountCycleConfig();
   const isEditing = !!account;
 
   const defaults = (): AccountFormValues => ({
@@ -125,6 +132,8 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
     ccCycleStartDate: account?.ccCycleStartDate != null ? String(account.ccCycleStartDate) : "",
     ccCycleEndDate: account?.ccCycleEndDate != null ? String(account.ccCycleEndDate) : "",
     ccPaymentDueDate: account?.ccPaymentDueDate != null ? String(account.ccPaymentDueDate) : "",
+    statementDay: account?.statementDay != null ? String(account.statementDay) : "",
+    dueDay: account?.dueDay != null ? String(account.dueDay) : "",
   });
 
   const form = useForm<AccountFormValues>({
@@ -161,10 +170,27 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
       queryClient.invalidateQueries({ queryKey: getGetAccountsSummaryQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
     };
+    // Envelope-cycle config (statement/due day): saved via its own endpoint,
+    // which also generates the card's cycles.
+    const saveCycleConfig = (accountId: number) => {
+      if (values.accountType !== "credit_card" || values.statementDay === "" || values.dueDay === "") return;
+      const statementDay = Number(values.statementDay);
+      const dueDay = Number(values.dueDay);
+      if (statementDay === account?.statementDay && dueDay === account?.dueDay) return;
+      updateCycleConfig.mutate({ id: accountId, data: { statementDay, dueDay } }, {
+        onSuccess: () => {
+          invalidate();
+          queryClient.invalidateQueries({ queryKey: getListAccountCyclesQueryKey(accountId) });
+          toast({ title: "Billing cycles generated" });
+        },
+        onError: () => toast({ title: "Failed to generate billing cycles", variant: "destructive" }),
+      });
+    };
     if (isEditing) {
       updateAccount.mutate({ id: account.id, data }, {
         onSuccess: () => {
           invalidate();
+          saveCycleConfig(account.id);
           toast({ title: "Account updated successfully" });
           setIsOpen(false);
           if (!isControlled) form.reset();
@@ -175,8 +201,9 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
       });
     } else {
       createAccount.mutate({ data }, {
-        onSuccess: () => {
+        onSuccess: (created) => {
           invalidate();
+          saveCycleConfig(created.id);
           toast({ title: "Account created successfully" });
           setIsOpen(false);
           if (!isControlled) form.reset();
@@ -315,6 +342,38 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">Day of month (1-31). Bills paid by this card are grouped in the forecast on the payment due date.</p>
+                <div className="border-t border-border pt-3 space-y-2">
+                  <p className="text-sm font-semibold">Envelope Budgeting Cycles</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="statementDay"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Statement Day</FormLabel>
+                          <FormControl>
+                            <Input placeholder="14" inputMode="numeric" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="dueDay"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Payment Due Day</FormLabel>
+                          <FormControl>
+                            <Input placeholder="8" inputMode="numeric" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Set these to generate billing cycles with spending envelopes. For cards without a bank connection, you can then record charges by hand from "Manage envelopes".</p>
+                </div>
               </div>
             )}
             {form.watch("accountType") === "retirement" && (

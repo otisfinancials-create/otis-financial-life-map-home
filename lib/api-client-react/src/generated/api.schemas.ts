@@ -307,6 +307,18 @@ export interface Account {
      * @nullable
      */
   ccPaymentDueDate?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  statementDay?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 31
+     * @nullable
+     */
+  dueDay?: number | null;
   /** @nullable */
   plaidAccountId?: string | null;
   /** @nullable */
@@ -400,6 +412,54 @@ export interface CloseCycleResult {
   /** @nullable */
   nextCycleId?: number | null;
   foodRemaining: number;
+}
+
+export interface ManualCharge {
+  id: number;
+  amount: number;
+  source: string;
+  /** @nullable */
+  envelopeId: number | null;
+  /** @nullable */
+  cardCycleBillId: number | null;
+  /** @nullable */
+  txnDate: string | null;
+  /** @nullable */
+  description: string | null;
+  /** Name of the envelope or bill this charge applies to */
+  targetName: string;
+  createdAt: string;
+}
+
+export interface ManualChargeInput {
+  /** @exclusiveMinimum 0 */
+  amount: number;
+  /** YYYY-MM-DD, must fall within the cycle window */
+  txnDate: string;
+  /** @nullable */
+  description?: string | null;
+  /**
+     * Target envelope (exactly one of envelopeId / cardCycleBillId)
+     * @nullable
+     */
+  envelopeId?: number | null;
+  /**
+     * Target cycle bill (exactly one of envelopeId / cardCycleBillId)
+     * @nullable
+     */
+  cardCycleBillId?: number | null;
+}
+
+export interface ManualChargeUpdate {
+  /** @exclusiveMinimum 0 */
+  amount?: number;
+  txnDate?: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  envelopeId?: number | null;
+  /** @nullable */
+  cardCycleBillId?: number | null;
 }
 
 export type CycleBreakdownBillsItem = {

@@ -77,6 +77,8 @@ export const envelopeAllocationsTable = pgTable("envelope_allocations", {
   cardCycleBillId: integer("card_cycle_bill_id").references(() => cardCycleBillsTable.id),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   source: text("source").notNull(), // 'auto' | 'manual'
+  txnDate: text("txn_date"), // YYYY-MM-DD; manual charges carry their own date (auto rows derive it from the Plaid txn)
+  description: text("description"), // manual charge label; null for auto rows
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   // Idempotent allocation: one allocation per Plaid transaction (NULLs — manual

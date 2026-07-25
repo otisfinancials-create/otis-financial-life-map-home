@@ -346,7 +346,11 @@ export async function rollupCycle(cardCycleId: number): Promise<RollupResult> {
   // card within the cycle window.
   let postedChargesTotal = 0;
   const [account] = await db.select().from(accountsTable).where(eq(accountsTable.id, cycle.accountId));
-  if (account?.plaidAccountId) {
+  if (!account?.plaidAccountId) {
+    // Manual (non-Plaid) card: the hand-entered charges ARE the posted
+    // charges, so the invariant holds by construction — skip the check.
+    postedChargesTotal = accumulatedTotal;
+  } else if (account?.plaidAccountId) {
     const txns = await db
       .select()
       .from(plaidTransactionsTable)
