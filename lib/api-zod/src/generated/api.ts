@@ -869,6 +869,37 @@ export const ProcessCycleResponse = zod.object({
 
 
 /**
+ * @summary Mark a cycle closed (only if past its cycle_end) and generate the Food carryover envelope in the next cycle
+ */
+export const CloseCycleParams = zod.object({
+  "cycleId": zod.coerce.number()
+})
+
+export const CloseCycleResponse = zod.object({
+  "carryover": zod.union([zod.object({
+  "id": zod.number(),
+  "cardCycleId": zod.number(),
+  "name": zod.string(),
+  "category": zod.string().nullish(),
+  "plannedAmount": zod.number(),
+  "spentAmount": zod.number(),
+  "cadence": zod.union([zod.literal('weekly'),zod.literal('one-time'),zod.literal(null)]).nullish(),
+  "note": zod.string().nullish(),
+  "envelopeType": zod.enum(['standard', 'food', 'carryover']),
+  "isCatchall": zod.boolean(),
+  "recurring": zod.boolean(),
+  "weeklyRate": zod.number().nullish(),
+  "isCarryover": zod.boolean(),
+  "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}),zod.null()]).optional(),
+  "nextCycleId": zod.number().nullish(),
+  "foodRemaining": zod.number()
+})
+
+
+/**
  * @summary Update an envelope
  */
 export const UpdateEnvelopeParams = zod.object({

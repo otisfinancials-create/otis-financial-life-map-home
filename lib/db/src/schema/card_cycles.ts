@@ -41,6 +41,10 @@ export const envelopesTable = pgTable("envelopes", {
   // Plaid DETAILED category codes this envelope catches (e.g.
   // TRANSPORTATION_GAS). When set, takes precedence over free-text `category`.
   matchCategories: text("match_categories").array(),
+  // Carryover identity: the closing cycle whose unspent food this envelope
+  // carries. UNIQUE (one carryover per source cycle) — the idempotency key
+  // for carryover generation, independent of envelope name.
+  sourceCycleId: integer("source_cycle_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

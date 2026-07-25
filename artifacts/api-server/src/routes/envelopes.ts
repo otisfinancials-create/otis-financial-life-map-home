@@ -13,8 +13,8 @@ import {
   DeleteEnvelopeParams,
 } from "@workspace/api-zod";
 import { foodPlannedAmount } from "../services/envelopes";
-import { processCycle } from "../services/cycle-processing";
-import { ProcessCycleParams, ProcessCycleResponse } from "@workspace/api-zod";
+import { processCycle, closeCycle } from "../services/cycle-processing";
+import { ProcessCycleParams, ProcessCycleResponse, CloseCycleParams, CloseCycleResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -81,6 +81,29 @@ router.post("/cycles/:cycleId/process", async (req, res): Promise<void> => {
   }
   const summary = await processCycle(cycle.id);
   res.json(ProcessCycleResponse.parse(summary));
+});
+
+router.post("/cycles/:cycleId/close", async (req, res): Promise<void> => {
+  const params = CloseCycleParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const cycle = await ownedCycle(params.data.cycleId, req.userId);
+  if (!cycle) {
+    res.status(404).json({ error: "Cycle not found" });
+    return;
+  }
+  const result = await closeCycle(cycle.id);
+  if (!result) {
+    res.status(400).json({ error: "Cycle is not past its cycle_end yet" });
+    return;
+  }
+  res.json(CloseCycleResponse.parse({
+    carryover: result.carryover ? serializeEnvelope(result.carryover) : null,
+    nextCycleId: result.nextCycleId,
+    foodRemaining: result.foodRemaining,
+  }));
 });
 
 router.post("/cycles/:cycleId/envelopes", async (req, res): Promise<void> => {

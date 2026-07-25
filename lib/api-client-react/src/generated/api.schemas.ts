@@ -348,41 +348,6 @@ export interface ProcessCycleSummary {
   invariantOk: boolean;
 }
 
-export interface CycleConfigInput {
-  /**
-     * @minimum 1
-     * @maximum 31
-     */
-  statementDay: number;
-  /**
-     * @minimum 1
-     * @maximum 31
-     */
-  dueDay: number;
-}
-
-export type CardCycleStatus = typeof CardCycleStatus[keyof typeof CardCycleStatus];
-
-
-export const CardCycleStatus = {
-  open: 'open',
-  closed: 'closed',
-  paid: 'paid',
-} as const;
-
-export interface CardCycle {
-  id: number;
-  accountId: number;
-  cycleStart: string;
-  cycleEnd: string;
-  dueDate: string;
-  plannedTotal: number;
-  accumulatedTotal: number;
-  status: CardCycleStatus;
-  createdAt: string;
-  updatedAt: string;
-}
-
 /**
  * @nullable
  */
@@ -426,6 +391,48 @@ export interface Envelope {
      * @nullable
      */
   matchCategories?: string[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CloseCycleResult {
+  carryover?: Envelope | null;
+  /** @nullable */
+  nextCycleId?: number | null;
+  foodRemaining: number;
+}
+
+export interface CycleConfigInput {
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  statementDay: number;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  dueDay: number;
+}
+
+export type CardCycleStatus = typeof CardCycleStatus[keyof typeof CardCycleStatus];
+
+
+export const CardCycleStatus = {
+  open: 'open',
+  closed: 'closed',
+  paid: 'paid',
+} as const;
+
+export interface CardCycle {
+  id: number;
+  accountId: number;
+  cycleStart: string;
+  cycleEnd: string;
+  dueDate: string;
+  plannedTotal: number;
+  accumulatedTotal: number;
+  status: CardCycleStatus;
   createdAt: string;
   updatedAt: string;
 }

@@ -37,6 +37,7 @@ import type {
   BillInput,
   BillUpdate,
   CardCycle,
+  CloseCycleResult,
   CycleConfigInput,
   DashboardSummary,
   DetectedBill,
@@ -2545,6 +2546,76 @@ export const useProcessCycle = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getProcessCycleMutationOptions(options));
+    }
+
+export const getCloseCycleUrl = (cycleId: number,) => {
+
+
+
+
+  return `/api/cycles/${cycleId}/close`
+}
+
+/**
+ * @summary Mark a cycle closed (only if past its cycle_end) and generate the Food carryover envelope in the next cycle
+ */
+export const closeCycle = async (cycleId: number, options?: RequestInit): Promise<CloseCycleResult> => {
+
+  return customFetch<CloseCycleResult>(getCloseCycleUrl(cycleId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCloseCycleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeCycle>>, TError,{cycleId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof closeCycle>>, TError,{cycleId: number}, TContext> => {
+
+const mutationKey = ['closeCycle'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof closeCycle>>, {cycleId: number}> = (props) => {
+          const {cycleId} = props ?? {};
+
+          return  closeCycle(cycleId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloseCycleMutationResult = NonNullable<Awaited<ReturnType<typeof closeCycle>>>
+
+    export type CloseCycleMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark a cycle closed (only if past its cycle_end) and generate the Food carryover envelope in the next cycle
+ */
+export const useCloseCycle = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeCycle>>, TError,{cycleId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof closeCycle>>,
+        TError,
+        {cycleId: number},
+        TContext
+      > => {
+      return useMutation(getCloseCycleMutationOptions(options));
     }
 
 export const getUpdateEnvelopeUrl = (id: number,) => {

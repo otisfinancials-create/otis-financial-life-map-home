@@ -36,6 +36,7 @@ export * from './billUpdateAmountType';
 export * from './billUpdatePaymentMethod';
 export * from './cardCycle';
 export * from './cardCycleStatus';
+export * from './closeCycleResult';
 export * from './cycleConfigInput';
 export * from './dashboardSummary';
 export * from './detectedBill';

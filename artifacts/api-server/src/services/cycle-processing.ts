@@ -143,6 +143,10 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
     throw new Error(`Cycle ${cardCycleId} has no catch-all envelope; seed envelopes before processing`);
   }
   const named = envelopes.filter((e) => !e.isCatchall && !e.isCarryover);
+  // Carryover envelopes (Stage 3b) drain FIRST for charges they match, up to
+  // their planned_amount. Whole-charge assignment: a charge goes entirely to
+  // the carryover while it still has room, else to the regular envelope.
+  const carryovers = envelopes.filter((e) => e.isCarryover);
 
   // Reconcile stale auto allocations: any auto allocation pointing at this
   // cycle's envelopes/bills whose transaction is no longer a qualifying
@@ -174,6 +178,17 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
   let allocated = 0;
   let skippedManual = 0;
 
+  // Room left in each carryover envelope. Manual allocations already pinned
+  // to a carryover consume its room up front (they are skipped in the loop
+  // below but still occupy the budget).
+  const carryoverRoom = new Map<number, number>();
+  for (const co of carryovers) {
+    const manualSpent = cycleTargetAllocs
+      .filter((a) => a.envelopeId === co.id && a.source === "manual")
+      .reduce((s, a) => s + num(a.amount), 0);
+    carryoverRoom.set(co.id, num(co.plannedAmount) - manualSpent);
+  }
+
   for (const txn of txns) {
     const prior = existingByTxn.get(txn.plaidTransactionId);
     if (prior?.source === "manual") {
@@ -194,14 +209,23 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
       }
     }
 
-    // 2. Named envelope by category; 3. catch-all.
+    // 2. Carryover envelope (drains first, while it has room);
+    // 3. named envelope by category; 4. catch-all.
     let envelopeId: number | null = null;
     let cardCycleBillId: number | null = null;
     if (bestBill) {
       cardCycleBillId = bestBill.id;
     } else {
-      const env = named.find((e) => envelopeMatches(e, txn));
-      envelopeId = env ? env.id : catchall.id;
+      const carryover = carryovers.find(
+        (e) => (carryoverRoom.get(e.id) ?? 0) > 0.005 && envelopeMatches(e, txn),
+      );
+      if (carryover) {
+        envelopeId = carryover.id;
+        carryoverRoom.set(carryover.id, (carryoverRoom.get(carryover.id) ?? 0) - amount);
+      } else {
+        const env = named.find((e) => envelopeMatches(e, txn));
+        envelopeId = env ? env.id : catchall.id;
+      }
     }
 
     await db
@@ -307,6 +331,12 @@ export async function rollupCycle(cardCycleId: number): Promise<RollupResult> {
   const allocs = [...allocsById.values()];
 
   const accumulatedTotal = round2(allocs.reduce((s, a) => s + num(a.amount), 0));
+  // planned_total sums ALL envelopes including any carryover. Note: a
+  // carryover's planned_amount is last cycle's already-planned food budget
+  // relocating to where the charges will post — it is expected spend for
+  // THIS cycle's window, but summing planned_total across cycles would count
+  // that budget twice. Consumers comparing plans across cycles should treat
+  // carryover as relocated, not new, budget.
   const plannedTotal = round2(
     envelopes.reduce((s, e) => s + num(e.plannedAmount), 0) +
     cycleBills.reduce((s, b) => s + num(b.expectedAmount), 0),
@@ -346,6 +376,133 @@ export async function rollupCycle(cardCycleId: number): Promise<RollupResult> {
     .where(eq(cardCyclesTable.id, cardCycleId));
 
   return { accumulatedTotal, plannedTotal, invariantOk, postedChargesTotal };
+}
+
+/* ------------------------------------------------- STAGE 3b: CARRYOVER */
+
+/** ISO date string for the day after `iso` (YYYY-MM-DD, UTC-safe). */
+function dayAfter(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+export interface CarryoverResult {
+  carryover: Envelope | null;
+  nextCycleId: number | null;
+  foodRemaining: number;
+}
+
+/**
+ * When a cycle closes with unspent Food budget, move the remainder into the
+ * NEXT cycle as a one-time 'carryover' envelope so late-posting grocery
+ * charges drain it instead of appearing as brand-new spending.
+ *
+ * Idempotent: carryover identity is source_cycle_id (unique index — one
+ * carryover per closing cycle), independent of envelope name. Re-runs update
+ * planned_amount and re-assert the carryover-defining fields. A user envelope
+ * that happens to be named 'Food carryover' is never hijacked; on a name
+ * collision the carryover gets a disambiguated name.
+ */
+export async function generateCarryover(closingCycleId: number): Promise<CarryoverResult> {
+  const [cycle] = await db.select().from(cardCyclesTable).where(eq(cardCyclesTable.id, closingCycleId));
+  if (!cycle) return { carryover: null, nextCycleId: null, foodRemaining: 0 };
+
+  // Only closed cycles (past cycle_end) generate carryover.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  if (todayIso <= cycle.cycleEnd) return { carryover: null, nextCycleId: null, foodRemaining: 0 };
+
+  const envelopes = await db.select().from(envelopesTable).where(eq(envelopesTable.cardCycleId, closingCycleId));
+  const food = envelopes.find((e) => e.envelopeType === "food" && !e.isCarryover);
+  const foodRemaining = food ? round2(Math.max(0, num(food.plannedAmount) - num(food.spentAmount))) : 0;
+
+  // Find (or generate) the next cycle for the same account.
+  const nextStart = dayAfter(cycle.cycleEnd);
+  const findNext = () =>
+    db.select().from(cardCyclesTable).where(and(
+      eq(cardCyclesTable.accountId, cycle.accountId),
+      eq(cardCyclesTable.cycleStart, nextStart),
+    ));
+  let [next] = await findNext();
+  if (!next && foodRemaining > 0) {
+    const { generateCyclesForAccount } = await import("./card-cycles");
+    await generateCyclesForAccount(cycle.accountId);
+    [next] = await findNext();
+  }
+  if (foodRemaining <= 0 || !next) {
+    return { carryover: null, nextCycleId: next?.id ?? null, foodRemaining };
+  }
+
+  // Carryover-defining fields, re-asserted on every run so the row can't drift.
+  const defining = {
+    note: "Carryover unspent from last month\u2019s weekly food",
+    category: "Food",
+    matchCategories: ["FOOD_AND_DRINK_GROCERIES"],
+    plannedAmount: String(foodRemaining),
+    envelopeType: "carryover",
+    isCarryover: true,
+    isCatchall: false,
+    recurring: false, // one-time; never copied forward
+  };
+
+  const [existing] = await db
+    .select()
+    .from(envelopesTable)
+    .where(eq(envelopesTable.sourceCycleId, closingCycleId));
+  if (existing) {
+    const [carryover] = await db
+      .update(envelopesTable)
+      .set({ ...defining, updatedAt: new Date() })
+      .where(eq(envelopesTable.id, existing.id))
+      .returning();
+    return { carryover, nextCycleId: next.id, foodRemaining };
+  }
+
+  const insertCarryover = (name: string) =>
+    db
+      .insert(envelopesTable)
+      .values({
+        userId: cycle.userId,
+        cardCycleId: next!.id,
+        sourceCycleId: closingCycleId,
+        name,
+        ...defining,
+      })
+      .returning();
+
+  let carryover: Envelope;
+  try {
+    [carryover] = await insertCarryover("Food carryover");
+  } catch (err: unknown) {
+    // UNIQUE(card_cycle_id, name) collision with a user-created envelope of
+    // the same name — never hijack it; use a disambiguated name instead.
+    // (Drizzle wraps the pg error, so check the cause chain for 23505.)
+    const pgCode =
+      (err as { code?: string }).code ??
+      ((err as { cause?: { code?: string } }).cause?.code);
+    if (pgCode === "23505") {
+      [carryover] = await insertCarryover(`Food carryover (from ${cycle.cycleStart})`);
+    } else {
+      throw err;
+    }
+  }
+
+  return { carryover, nextCycleId: next.id, foodRemaining };
+}
+
+/**
+ * Mark a cycle closed (only if past its cycle_end) and generate carryover.
+ * Returns null if the cycle isn't past its end yet.
+ */
+export async function closeCycle(cardCycleId: number): Promise<CarryoverResult | null> {
+  const [cycle] = await db.select().from(cardCyclesTable).where(eq(cardCyclesTable.id, cardCycleId));
+  if (!cycle) return null;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  if (todayIso <= cycle.cycleEnd) return null;
+  if (cycle.status === "open") {
+    await db.update(cardCyclesTable).set({ status: "closed", updatedAt: new Date() }).where(eq(cardCyclesTable.id, cardCycleId));
+  }
+  return generateCarryover(cardCycleId);
 }
 
 /* ---------------------------------------------------------------- STEP 5 */

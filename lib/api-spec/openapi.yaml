@@ -654,6 +654,29 @@ paths:
         "404":
           description: Not found
 
+  /cycles/{cycleId}/close:
+    post:
+      operationId: closeCycle
+      tags: [envelopes]
+      summary: Mark a cycle closed (only if past its cycle_end) and generate the Food carryover envelope in the next cycle
+      parameters:
+        - name: cycleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Close result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloseCycleResult"
+        "400":
+          description: Cycle is not past its cycle_end yet
+        "404":
+          description: Not found
+
   /envelopes/{id}:
     patch:
       operationId: updateEnvelope
@@ -1866,6 +1889,19 @@ components:
           type: number
         invariantOk:
           type: boolean
+
+    CloseCycleResult:
+      type: object
+      required: [foodRemaining]
+      properties:
+        carryover:
+          oneOf:
+            - $ref: "#/components/schemas/Envelope"
+            - type: "null"
+        nextCycleId:
+          type: ["integer", "null"]
+        foodRemaining:
+          type: number
 
     CycleConfigInput:
       type: object
