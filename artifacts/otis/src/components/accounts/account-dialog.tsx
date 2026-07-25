@@ -229,7 +229,7 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Account" : "Add Account"}</DialogTitle>
           <DialogDescription>
-            {isEditing ? "Make changes to your account details." : "Add a financial account. Plaid sync is coming soon."}
+            {isEditing ? "Make changes to your account details." : "Add a financial account, or track a card manually with statement and due days."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
