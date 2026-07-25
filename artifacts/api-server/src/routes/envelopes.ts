@@ -13,6 +13,8 @@ import {
   DeleteEnvelopeParams,
 } from "@workspace/api-zod";
 import { foodPlannedAmount } from "../services/envelopes";
+import { processCycle } from "../services/cycle-processing";
+import { ProcessCycleParams, ProcessCycleResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -63,6 +65,21 @@ router.get("/cycles/:cycleId/envelopes", async (req, res): Promise<void> => {
   }
   const envelopes = await db.select().from(envelopesTable).where(eq(envelopesTable.cardCycleId, cycle.id));
   res.json(ListCycleEnvelopesResponse.parse(orderEnvelopes(envelopes).map(serializeEnvelope)));
+});
+
+router.post("/cycles/:cycleId/process", async (req, res): Promise<void> => {
+  const params = ProcessCycleParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const cycle = await ownedCycle(params.data.cycleId, req.userId);
+  if (!cycle) {
+    res.status(404).json({ error: "Cycle not found" });
+    return;
+  }
+  const summary = await processCycle(cycle.id);
+  res.json(ProcessCycleResponse.parse(summary));
 });
 
 router.post("/cycles/:cycleId/envelopes", async (req, res): Promise<void> => {

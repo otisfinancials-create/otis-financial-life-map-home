@@ -324,6 +324,30 @@ export interface Account {
   updatedAt: string;
 }
 
+export type ProcessCycleSummaryByTargetItemType = typeof ProcessCycleSummaryByTargetItemType[keyof typeof ProcessCycleSummaryByTargetItemType];
+
+
+export const ProcessCycleSummaryByTargetItemType = {
+  envelope: 'envelope',
+  bill: 'bill',
+} as const;
+
+export type ProcessCycleSummaryByTargetItem = {
+  target: string;
+  type: ProcessCycleSummaryByTargetItemType;
+  count: number;
+  amount: number;
+};
+
+export interface ProcessCycleSummary {
+  billsPopulated: number;
+  transactionsAllocated: number;
+  byTarget: ProcessCycleSummaryByTargetItem[];
+  accumulatedTotal: number;
+  plannedTotal: number;
+  invariantOk: boolean;
+}
+
 export interface CycleConfigInput {
   /**
      * @minimum 1

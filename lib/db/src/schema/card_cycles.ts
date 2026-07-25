@@ -1,4 +1,5 @@
-import { pgTable, serial, text, numeric, integer, date, timestamp, unique, boolean } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, serial, text, numeric, integer, date, timestamp, unique, boolean, check } from "drizzle-orm/pg-core";
 import { accountsTable } from "./accounts";
 import { billsTable } from "./bills";
 
@@ -55,7 +56,10 @@ export const cardCycleBillsTable = pgTable("card_cycle_bills", {
   actualAmount: numeric("actual_amount", { precision: 15, scale: 2 }),
   status: text("status").default("pending"), // 'pending' | 'hit' | 'missed'
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  // Idempotent bill population: one row per bill per cycle.
+  unique("card_cycle_bills_cycle_bill_unique").on(t.cardCycleId, t.billId),
+]);
 
 /** Transaction → envelope / cycle-bill allocations (engine in Stage 3). */
 export const envelopeAllocationsTable = pgTable("envelope_allocations", {
@@ -67,7 +71,13 @@ export const envelopeAllocationsTable = pgTable("envelope_allocations", {
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   source: text("source").notNull(), // 'auto' | 'manual'
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  // Idempotent allocation: one allocation per Plaid transaction (NULLs — manual
+  // card entries without a Plaid txn — are distinct, so multiple are allowed).
+  unique("envelope_allocations_plaid_txn_unique").on(t.plaidTransactionId),
+  // Exactly one target: an envelope XOR a cycle bill.
+  check("envelope_allocations_one_target_check", sql`(envelope_id IS NULL) <> (card_cycle_bill_id IS NULL)`),
+]);
 
 export type CardCycle = typeof cardCyclesTable.$inferSelect;
 export type Envelope = typeof envelopesTable.$inferSelect;

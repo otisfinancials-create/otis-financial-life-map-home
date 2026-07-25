@@ -844,6 +844,28 @@ export const CreateCycleEnvelopeResponse = zod.object({
 
 
 /**
+ * @summary Process a cycle — populate bills, allocate posted charges, recompute envelope spent, roll up totals
+ */
+export const ProcessCycleParams = zod.object({
+  "cycleId": zod.coerce.number()
+})
+
+export const ProcessCycleResponse = zod.object({
+  "billsPopulated": zod.number(),
+  "transactionsAllocated": zod.number(),
+  "byTarget": zod.array(zod.object({
+  "target": zod.string(),
+  "type": zod.enum(['envelope', 'bill']),
+  "count": zod.number(),
+  "amount": zod.number()
+})),
+  "accumulatedTotal": zod.number(),
+  "plannedTotal": zod.number(),
+  "invariantOk": zod.boolean()
+})
+
+
+/**
  * @summary Update an envelope
  */
 export const UpdateEnvelopeParams = zod.object({

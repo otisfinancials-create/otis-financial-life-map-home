@@ -72,6 +72,7 @@ import type {
   PlaidSyncResult,
   PlaidTransaction,
   PlaidWebhookInput,
+  ProcessCycleSummary,
   RegenerateForecastResult,
   ReorderForecastInput,
   ReorderForecastResult,
@@ -2474,6 +2475,76 @@ export const useCreateCycleEnvelope = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getCreateCycleEnvelopeMutationOptions(options));
+    }
+
+export const getProcessCycleUrl = (cycleId: number,) => {
+
+
+
+
+  return `/api/cycles/${cycleId}/process`
+}
+
+/**
+ * @summary Process a cycle — populate bills, allocate posted charges, recompute envelope spent, roll up totals
+ */
+export const processCycle = async (cycleId: number, options?: RequestInit): Promise<ProcessCycleSummary> => {
+
+  return customFetch<ProcessCycleSummary>(getProcessCycleUrl(cycleId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getProcessCycleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processCycle>>, TError,{cycleId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof processCycle>>, TError,{cycleId: number}, TContext> => {
+
+const mutationKey = ['processCycle'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof processCycle>>, {cycleId: number}> = (props) => {
+          const {cycleId} = props ?? {};
+
+          return  processCycle(cycleId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProcessCycleMutationResult = NonNullable<Awaited<ReturnType<typeof processCycle>>>
+
+    export type ProcessCycleMutationError = ErrorType<void>
+
+    /**
+ * @summary Process a cycle — populate bills, allocate posted charges, recompute envelope spent, roll up totals
+ */
+export const useProcessCycle = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processCycle>>, TError,{cycleId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof processCycle>>,
+        TError,
+        {cycleId: number},
+        TContext
+      > => {
+      return useMutation(getProcessCycleMutationOptions(options));
     }
 
 export const getUpdateEnvelopeUrl = (id: number,) => {

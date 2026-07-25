@@ -633,6 +633,27 @@ paths:
         "404":
           description: Not found
 
+  /cycles/{cycleId}/process:
+    post:
+      operationId: processCycle
+      tags: [envelopes]
+      summary: Process a cycle — populate bills, allocate posted charges, recompute envelope spent, roll up totals
+      parameters:
+        - name: cycleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Processing summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessCycleSummary"
+        "404":
+          description: Not found
+
   /envelopes/{id}:
     patch:
       operationId: updateEnvelope
@@ -1815,6 +1836,36 @@ components:
           type: string
         updatedAt:
           type: string
+
+    ProcessCycleSummary:
+      type: object
+      required: [billsPopulated, transactionsAllocated, byTarget, accumulatedTotal, plannedTotal, invariantOk]
+      properties:
+        billsPopulated:
+          type: integer
+        transactionsAllocated:
+          type: integer
+        byTarget:
+          type: array
+          items:
+            type: object
+            required: [target, type, count, amount]
+            properties:
+              target:
+                type: string
+              type:
+                type: string
+                enum: [envelope, bill]
+              count:
+                type: integer
+              amount:
+                type: number
+        accumulatedTotal:
+          type: number
+        plannedTotal:
+          type: number
+        invariantOk:
+          type: boolean
 
     CycleConfigInput:
       type: object
