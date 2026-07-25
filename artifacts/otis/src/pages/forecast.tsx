@@ -5,7 +5,7 @@ import {
   ExternalLink, Plus, Trash2, Check, RefreshCw, Search,
   ChevronRight, Zap, PawPrint, Download,
   X, RotateCcw, FileSpreadsheet, FileText, ClipboardCopy,
-  TriangleAlert,
+  TriangleAlert, Pencil,
 } from "lucide-react";
 
 import { categoryMeta, categoryDisplayLabel, getCategoryEmoji } from "@/utils/categoryIcons";
@@ -33,8 +33,16 @@ import {
   useUpdateEnvelope,
   useDeleteEnvelope,
   getListCycleEnvelopesQueryKey,
+  useGetAccount,
+  getGetAccountQueryKey,
+  useListCycleCharges,
+  getListCycleChargesQueryKey,
+  useCreateCycleCharge,
+  useUpdateCycleCharge,
+  useDeleteCycleCharge,
   type BalanceSync,
   type Envelope,
+  type ManualCharge,
 } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
@@ -147,6 +155,7 @@ function mondaysBetween(startIso: string, endIso: string): number {
 }
 
 const EMPTY_ENVELOPE_FORM = { name: "", category: "", plannedAmount: "", cadence: "one-time", scope: "this-cycle" };
+const EMPTY_CHARGE_FORM = { amount: "", txnDate: "", description: "", target: "" };
 
 // Client failures throw ApiError with the server payload on `.data` (e.g.
 // { error: "..." }) and a readable `.message` fallback.
@@ -163,16 +172,27 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 // (auto) charges stay read-only. The server recomputes the cycle rollup and
 // regenerates the forecast on every envelope mutation, so invalidating the
 // forecast queries here refreshes the parent payment row live.
-function CycleBreakdownRows({ cycleId }: { cycleId: number }) {
+function CycleBreakdownRows({ cycleId, ccAccountId }: { cycleId: number; ccAccountId: number | null }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data, isLoading } = useGetCycleBreakdown(cycleId, {
     query: { queryKey: getGetCycleBreakdownQueryKey(cycleId) },
   });
 
+  // Manual cards (no Plaid connection) get hand-entered charges; connected
+  // cards get their charges from Plaid, so charge entry stays hidden for them.
+  const { data: account } = useGetAccount(ccAccountId ?? 0, {
+    query: { queryKey: getGetAccountQueryKey(ccAccountId ?? 0), enabled: ccAccountId != null },
+  });
+  const isManualCard = account != null && account.plaidAccountId == null;
+  const { data: charges } = useListCycleCharges(cycleId, {
+    query: { queryKey: getListCycleChargesQueryKey(cycleId), enabled: isManualCard },
+  });
+
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: getGetCycleBreakdownQueryKey(cycleId) });
     void queryClient.invalidateQueries({ queryKey: getListCycleEnvelopesQueryKey(cycleId) });
+    void queryClient.invalidateQueries({ queryKey: getListCycleChargesQueryKey(cycleId) });
     void queryClient.invalidateQueries({ queryKey: getListForecastQueryKey() });
     void queryClient.invalidateQueries({ queryKey: getGetMonthlyForecastQueryKey() });
   };
@@ -195,10 +215,32 @@ function CycleBreakdownRows({ cycleId }: { cycleId: number }) {
     },
   });
 
+  const createCharge = useCreateCycleCharge({
+    mutation: {
+      onSuccess: invalidate,
+      onError: (err: unknown) => toast({ title: apiErrorMessage(err, "Failed to add charge"), variant: "destructive" }),
+    },
+  });
+  const updateCharge = useUpdateCycleCharge({
+    mutation: {
+      onSuccess: invalidate,
+      onError: (err: unknown) => toast({ title: apiErrorMessage(err, "Failed to update charge"), variant: "destructive" }),
+    },
+  });
+  const deleteCharge = useDeleteCycleCharge({
+    mutation: {
+      onSuccess: invalidate,
+      onError: (err: unknown) => toast({ title: apiErrorMessage(err, "Failed to delete charge"), variant: "destructive" }),
+    },
+  });
+
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState(EMPTY_ENVELOPE_FORM);
+  const [chargeOpen, setChargeOpen] = useState(false);
+  const [editingChargeId, setEditingChargeId] = useState<number | null>(null);
+  const [chargeForm, setChargeForm] = useState(EMPTY_CHARGE_FORM);
 
   if (isLoading) {
     return (
@@ -236,6 +278,46 @@ function CycleBreakdownRows({ cycleId }: { cycleId: number }) {
       },
       { onSuccess: () => { setAdding(false); setForm(EMPTY_ENVELOPE_FORM); } },
     );
+  };
+
+  // ── Manual charge helpers (manual cards only) ──────────────────────────
+  const chargeTargets = [
+    ...data.envelopes.map((e) => ({ key: `env-${e.id}`, label: `${e.name} (envelope)` })),
+    ...data.bills.map((b) => ({ key: `bill-${b.id}`, label: `${b.billName} (bill)` })),
+  ];
+  const chargeTargetIds = (target: string) =>
+    target.startsWith("env-")
+      ? { envelopeId: Number(target.slice(4)), cardCycleBillId: null }
+      : { envelopeId: null, cardCycleBillId: Number(target.slice(5)) };
+  const chargeDateOutsideCycle =
+    chargeForm.txnDate !== "" && (chargeForm.txnDate < data.cycleStart || chargeForm.txnDate > data.cycleEnd);
+  const openAddCharge = () => {
+    setEditingChargeId(null);
+    setChargeForm({ ...EMPTY_CHARGE_FORM, txnDate: format(new Date(), "yyyy-MM-dd") });
+    setChargeOpen(true);
+  };
+  const startEditCharge = (c: ManualCharge) => {
+    setEditingChargeId(c.id);
+    setChargeForm({
+      amount: String(c.amount),
+      txnDate: c.txnDate ?? format(new Date(), "yyyy-MM-dd"),
+      description: c.description ?? "",
+      target: c.envelopeId != null ? `env-${c.envelopeId}` : `bill-${c.cardCycleBillId}`,
+    });
+    setChargeOpen(true);
+  };
+  const submitCharge = () => {
+    const amount = parseFloat(chargeForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0 || !chargeForm.txnDate || !chargeForm.target) return;
+    const payload = {
+      amount,
+      txnDate: chargeForm.txnDate,
+      description: chargeForm.description.trim() || null,
+      ...chargeTargetIds(chargeForm.target),
+    };
+    const done = { onSuccess: () => { setChargeOpen(false); setEditingChargeId(null); setChargeForm(EMPTY_CHARGE_FORM); } };
+    if (editingChargeId != null) updateCharge.mutate({ id: editingChargeId, data: payload }, done);
+    else createCharge.mutate({ cycleId, data: payload }, done);
   };
 
   return (
@@ -367,6 +449,74 @@ function CycleBreakdownRows({ cycleId }: { cycleId: number }) {
         >
           <Plus className="h-3 w-3" /> Add envelope
         </button>
+      )}
+
+      {/* ── Manual charges (manual cards only) ─────────────────────── */}
+      {isManualCard && (
+        <>
+          {(charges ?? []).length > 0 && (
+            <div className="mx-10 my-1 rounded border border-[#E5EAF1] bg-white divide-y divide-[#F2F4F7]">
+              {charges!.map((c) => (
+                <div key={c.id} className="flex items-center justify-between gap-2 px-2.5 py-1 text-[12px]">
+                  <span className="min-w-0 flex items-center gap-2">
+                    <span className="truncate font-medium" style={{ color: "#1A1A2E" }}>{c.description || c.targetName}</span>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {c.txnDate ? format(new Date(c.txnDate + "T00:00:00"), "MMM d") : ""} · {c.targetName}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-1 shrink-0">
+                    <span className="font-mono tabular-nums mr-1"><FormatCurrency amount={c.amount} /></span>
+                    <button type="button" className="text-muted-foreground hover:text-foreground" aria-label={`Edit charge ${c.description || c.targetName}`} onClick={() => startEditCharge(c)}>
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button type="button" className="text-muted-foreground hover:text-destructive" aria-label={`Delete charge ${c.description || c.targetName}`} onClick={() => deleteCharge.mutate({ id: c.id })}>
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {chargeOpen ? (
+            <div className="mx-10 my-1.5 rounded border border-dashed border-[#D7DEE8] bg-white p-2 space-y-1.5 text-[12px]">
+              <div className="grid grid-cols-2 gap-1.5">
+                <Input type="number" placeholder="Amount" value={chargeForm.amount} onChange={(e) => setChargeForm((f) => ({ ...f, amount: e.target.value }))} className="h-7 text-[12px]" aria-label="Charge amount" />
+                <Input type="date" value={chargeForm.txnDate} onChange={(e) => setChargeForm((f) => ({ ...f, txnDate: e.target.value }))} className="h-7 text-[12px]" aria-label="Charge date" />
+                <Input placeholder="Description (optional)" aria-label="Charge description" value={chargeForm.description} onChange={(e) => setChargeForm((f) => ({ ...f, description: e.target.value }))} className="h-7 text-[12px]" />
+                <Select value={chargeForm.target} onValueChange={(v) => setChargeForm((f) => ({ ...f, target: v }))}>
+                  <SelectTrigger className="h-7 text-[12px]" aria-label="Charge target"><SelectValue placeholder="Apply to…" /></SelectTrigger>
+                  <SelectContent>
+                    {chargeTargets.map((t) => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {chargeDateOutsideCycle && (
+                <div className="text-[10px] text-amber-600">
+                  Date is outside this cycle ({format(new Date(data.cycleStart + "T00:00:00"), "MMM d")} – {format(new Date(data.cycleEnd + "T00:00:00"), "MMM d")}) — it can't be saved here.
+                </div>
+              )}
+              <div className="flex justify-end gap-1.5">
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={() => { setChargeOpen(false); setEditingChargeId(null); setChargeForm(EMPTY_CHARGE_FORM); }}>Cancel</Button>
+                <Button
+                  size="sm"
+                  className="h-6 px-2 text-[11px]"
+                  onClick={submitCharge}
+                  disabled={!(parseFloat(chargeForm.amount) > 0) || !chargeForm.txnDate || !chargeForm.target || chargeDateOutsideCycle || createCharge.isPending || updateCharge.isPending}
+                >
+                  {editingChargeId != null ? "Save charge" : "Add charge"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="flex items-center gap-1 px-10 py-1 text-[11px] text-primary hover:underline"
+              onClick={openAddCharge}
+            >
+              <Plus className="h-3 w-3" /> Add charge
+            </button>
+          )}
+        </>
       )}
 
       <div className="flex items-center justify-between px-10 py-1.5 text-[12px] border-t border-[#EEF1F5] font-semibold">
@@ -1777,7 +1927,7 @@ export default function Forecast() {
                               </div>
                             </div>
                             {cycleExpanded && (
-                              <CycleBreakdownRows cycleId={tx.sourceCardCycleId!} />
+                              <CycleBreakdownRows cycleId={tx.sourceCardCycleId!} ccAccountId={tx.ccAccountId ?? null} />
                             )}
                             </Fragment>
                           );
