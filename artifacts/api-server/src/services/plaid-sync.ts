@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { db, plaidItemsTable, plaidTransactionsTable, balanceSnapshotsTable, type PlaidItem } from "@workspace/db";
 import type { Transaction, AccountBase } from "plaid";
 import { plaidClient } from "../lib/plaid";
+import { detectBills } from "./bill-detection";
 import { logger } from "../lib/logger";
 
 export interface SyncCounts {
@@ -114,7 +115,33 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
     { plaidItemId: item.id, ...counts },
     "Plaid transaction sync complete for item",
   );
+
+  // Ongoing detection: new history can surface new recurring bills. detectBills
+  // is idempotent (upsert + stale-pending cleanup), so re-running is safe; only
+  // genuinely new detections are inserted unseen and trigger the login notice.
+  if (counts.added > 0 || counts.modified > 0) {
+    scheduleDetection(item.userId);
+  }
   return counts;
+}
+
+// Coalesce post-sync detection per user: multi-item users, nightly loops, and
+// webhook bursts would otherwise run several full detection passes back to
+// back. A short trailing timer runs detection once after the burst settles.
+const DETECTION_COALESCE_MS = 5_000;
+const pendingDetection = new Map<string, NodeJS.Timeout>();
+
+function scheduleDetection(userId: string): void {
+  const existing = pendingDetection.get(userId);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    pendingDetection.delete(userId);
+    detectBills(userId).catch((err) => {
+      logger.error({ userId, err: sanitizeSyncError(err) }, "Post-sync bill detection failed");
+    });
+  }, DETECTION_COALESCE_MS);
+  timer.unref?.();
+  pendingDetection.set(userId, timer);
 }
 
 /** Upsert one balance_snapshots row per account for today (last write wins for the day). */

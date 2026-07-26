@@ -19,6 +19,8 @@ export const detectedBillsTable = pgTable(
     nextExpectedDate: date("next_expected_date", { mode: "string" }),
     confidence: numeric("confidence", { precision: 3, scale: 2 }).notNull(),
     status: text("status").notNull().default("pending"),
+    /** Set when the user has viewed this detection on the review page; null = "new" (unseen). */
+    seenAt: timestamp("seen_at", { withTimezone: true }),
     duplicateOf: integer("duplicate_of"),
     sampleTxnIds: jsonb("sample_txn_ids"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

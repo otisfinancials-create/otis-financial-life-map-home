@@ -56,6 +56,7 @@ import type {
   ForecastedTransaction,
   ForecastedTransactionInput,
   ForecastedTransactionUpdate,
+  GetDetectedNewBillCount200,
   HealthStatus,
   LifeEvent,
   LifeEventInput,
@@ -72,6 +73,7 @@ import type {
   ManualCharge,
   ManualChargeInput,
   ManualChargeUpdate,
+  MarkDetectedBillsSeen200,
   MonthlyForecast,
   OtisChatRequest,
   OtisHistoryMessage,
@@ -6382,6 +6384,153 @@ export function useListDetectedBillDrafts<TData = Awaited<ReturnType<typeof list
 
 
 
+
+export const getGetDetectedNewBillCountUrl = () => {
+
+
+
+
+  return `/api/bills/detected-new-count`
+}
+
+/**
+ * @summary Count of pending detections the user has not yet seen
+ */
+export const getDetectedNewBillCount = async ( options?: RequestInit): Promise<GetDetectedNewBillCount200> => {
+
+  return customFetch<GetDetectedNewBillCount200>(getGetDetectedNewBillCountUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDetectedNewBillCountQueryKey = () => {
+    return [
+    `/api/bills/detected-new-count`
+    ] as const;
+    }
+
+
+export const getGetDetectedNewBillCountQueryOptions = <TData = Awaited<ReturnType<typeof getDetectedNewBillCount>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDetectedNewBillCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDetectedNewBillCountQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDetectedNewBillCount>>> = ({ signal }) => getDetectedNewBillCount({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDetectedNewBillCount>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDetectedNewBillCountQueryResult = NonNullable<Awaited<ReturnType<typeof getDetectedNewBillCount>>>
+export type GetDetectedNewBillCountQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Count of pending detections the user has not yet seen
+ */
+
+export function useGetDetectedNewBillCount<TData = Awaited<ReturnType<typeof getDetectedNewBillCount>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDetectedNewBillCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDetectedNewBillCountQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getMarkDetectedBillsSeenUrl = () => {
+
+
+
+
+  return `/api/bills/detected/mark-seen`
+}
+
+/**
+ * @summary Mark all pending detections as seen (stops the new-bill notification)
+ */
+export const markDetectedBillsSeen = async ( options?: RequestInit): Promise<MarkDetectedBillsSeen200> => {
+
+  return customFetch<MarkDetectedBillsSeen200>(getMarkDetectedBillsSeenUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getMarkDetectedBillsSeenMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markDetectedBillsSeen>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markDetectedBillsSeen>>, TError,void, TContext> => {
+
+const mutationKey = ['markDetectedBillsSeen'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markDetectedBillsSeen>>, void> = () => {
+
+
+          return  markDetectedBillsSeen(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkDetectedBillsSeenMutationResult = NonNullable<Awaited<ReturnType<typeof markDetectedBillsSeen>>>
+
+    export type MarkDetectedBillsSeenMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Mark all pending detections as seen (stops the new-bill notification)
+ */
+export const useMarkDetectedBillsSeen = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markDetectedBillsSeen>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markDetectedBillsSeen>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getMarkDetectedBillsSeenMutationOptions(options));
+    }
 
 export const getConfirmDetectedBillUrl = (id: number,) => {
 

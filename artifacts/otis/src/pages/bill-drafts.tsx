@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, CheckCheck, PencilLine, Sparkles, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -8,6 +8,8 @@ import {
   useConfirmDetectedBill,
   useDismissDetectedBill,
   useListAccounts,
+  useMarkDetectedBillsSeen,
+  getGetDetectedNewBillCountQueryKey,
   getListDetectedBillDraftsQueryKey,
   getListDetectedBillsQueryKey,
   getListBillsQueryKey,
@@ -126,6 +128,11 @@ function DraftCard({
               </Badge>
             ) : (
               <Badge variant="outline">{Math.round(draft.confidence * 100)}% confident</Badge>
+            )}
+            {draft.isNew && state === "pending" && (
+              <Badge className="bg-blue-600 text-white" data-testid={`badge-new-${draft.id}`}>
+                New
+              </Badge>
             )}
             {state === "confirmed" && <Badge className="bg-emerald-600">Confirmed</Badge>}
             {state === "dismissed" && <Badge variant="secondary">Dismissed</Badge>}
@@ -274,6 +281,28 @@ export default function BillDrafts() {
 
   const confirmMutation = useConfirmDetectedBill();
   const dismissMutation = useDismissDetectedBill();
+
+  // Opening the review page marks pending detections as seen so the login
+  // "new bill detected" notice stops re-firing. The drafts snapshot was taken
+  // before this runs, so "New" tags stay visible for this visit.
+  const markSeenMutation = useMarkDetectedBillsSeen();
+  const markedSeen = useRef(false);
+  useEffect(() => {
+    // Wait for the drafts to load first: the snapshot (with its isNew flags)
+    // must be captured before the server clears seen state, or a slow fetch
+    // could race mark-seen and lose the "New" tags on first visit.
+    if (markedSeen.current || liveDrafts === undefined) return;
+    markedSeen.current = true;
+    markSeenMutation.mutate(undefined, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetDetectedNewBillCountQueryKey() });
+        // Refresh the cached drafts so a later visit doesn't snapshot stale
+        // isNew flags; this visit renders from the snapshot, so tags stay put.
+        queryClient.invalidateQueries({ queryKey: getListDetectedBillDraftsQueryKey() });
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveDrafts]);
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, inArray, desc } from "drizzle-orm";
+import { and, eq, inArray, desc, isNull, count } from "drizzle-orm";
 import {
   db,
   detectedBillsTable,
@@ -12,6 +12,8 @@ import {
   DetectBillsResponse,
   ListDetectedBillsResponse,
   ListDetectedBillDraftsResponse,
+  GetDetectedNewBillCountResponse,
+  MarkDetectedBillsSeenResponse,
   ConfirmDetectedBillParams,
   ConfirmDetectedBillBody,
   ConfirmDetectedBillResponse,
@@ -225,6 +227,7 @@ router.get("/bills/detected-drafts", async (req, res): Promise<void> => {
       dueDay: dueDayFrom(det),
       confidence: parseFloat(String(det.confidence)),
       status: det.status,
+      isNew: det.status === "pending" && det.seenAt === null,
       duplicateOf: det.duplicateOf,
       duplicateBillName: det.duplicateOf != null ? (dupNameById.get(det.duplicateOf) ?? null) : null,
       suggestedCategory: suggestCategoryFromSamples(txns),
@@ -235,6 +238,37 @@ router.get("/bills/detected-drafts", async (req, res): Promise<void> => {
   });
 
   res.json(ListDetectedBillDraftsResponse.parse(drafts));
+});
+
+/** Count of pending detections the user has never seen — powers the login "new bill detected" notice. */
+router.get("/bills/detected-new-count", async (req, res): Promise<void> => {
+  const [row] = await db
+    .select({ count: count() })
+    .from(detectedBillsTable)
+    .where(
+      and(
+        eq(detectedBillsTable.userId, req.userId),
+        eq(detectedBillsTable.status, "pending"),
+        isNull(detectedBillsTable.seenAt),
+      ),
+    );
+  res.json(GetDetectedNewBillCountResponse.parse({ count: row?.count ?? 0 }));
+});
+
+/** Mark all pending unseen detections as seen (review page opened). They stay pending until confirmed/dismissed. */
+router.post("/bills/detected/mark-seen", async (req, res): Promise<void> => {
+  const marked = await db
+    .update(detectedBillsTable)
+    .set({ seenAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(detectedBillsTable.userId, req.userId),
+        inArray(detectedBillsTable.status, ["pending", "duplicate"]),
+        isNull(detectedBillsTable.seenAt),
+      ),
+    )
+    .returning({ id: detectedBillsTable.id });
+  res.json(MarkDetectedBillsSeenResponse.parse({ marked: marked.length }));
 });
 
 router.post("/bills/detected/:id/confirm", async (req, res): Promise<void> => {

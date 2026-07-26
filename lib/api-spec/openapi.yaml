@@ -1610,6 +1610,40 @@ paths:
                 items:
                   $ref: "#/components/schemas/DetectedBillDraft"
 
+  /bills/detected-new-count:
+    get:
+      operationId: getDetectedNewBillCount
+      tags: [bills]
+      summary: Count of pending detections the user has not yet seen
+      responses:
+        "200":
+          description: Unseen pending detection count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count:
+                    type: integer
+
+  /bills/detected/mark-seen:
+    post:
+      operationId: markDetectedBillsSeen
+      tags: [bills]
+      summary: Mark all pending detections as seen (stops the new-bill notification)
+      responses:
+        "200":
+          description: Number of detections marked seen
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [marked]
+                properties:
+                  marked:
+                    type: integer
+
   /bills/detected/{id}/confirm:
     post:
       operationId: confirmDetectedBill
@@ -3416,7 +3450,7 @@ components:
 
     DetectedBillDraft:
       type: object
-      required: [id, displayName, matchMerchant, amount, isVariable, frequency, occurrenceCount, dueDay, confidence, status, suggestedCategory, sampleTransactions]
+      required: [id, displayName, matchMerchant, amount, isVariable, frequency, occurrenceCount, dueDay, confidence, status, isNew, suggestedCategory, sampleTransactions]
       properties:
         id:
           type: integer
@@ -3456,6 +3490,9 @@ components:
         status:
           type: string
           enum: [pending, duplicate]
+        isNew:
+          type: boolean
+          description: True while the detection is pending and the user has not yet viewed it on the review page
         duplicateOf:
           type: integer
           nullable: true

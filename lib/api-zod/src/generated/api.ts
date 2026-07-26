@@ -2044,6 +2044,7 @@ export const ListDetectedBillDraftsResponseItem = zod.object({
   "dueDay": zod.number(),
   "confidence": zod.number(),
   "status": zod.enum(['pending', 'duplicate']),
+  "isNew": zod.boolean().describe('True while the detection is pending and the user has not yet viewed it on the review page'),
   "duplicateOf": zod.number().nullish(),
   "duplicateBillName": zod.string().nullish(),
   "suggestedCategory": zod.string(),
@@ -2056,6 +2057,22 @@ export const ListDetectedBillDraftsResponseItem = zod.object({
 }))
 })
 export const ListDetectedBillDraftsResponse = zod.array(ListDetectedBillDraftsResponseItem)
+
+
+/**
+ * @summary Count of pending detections the user has not yet seen
+ */
+export const GetDetectedNewBillCountResponse = zod.object({
+  "count": zod.number()
+})
+
+
+/**
+ * @summary Mark all pending detections as seen (stops the new-bill notification)
+ */
+export const MarkDetectedBillsSeenResponse = zod.object({
+  "marked": zod.number()
+})
 
 
 /**

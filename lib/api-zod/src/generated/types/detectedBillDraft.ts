@@ -26,6 +26,8 @@ export interface DetectedBillDraft {
   dueDay: number;
   confidence: number;
   status: DetectedBillDraftStatus;
+  /** True while the detection is pending and the user has not yet viewed it on the review page */
+  isNew: boolean;
   duplicateOf?: number | null;
   duplicateBillName?: string | null;
   suggestedCategory: string;
