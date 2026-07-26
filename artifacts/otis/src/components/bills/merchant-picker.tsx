@@ -49,12 +49,24 @@ export function MerchantPicker({ accountId, value, onChange, placeholder, ...res
     { query: { queryKey: getListAccountMerchantsQueryKey({ accountId: accountId ?? 0 }), enabled } },
   );
 
-  const hasMerchants = (merchants?.length ?? 0) > 0;
-  const selected = merchants?.find((m) => m.merchant === value);
+  const loadedMerchants = Array.isArray(merchants) ? merchants : undefined;
+  const hasMerchants = (loadedMerchants?.length ?? 0) > 0;
+  const selected = loadedMerchants?.find((m) => m.merchant === value);
 
-  // Manual card (no synced charges) or no paying account: manual entry is
-  // the only option — flag it as such.
-  if (!enabled || (!isLoading && !hasMerchants)) {
+  // LOADING: fetch in flight — never fall through to the list render with
+  // undefined data.
+  if (enabled && isLoading) {
+    return (
+      <Button type="button" variant="outline" disabled className="w-full justify-between font-normal">
+        <span className="text-muted-foreground">Loading merchants…</span>
+        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+      </Button>
+    );
+  }
+
+  // EMPTY: manual card (no synced charges), fetch error, or no paying
+  // account — manual entry is the only option; flag it as such.
+  if (!enabled || !hasMerchants) {
     return (
       <div className="space-y-1">
         <Input
@@ -118,7 +130,7 @@ export function MerchantPicker({ accountId, value, onChange, placeholder, ...res
               <CommandList>
                 <CommandEmpty>No merchant found in this account's charges.</CommandEmpty>
                 <CommandGroup>
-                  {merchants!.map((m: AccountMerchant) => (
+                  {(loadedMerchants ?? []).map((m: AccountMerchant) => (
                     <CommandItem
                       key={m.merchant}
                       value={`${m.merchant} ${m.displayName}`}
