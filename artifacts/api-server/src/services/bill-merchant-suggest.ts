@@ -42,7 +42,50 @@ export interface BillLinkCandidate {
 type Txn = typeof plaidTransactionsTable.$inferSelect;
 type Bill = typeof billsTable.$inferSelect;
 
-/** Rank candidate merchants for one bill from its account's recent charges. */
+/**
+ * Merchant-name plausibility between the bill and a candidate merchant.
+ * Compares the bill's display name, company_url hostname, and any existing
+ * match_merchant against the candidate. Returns 0 when there is NO
+ * plausible name relationship — such candidates are dropped entirely, no
+ * matter how well the amount fits.
+ */
+function nameAffinity(bill: Bill, merchant: string): number {
+  const sources: string[] = [bill.billName];
+  if (bill.matchMerchant) sources.push(bill.matchMerchant);
+  if (bill.companyUrl) {
+    // "https://www.appletv.com/x" -> "appletv"
+    const host = bill.companyUrl.replace(/^[a-z]+:\/\//i, "").split("/")[0].replace(/^www\./i, "");
+    const stem = host.split(".").slice(0, -1).join(" ") || host;
+    if (stem) sources.push(stem);
+  }
+
+  const mTokens = toks(merchant);
+  let best = 0;
+  for (const src of sources) {
+    const sTokens = toks(src);
+    // Exact shared significant token: "apple tv" ~ "apple.com/bill".
+    if (sTokens.some((t) => mTokens.includes(t))) best = Math.max(best, 1);
+    // Substring containment between tokens (len >= 4): "appletv" ~ "apple".
+    else if (
+      sTokens.some((s) => mTokens.some((m) =>
+        (s.length >= 4 && m.includes(s)) || (m.length >= 4 && s.includes(m))))
+    ) best = Math.max(best, 0.9);
+    // Whole-string trigram similarity: misspellings, spacing differences.
+    else {
+      const tri = trigramSimilarity(src, merchant);
+      if (tri >= 0.5) best = Math.max(best, 0.6 + 0.4 * Math.min(1, (tri - 0.5) / 0.5));
+    }
+  }
+  return best;
+}
+
+/**
+ * Rank candidate merchants for one bill from its account's recent charges.
+ * Merchant-name plausibility is the PRIMARY signal and a hard gate: a
+ * candidate with no name relationship to the bill is never suggested,
+ * regardless of amount fit ("Shell" is not "apple tv" just because both are
+ * ~$13). Amount proximity and cadence only rank among plausible merchants.
+ */
 export function rankCandidates(bill: Bill, txns: Txn[]): BillLinkCandidate[] {
   const expected = num(bill.amount);
   if (expected <= 0) return [];
@@ -61,10 +104,13 @@ export function rankCandidates(bill: Bill, txns: Txn[]): BillLinkCandidate[] {
     else groups.set(key, [t]);
   }
 
-  const billTokens = toks(bill.billName);
   const today = Date.now();
 
   const scored = [...groups.entries()].map(([merchant, charges]) => {
+    // HARD GATE: no plausible merchant-name relationship -> not a candidate.
+    const nameScore = nameAffinity(bill, merchant);
+    if (nameScore === 0) return null;
+
     charges.sort((a, b) => (a.date < b.date ? 1 : -1)); // newest first
 
     // Amount proximity: 1 at exact, 0 at the 15% edge (best single charge).
@@ -93,19 +139,13 @@ export function rankCandidates(bill: Bill, txns: Txn[]): BillLinkCandidate[] {
         median > 0 && Math.abs(median - expectedGap) / expectedGap <= 0.4 ? 1 : 0.4;
     }
 
-    // Name similarity to the bill (shared significant token or trigram).
-    const mTokens = new Set(toks(merchant));
-    const nameScore = billTokens.some((t) => mTokens.has(t))
-      ? 1
-      : trigramSimilarity(bill.billName, merchant) >= 0.5
-        ? 0.7
-        : 0;
-
     // Recency: newest supporting charge, 1 at 0 days -> 0 at 180 days.
     const newestMs = new Date(charges[0].date + "T00:00:00Z").getTime();
     const recencyScore = Math.max(0, 1 - (today - newestMs) / (180 * 86_400_000));
 
-    const score = amountScore * 0.35 + recurrenceScore * 0.3 + nameScore * 0.25 + recencyScore * 0.1;
+    // Merchant plausibility dominates; amount and cadence only break ties
+    // among plausible merchants.
+    const score = nameScore * 0.55 + amountScore * 0.2 + recurrenceScore * 0.15 + recencyScore * 0.1;
 
     return {
       merchant,
@@ -120,18 +160,11 @@ export function rankCandidates(bill: Bill, txns: Txn[]): BillLinkCandidate[] {
     };
   });
 
-  // Plausibility floor: a one-off charge with no name affinity is a guess,
-  // not a suggestion — require recurrence OR name similarity OR near-exact
-  // amount (within 2%).
-  const plausible = scored.filter(
-    (c) =>
-      c.occurrences >= 2 ||
-      c.samples.some((s) => Math.abs(s.amount - expected) / expected <= 0.02) ||
-      billTokens.some((t) => new Set(toks(c.merchant)).has(t)) ||
-      trigramSimilarity(bill.billName, c.merchant) >= 0.5,
-  );
-
-  return plausible
+  // Candidates without a plausible merchant-name relationship were dropped
+  // above — if nothing survives, the bill goes to manual entry instead of
+  // being offered amount-only lookalikes.
+  return scored
+    .filter((c): c is NonNullable<typeof c> => c !== null)
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
     .map(({ score: _score, ...rest }) => rest);
