@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { CountryCode, Products, DepositoryAccountSubtype, CreditAccountSubtype, InvestmentAccountSubtype } from "plaid";
 import { db, accountsTable, plaidItemsTable, plaidTransactionsTable } from "@workspace/db";
 import {
@@ -10,9 +10,12 @@ import {
   DisconnectPlaidAccountResponse,
   SyncPlaidTransactionsResponse,
   ListPlaidTransactionsResponse,
+  RemovePlaidItemParams,
+  RemovePlaidItemResponse,
 } from "@workspace/api-zod";
 import { plaidClient, mapPlaidAccountType } from "../lib/plaid";
 import { syncAllItemsForUser } from "../services/plaid-sync";
+import { removePlaidItem, PlaidRemovalError } from "../services/plaid-item-removal";
 
 const router: IRouter = Router();
 
@@ -37,6 +40,9 @@ router.post("/plaid/create-link-token", async (req, res): Promise<void> => {
       },
       country_codes: [CountryCode.Us],
       language: "en",
+      // Pull up to 2 years of history on new links (institutions may cap
+      // lower on their side, e.g. Capital One's 90-day limit).
+      transactions: { days_requested: 730 },
       ...(process.env["REPLIT_DOMAINS"]
         ? { webhook: `https://${process.env["REPLIT_DOMAINS"].split(",")[0]}/api/plaid/webhook` }
         : {}),
@@ -201,6 +207,32 @@ router.get("/plaid/transactions", async (req, res): Promise<void> => {
       })),
     ),
   );
+});
+
+/**
+ * Remove a Plaid Item completely: revoke at Plaid (/item/remove) and delete
+ * all local data derived from it — transactions, balance snapshots, and the
+ * card-cycle/allocation data of the accounts it backed. Linked accounts are
+ * kept but unlinked (become manual). Idempotent: an already-removed item
+ * returns { removed: false }.
+ */
+router.post("/plaid/items/:id/remove", async (req, res): Promise<void> => {
+  const parsed = RemovePlaidItemParams.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  try {
+    const result = await removePlaidItem(req.userId, parsed.data.id);
+    res.json(RemovePlaidItemResponse.parse({ removed: result === "removed" }));
+  } catch (err) {
+    if (err instanceof PlaidRemovalError) {
+      req.log.error({ plaidCode: err.plaidCode, message: err.message }, "Plaid /item/remove failed");
+      res.status(502).json({ error: "Plaid rejected the removal; nothing was deleted locally" });
+      return;
+    }
+    throw err;
+  }
 });
 
 router.post("/plaid/disconnect", async (req, res): Promise<void> => {

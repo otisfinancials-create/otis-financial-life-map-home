@@ -1694,6 +1694,31 @@ paths:
         "404":
           description: Not found
 
+  /plaid/items/{id}/remove:
+    post:
+      operationId: removePlaidItem
+      tags: [plaid]
+      summary: Remove a Plaid Item — revokes it at Plaid and deletes local item data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Removal result (idempotent — removed=false when the item was already gone)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [removed]
+                properties:
+                  removed:
+                    type: boolean
+        "502":
+          description: Plaid rejected the removal; nothing was deleted locally
+
   /plaid/sync:
     post:
       operationId: syncPlaidTransactions

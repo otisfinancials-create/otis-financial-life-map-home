@@ -1467,6 +1467,10 @@ export type MarkDetectedBillsSeen200 = {
   marked: number;
 };
 
+export type RemovePlaidItem200 = {
+  removed: boolean;
+};
+
 export type ListPlaidTransactionsParams = {
 limit?: number;
 };

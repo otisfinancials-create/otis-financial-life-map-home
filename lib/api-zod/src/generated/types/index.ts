@@ -109,6 +109,7 @@ export * from './processCycleSummary';
 export * from './processCycleSummaryByTargetItem';
 export * from './processCycleSummaryByTargetItemType';
 export * from './regenerateForecastResult';
+export * from './removePlaidItem200';
 export * from './reorderForecastInput';
 export * from './reorderForecastResult';
 export * from './retirementProjection';

@@ -2146,6 +2146,18 @@ export const DismissDetectedBillResponse = zod.object({
 
 
 /**
+ * @summary Remove a Plaid Item — revokes it at Plaid and deletes local item data
+ */
+export const RemovePlaidItemParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RemovePlaidItemResponse = zod.object({
+  "removed": zod.boolean()
+})
+
+
+/**
  * @summary Sync transactions from Plaid for all connected items of the authenticated user
  */
 export const SyncPlaidTransactionsResponse = zod.object({

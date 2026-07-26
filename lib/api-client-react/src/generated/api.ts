@@ -90,6 +90,7 @@ import type {
   PlaidWebhookInput,
   ProcessCycleSummary,
   RegenerateForecastResult,
+  RemovePlaidItem200,
   ReorderForecastInput,
   ReorderForecastResult,
   RetirementProjection,
@@ -6671,6 +6672,76 @@ export const useDismissDetectedBill = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getDismissDetectedBillMutationOptions(options));
+    }
+
+export const getRemovePlaidItemUrl = (id: number,) => {
+
+
+
+
+  return `/api/plaid/items/${id}/remove`
+}
+
+/**
+ * @summary Remove a Plaid Item — revokes it at Plaid and deletes local item data
+ */
+export const removePlaidItem = async (id: number, options?: RequestInit): Promise<RemovePlaidItem200> => {
+
+  return customFetch<RemovePlaidItem200>(getRemovePlaidItemUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRemovePlaidItemMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removePlaidItem>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removePlaidItem>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['removePlaidItem'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removePlaidItem>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  removePlaidItem(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemovePlaidItemMutationResult = NonNullable<Awaited<ReturnType<typeof removePlaidItem>>>
+
+    export type RemovePlaidItemMutationError = ErrorType<void>
+
+    /**
+ * @summary Remove a Plaid Item — revokes it at Plaid and deletes local item data
+ */
+export const useRemovePlaidItem = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removePlaidItem>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof removePlaidItem>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRemovePlaidItemMutationOptions(options));
     }
 
 export const getSyncPlaidTransactionsUrl = () => {
