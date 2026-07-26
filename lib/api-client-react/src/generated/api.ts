@@ -35,8 +35,11 @@ import type {
   Bill,
   BillDetectionSummary,
   BillInput,
+  BillLinkCandidate,
   BillLinkMerchantInput,
   BillLinkReviewItem,
+  BillLinkSample,
+  BillMerchantSuggestInput,
   BillUpdate,
   CardCycle,
   CloseCycleResult,
@@ -5920,6 +5923,153 @@ export const useLinkBillMerchant = <TError = ErrorType<void>,
       > => {
       return useMutation(getLinkBillMerchantMutationOptions(options));
     }
+
+export const getSuggestBillMerchantsUrl = () => {
+
+
+
+
+  return `/api/bills/suggest-merchants`
+}
+
+/**
+ * @summary Suggest likely merchants for a (possibly unsaved) bill from its paying account's recent charges
+ */
+export const suggestBillMerchants = async (billMerchantSuggestInput: BillMerchantSuggestInput, options?: RequestInit): Promise<BillLinkCandidate[]> => {
+
+  return customFetch<BillLinkCandidate[]>(getSuggestBillMerchantsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(billMerchantSuggestInput)
+  }
+);}
+
+
+
+
+export const getSuggestBillMerchantsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestBillMerchants>>, TError,{data: BodyType<BillMerchantSuggestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof suggestBillMerchants>>, TError,{data: BodyType<BillMerchantSuggestInput>}, TContext> => {
+
+const mutationKey = ['suggestBillMerchants'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof suggestBillMerchants>>, {data: BodyType<BillMerchantSuggestInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  suggestBillMerchants(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SuggestBillMerchantsMutationResult = NonNullable<Awaited<ReturnType<typeof suggestBillMerchants>>>
+    export type SuggestBillMerchantsMutationBody = BodyType<BillMerchantSuggestInput>
+    export type SuggestBillMerchantsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Suggest likely merchants for a (possibly unsaved) bill from its paying account's recent charges
+ */
+export const useSuggestBillMerchants = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestBillMerchants>>, TError,{data: BodyType<BillMerchantSuggestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof suggestBillMerchants>>,
+        TError,
+        {data: BodyType<BillMerchantSuggestInput>},
+        TContext
+      > => {
+      return useMutation(getSuggestBillMerchantsMutationOptions(options));
+    }
+
+export const getGetBillMatchingChargesUrl = (id: number,) => {
+
+
+
+
+  return `/api/bills/${id}/matching-charges`
+}
+
+/**
+ * @summary Recent charges currently allocated to this bill's line in its card's cycles
+ */
+export const getBillMatchingCharges = async (id: number, options?: RequestInit): Promise<BillLinkSample[]> => {
+
+  return customFetch<BillLinkSample[]>(getGetBillMatchingChargesUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBillMatchingChargesQueryKey = (id: number,) => {
+    return [
+    `/api/bills/${id}/matching-charges`
+    ] as const;
+    }
+
+
+export const getGetBillMatchingChargesQueryOptions = <TData = Awaited<ReturnType<typeof getBillMatchingCharges>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBillMatchingCharges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBillMatchingChargesQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBillMatchingCharges>>> = ({ signal }) => getBillMatchingCharges(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBillMatchingCharges>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBillMatchingChargesQueryResult = NonNullable<Awaited<ReturnType<typeof getBillMatchingCharges>>>
+export type GetBillMatchingChargesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Recent charges currently allocated to this bill's line in its card's cycles
+ */
+
+export function useGetBillMatchingCharges<TData = Awaited<ReturnType<typeof getBillMatchingCharges>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBillMatchingCharges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBillMatchingChargesQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getDetectBillsUrl = () => {
 

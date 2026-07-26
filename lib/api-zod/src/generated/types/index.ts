@@ -33,6 +33,7 @@ export * from './billLinkCandidate';
 export * from './billLinkMerchantInput';
 export * from './billLinkReviewItem';
 export * from './billLinkSample';
+export * from './billMerchantSuggestInput';
 export * from './billPaymentMethod';
 export * from './billSync';
 export * from './billUpdate';

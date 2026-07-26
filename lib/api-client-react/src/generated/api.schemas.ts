@@ -138,6 +138,8 @@ export interface BillInput {
   isVariable?: boolean;
   isActive?: boolean;
   notes?: string;
+  /** @nullable */
+  matchMerchant?: string | null;
 }
 
 export type BillUpdateAmountType = typeof BillUpdateAmountType[keyof typeof BillUpdateAmountType];
@@ -181,6 +183,17 @@ export interface BillUpdate {
   isVariable?: boolean;
   isActive?: boolean;
   notes?: string;
+  /** @nullable */
+  matchMerchant?: string | null;
+}
+
+export interface BillMerchantSuggestInput {
+  billName: string;
+  amount: number;
+  frequency?: string;
+  paymentAccountId: number;
+  /** @nullable */
+  companyUrl?: string | null;
 }
 
 export interface LifeEvent {

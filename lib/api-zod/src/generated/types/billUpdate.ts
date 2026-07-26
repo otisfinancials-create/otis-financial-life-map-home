@@ -27,4 +27,6 @@ export interface BillUpdate {
   isVariable?: boolean;
   isActive?: boolean;
   notes?: string;
+  /** @nullable */
+  matchMerchant?: string | null;
 }

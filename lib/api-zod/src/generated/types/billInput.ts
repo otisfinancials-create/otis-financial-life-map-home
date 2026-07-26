@@ -26,4 +26,6 @@ export interface BillInput {
   isVariable?: boolean;
   isActive?: boolean;
   notes?: string;
+  /** @nullable */
+  matchMerchant?: string | null;
 }

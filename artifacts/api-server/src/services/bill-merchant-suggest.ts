@@ -170,6 +170,43 @@ export function rankCandidates(bill: Bill, txns: Txn[]): BillLinkCandidate[] {
     .map(({ score: _score, ...rest }) => rest);
 }
 
+/**
+ * Suggestions for a bill-like shape that may not be saved yet (create form)
+ * or whose fields are being edited. Loads the paying account's recent
+ * charges and ranks them with the same merchant-name-first engine.
+ */
+export async function suggestForBillLike(
+  userId: string,
+  input: { billName: string; amount: number; frequency?: string | null; paymentAccountId: number; companyUrl?: string | null },
+  lookbackDays = 180,
+): Promise<BillLinkCandidate[]> {
+  const [account] = await db
+    .select()
+    .from(accountsTable)
+    .where(and(eq(accountsTable.id, input.paymentAccountId), eq(accountsTable.userId, userId)));
+  if (!account?.plaidAccountId) return [];
+
+  const sinceIso = new Date(Date.now() - lookbackDays * 86_400_000).toISOString().slice(0, 10);
+  const txns = await db
+    .select()
+    .from(plaidTransactionsTable)
+    .where(and(
+      eq(plaidTransactionsTable.accountId, account.plaidAccountId),
+      gt(plaidTransactionsTable.amount, "0"),
+      eq(plaidTransactionsTable.pending, false),
+      gte(plaidTransactionsTable.date, sinceIso),
+    ));
+
+  const pseudoBill = {
+    billName: input.billName,
+    amount: String(input.amount),
+    frequency: input.frequency ?? "monthly",
+    companyUrl: input.companyUrl ?? null,
+    matchMerchant: null,
+  } as Bill;
+  return rankCandidates(pseudoBill, txns);
+}
+
 export interface BillLinkReviewItem {
   bill: Bill;
   accountName: string;

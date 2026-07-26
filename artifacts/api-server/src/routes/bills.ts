@@ -1,10 +1,22 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
-import { db, billsTable, forecastedTransactionsTable, accountsTable } from "@workspace/db";
+import { eq, and, desc } from "drizzle-orm";
+import {
+  db,
+  billsTable,
+  forecastedTransactionsTable,
+  accountsTable,
+  cardCycleBillsTable,
+  envelopeAllocationsTable,
+  plaidTransactionsTable,
+} from "@workspace/db";
 import { syncBillWithCycles, detachBillFromAllCycles, refreshClosedCycles } from "../services/bill-cycle-sync";
-import { listBillLinkReview } from "../services/bill-merchant-suggest";
+import { listBillLinkReview, suggestForBillLike } from "../services/bill-merchant-suggest";
 import {
   GetBillLinkReviewResponse,
+  SuggestBillMerchantsBody,
+  SuggestBillMerchantsResponse,
+  GetBillMatchingChargesParams,
+  GetBillMatchingChargesResponse,
   LinkBillMerchantParams,
   LinkBillMerchantBody,
   LinkBillMerchantResponse,
@@ -33,6 +45,18 @@ function canonicalizeDueDay<T extends { frequency?: string | null; startDate?: s
     if (!Number.isNaN(day)) return { ...data, dueDay: day };
   }
   return data;
+}
+
+/**
+ * Normalize a user-supplied match merchant the same way the matcher
+ * normalizes transaction names, so stored keys and match-time keys line up.
+ * Empty/whitespace-only input clears the link (null).
+ */
+function normalizeMatchMerchant(raw: string | null | undefined): string | null | undefined {
+  if (raw === undefined) return undefined; // not part of this request
+  if (raw === null) return null;
+  const norm = raw.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  return norm || null;
 }
 
 /** Reject paymentAccountId values that don't belong to the requesting user. */
@@ -68,6 +92,7 @@ router.post("/bills", async (req, res): Promise<void> => {
   }
   const [bill] = await db.insert(billsTable).values({
     ...data,
+    matchMerchant: normalizeMatchMerchant(data.matchMerchant),
     userId: req.userId,
     amount: String(data.amount),
     isVariable: data.isVariable ?? false,
@@ -118,6 +143,19 @@ router.get("/bills/upcoming", async (req, res): Promise<void> => {
     .sort((a, b) => a.daysUntilDue - b.daysUntilDue);
 
   res.json(GetUpcomingBillsResponse.parse(upcoming));
+});
+
+// Merchant suggestions for the bill form (create OR edit — the bill may not
+// be saved yet, so the caller sends the bill-like fields). Must be
+// registered before /bills/:id.
+router.post("/bills/suggest-merchants", async (req, res): Promise<void> => {
+  const parsed = SuggestBillMerchantsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const candidates = await suggestForBillLike(req.userId, parsed.data);
+  res.json(SuggestBillMerchantsResponse.parse(candidates));
 });
 
 // P5.5 one-time "link existing bills" pass — must be registered before
@@ -174,6 +212,45 @@ router.post("/bills/:id/link-merchant", async (req, res): Promise<void> => {
   res.json(LinkBillMerchantResponse.parse(serializeBill(bill)));
 });
 
+// "Currently matching" preview: the charges presently allocated to this
+// bill's line across its card's cycles (newest first).
+router.get("/bills/:id/matching-charges", async (req, res): Promise<void> => {
+  const params = GetBillMatchingChargesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [bill] = await db
+    .select({ id: billsTable.id })
+    .from(billsTable)
+    .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)));
+  if (!bill) {
+    res.status(404).json({ error: "Bill not found" });
+    return;
+  }
+  const rows = await db
+    .select({
+      date: plaidTransactionsTable.date,
+      amount: plaidTransactionsTable.amount,
+      merchantName: plaidTransactionsTable.merchantName,
+      name: plaidTransactionsTable.name,
+    })
+    .from(envelopeAllocationsTable)
+    .innerJoin(cardCycleBillsTable, eq(envelopeAllocationsTable.cardCycleBillId, cardCycleBillsTable.id))
+    .innerJoin(plaidTransactionsTable, eq(envelopeAllocationsTable.plaidTransactionId, plaidTransactionsTable.plaidTransactionId))
+    .where(and(
+      eq(cardCycleBillsTable.billId, params.data.id),
+      eq(envelopeAllocationsTable.userId, req.userId),
+    ))
+    .orderBy(desc(plaidTransactionsTable.date))
+    .limit(10);
+  res.json(GetBillMatchingChargesResponse.parse(rows.map((r) => ({
+    date: r.date,
+    amount: parseFloat(String(r.amount)),
+    description: r.merchantName || r.name || "",
+  }))));
+});
+
 router.get("/bills/:id", async (req, res): Promise<void> => {
   const params = GetBillParams.safeParse(req.params);
   if (!params.success) {
@@ -208,7 +285,8 @@ router.patch("/bills/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid paying account" });
     return;
   }
-  const { amount: rawBillAmount, ...restBillData } = canonicalized;
+  const { amount: rawBillAmount, matchMerchant: rawMatchMerchant, ...restBillData } = canonicalized;
+  const matchMerchant = normalizeMatchMerchant(rawMatchMerchant);
   // Capture the pre-update paying account so a moved bill leaves the old
   // card's cycles as part of the sync.
   const [before] = await db
@@ -220,6 +298,7 @@ router.patch("/bills/:id", async (req, res): Promise<void> => {
     .set({
       ...restBillData,
       ...(rawBillAmount !== undefined && { amount: String(rawBillAmount) }),
+      ...(matchMerchant !== undefined && { matchMerchant }),
       updatedAt: new Date(),
     })
     .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)))

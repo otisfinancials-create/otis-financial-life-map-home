@@ -1500,6 +1500,50 @@ paths:
         "404":
           description: Not found
 
+  /bills/suggest-merchants:
+    post:
+      operationId: suggestBillMerchants
+      tags: [bills]
+      summary: Suggest likely merchants for a (possibly unsaved) bill from its paying account's recent charges
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillMerchantSuggestInput"
+      responses:
+        "200":
+          description: Ranked merchant candidates (merchant-name plausibility first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillLinkCandidate"
+
+  /bills/{id}/matching-charges:
+    get:
+      operationId: getBillMatchingCharges
+      tags: [bills]
+      summary: Recent charges currently allocated to this bill's line in its card's cycles
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Charges currently matched to the bill (newest first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillLinkSample"
+        "404":
+          description: Not found
+
   /bills/detect:
     post:
       operationId: detectBills
@@ -1808,6 +1852,8 @@ components:
           type: boolean
         notes:
           type: string
+        matchMerchant:
+          type: ["string", "null"]
 
     BillUpdate:
       type: object
@@ -1844,6 +1890,23 @@ components:
           type: boolean
         notes:
           type: string
+        matchMerchant:
+          type: ["string", "null"]
+
+    BillMerchantSuggestInput:
+      type: object
+      required: [billName, amount, paymentAccountId]
+      properties:
+        billName:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+        paymentAccountId:
+          type: integer
+        companyUrl:
+          type: ["string", "null"]
 
     # ── Life Events ────────────────────────────────────────────────────────────
     LifeEvent:

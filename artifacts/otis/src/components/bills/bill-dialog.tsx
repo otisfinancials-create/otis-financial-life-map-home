@@ -38,9 +38,12 @@ import {
   useCreateBill,
   useUpdateBill,
   useListAccounts,
+  useSuggestBillMerchants,
+  useGetBillMatchingCharges,
   getListBillsQueryKey,
   getGetUpcomingBillsQueryKey,
   getGetDashboardSummaryQueryKey,
+  getGetBillMatchingChargesQueryKey,
 } from "@workspace/api-client-react";
 import type { Bill, BillInputPaymentMethod } from "@workspace/api-client-react";
 import { useSyncForecast } from "@/hooks/use-sync-forecast";
@@ -115,6 +118,10 @@ const billSchema = z
     notes: z
       .string()
       .max(MAX_TEXT, { message: `Notes must be ${MAX_TEXT} characters or fewer.` })
+      .optional(),
+    matchMerchant: z
+      .string()
+      .max(MAX_TEXT, { message: `Merchant must be ${MAX_TEXT} characters or fewer.` })
       .optional(),
   })
   .superRefine((data, ctx) => {
@@ -285,6 +292,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       isVariable: bill?.isVariable || false,
       isActive: bill?.isActive ?? true,
       notes: bill?.notes || "",
+      matchMerchant: bill?.matchMerchant || "",
     },
   });
 
@@ -305,9 +313,20 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       isVariable: bill?.isVariable || false,
       isActive: bill?.isActive ?? true,
       notes: bill?.notes || "",
+      matchMerchant: bill?.matchMerchant || "",
     });
+    // Suggestions belong to the previous bill's context — clear them so
+    // stale chips can't be applied to a different bill.
+    suggestMerchants.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bill?.id]);
+
+  const suggestMerchants = useSuggestBillMerchants();
+  // "Currently matching" preview (edit only): charges presently on this
+  // bill's line, so the user can see whether the link grabs the right ones.
+  const { data: matchingCharges } = useGetBillMatchingCharges(bill?.id ?? 0, {
+    query: { queryKey: getGetBillMatchingChargesQueryKey(bill?.id ?? 0), enabled: !!bill?.id },
+  });
 
   const watchedPaymentMethod = form.watch("paymentMethod");
   const watchedIsVariable = form.watch("isVariable");
@@ -366,6 +385,8 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       isVariable: data.isVariable,
       isActive: data.isActive,
       notes: data.notes || undefined,
+      // null clears an existing link; the server normalizes the string.
+      matchMerchant: data.matchMerchant?.trim() || null,
     };
 
     if (isEditing) {
@@ -373,6 +394,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       // would omit the field from the PATCH and the old value would stick).
       updateBill.mutate({ id: bill.id, data: { ...payload, endDate: data.endDate || null } }, {
         onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetBillMatchingChargesQueryKey(bill.id) });
           queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetUpcomingBillsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
@@ -633,6 +655,94 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
                   <FormControl>
                     <Input placeholder="e.g. netflix.com" maxLength={MAX_TEXT} {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="matchMerchant"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Matches charges from <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    {form.watch("paymentAccountId") && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        disabled={suggestMerchants.isPending}
+                        onClick={() => {
+                          const v = form.getValues();
+                          suggestMerchants.mutate({
+                            data: {
+                              billName: v.billName || "",
+                              amount: Number(v.amount) || 0,
+                              frequency: v.frequency || "monthly",
+                              paymentAccountId: Number(v.paymentAccountId),
+                              companyUrl: normalizeCompanyUrl(v.companyUrl) ?? null,
+                            },
+                          });
+                        }}
+                        data-testid="button-suggest-merchant"
+                      >
+                        {suggestMerchants.isPending ? "Looking…" : "Suggest"}
+                      </Button>
+                    )}
+                  </div>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g. AT&T MOBILITY"
+                      maxLength={MAX_TEXT}
+                      {...field}
+                      value={field.value ?? ""}
+                      data-testid="input-match-merchant"
+                    />
+                  </FormControl>
+                  <FormDescription className="text-[10px]">
+                    Otis uses this to recognize this bill's charges from your accounts. Usually the
+                    merchant name as it appears on your statement (e.g. 'AT&T MOBILITY').
+                  </FormDescription>
+                  {suggestMerchants.isSuccess && suggestMerchants.data.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      No likely merchant found in recent charges — type it manually.
+                    </p>
+                  )}
+                  {(suggestMerchants.data?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {suggestMerchants.data!.map((c) => (
+                        <button
+                          key={c.merchant}
+                          type="button"
+                          onClick={() => form.setValue("matchMerchant", c.merchant, { shouldDirty: true })}
+                          className="rounded-full border border-border px-2.5 py-1 text-xs hover:border-primary hover:bg-primary/5"
+                          title={c.samples.map((s) => `$${s.amount.toFixed(2)} on ${s.date}`).join(", ")}
+                          data-testid={`chip-suggestion-${c.merchant.replace(/\s+/g, "-")}`}
+                        >
+                          {c.displayName}{" "}
+                          <span className="text-muted-foreground">
+                            ({c.samples[0] ? `$${c.samples[0].amount.toFixed(2)}, ` : ""}{c.occurrences}×)
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {isEditing && (matchingCharges?.length ?? 0) > 0 && (
+                    <p className="text-[11px] text-muted-foreground" data-testid="text-currently-matching">
+                      Currently matching:{" "}
+                      {matchingCharges!.slice(0, 3).map((c, i) => (
+                        <span key={`${c.date}-${i}`} className="text-foreground">
+                          {i > 0 && ", "}
+                          {c.description} ${c.amount.toFixed(2)} on {Number(c.date.slice(5, 7))}/{Number(c.date.slice(8, 10))}
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                  {isEditing && bill?.matchMerchant && (matchingCharges?.length ?? 0) === 0 && (
+                    <p className="text-[11px] text-muted-foreground">No charges matched yet this cycle.</p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

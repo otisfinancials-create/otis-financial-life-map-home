@@ -77,7 +77,8 @@ export const CreateBillBody = zod.object({
   "companyUrl": zod.string().optional(),
   "isVariable": zod.boolean().optional(),
   "isActive": zod.boolean().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "matchMerchant": zod.string().nullish()
 })
 
 export const CreateBillResponse = zod.object({
@@ -170,7 +171,8 @@ export const UpdateBillBody = zod.object({
   "companyUrl": zod.string().optional(),
   "isVariable": zod.boolean().optional(),
   "isActive": zod.boolean().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "matchMerchant": zod.string().nullish()
 })
 
 export const UpdateBillResponse = zod.object({
@@ -1929,6 +1931,45 @@ export const LinkBillMerchantResponse = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
+
+
+/**
+ * @summary Suggest likely merchants for a (possibly unsaved) bill from its paying account's recent charges
+ */
+export const SuggestBillMerchantsBody = zod.object({
+  "billName": zod.string(),
+  "amount": zod.number(),
+  "frequency": zod.string().optional(),
+  "paymentAccountId": zod.number(),
+  "companyUrl": zod.string().nullish()
+})
+
+export const SuggestBillMerchantsResponseItem = zod.object({
+  "merchant": zod.string().describe('Normalized merchant key to store as match_merchant'),
+  "displayName": zod.string().describe('Best raw merchant\/transaction name for display'),
+  "occurrences": zod.number(),
+  "samples": zod.array(zod.object({
+  "date": zod.string(),
+  "amount": zod.number(),
+  "description": zod.string()
+}))
+})
+export const SuggestBillMerchantsResponse = zod.array(SuggestBillMerchantsResponseItem)
+
+
+/**
+ * @summary Recent charges currently allocated to this bill's line in its card's cycles
+ */
+export const GetBillMatchingChargesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetBillMatchingChargesResponseItem = zod.object({
+  "date": zod.string(),
+  "amount": zod.number(),
+  "description": zod.string()
+})
+export const GetBillMatchingChargesResponse = zod.array(GetBillMatchingChargesResponseItem)
 
 
 /**
