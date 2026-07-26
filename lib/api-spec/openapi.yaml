@@ -1500,6 +1500,29 @@ paths:
         "404":
           description: Not found
 
+  /bills/account-merchants:
+    get:
+      operationId: listAccountMerchants
+      tags: [bills]
+      summary: Distinct real merchants from posted charges on an account, for exact match_merchant picking
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Real merchants (most recent/frequent first). Empty for manual accounts with no synced charges.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountMerchant"
+        "404":
+          description: Account not found
+
   /bills/suggest-merchants:
     post:
       operationId: suggestBillMerchants
@@ -1892,6 +1915,22 @@ components:
           type: string
         matchMerchant:
           type: ["string", "null"]
+
+    AccountMerchant:
+      type: object
+      required: [merchant, displayName, occurrences, typicalAmount, lastDate]
+      properties:
+        merchant:
+          type: string
+          description: Normalized merchant key (exact value to store as match_merchant)
+        displayName:
+          type: string
+        occurrences:
+          type: integer
+        typicalAmount:
+          type: number
+        lastDate:
+          type: string
 
     BillMerchantSuggestInput:
       type: object

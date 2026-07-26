@@ -187,6 +187,15 @@ export interface BillUpdate {
   matchMerchant?: string | null;
 }
 
+export interface AccountMerchant {
+  /** Normalized merchant key (exact value to store as match_merchant) */
+  merchant: string;
+  displayName: string;
+  occurrences: number;
+  typicalAmount: number;
+  lastDate: string;
+}
+
 export interface BillMerchantSuggestInput {
   billName: string;
   amount: number;
@@ -1362,6 +1371,10 @@ export interface PlaidTransaction {
 export type ListForecastParams = {
 startDate?: string;
 endDate?: string;
+};
+
+export type ListAccountMerchantsParams = {
+accountId: number;
 };
 
 export type ListPlaidTransactionsParams = {

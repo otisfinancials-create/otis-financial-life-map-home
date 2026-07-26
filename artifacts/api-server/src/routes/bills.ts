@@ -10,9 +10,11 @@ import {
   plaidTransactionsTable,
 } from "@workspace/db";
 import { syncBillWithCycles, detachBillFromAllCycles, refreshClosedCycles } from "../services/bill-cycle-sync";
-import { listBillLinkReview, suggestForBillLike } from "../services/bill-merchant-suggest";
+import { listBillLinkReview, suggestForBillLike, listAccountMerchants } from "../services/bill-merchant-suggest";
 import {
   GetBillLinkReviewResponse,
+  ListAccountMerchantsQueryParams,
+  ListAccountMerchantsResponse,
   SuggestBillMerchantsBody,
   SuggestBillMerchantsResponse,
   GetBillMatchingChargesParams,
@@ -143,6 +145,22 @@ router.get("/bills/upcoming", async (req, res): Promise<void> => {
     .sort((a, b) => a.daysUntilDue - b.daysUntilDue);
 
   res.json(GetUpcomingBillsResponse.parse(upcoming));
+});
+
+// Real-merchant picker source: distinct merchants from posted charges on an
+// account. Registered before /bills/:id.
+router.get("/bills/account-merchants", async (req, res): Promise<void> => {
+  const parsed = ListAccountMerchantsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const merchants = await listAccountMerchants(req.userId, parsed.data.accountId);
+  if (merchants === null) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  res.json(ListAccountMerchantsResponse.parse(merchants));
 });
 
 // Merchant suggestions for the bill form (create OR edit — the bill may not

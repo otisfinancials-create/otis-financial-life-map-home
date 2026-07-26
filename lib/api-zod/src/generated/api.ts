@@ -1934,6 +1934,23 @@ export const LinkBillMerchantResponse = zod.object({
 
 
 /**
+ * @summary Distinct real merchants from posted charges on an account, for exact match_merchant picking
+ */
+export const ListAccountMerchantsQueryParams = zod.object({
+  "accountId": zod.coerce.number()
+})
+
+export const ListAccountMerchantsResponseItem = zod.object({
+  "merchant": zod.string().describe('Normalized merchant key (exact value to store as match_merchant)'),
+  "displayName": zod.string(),
+  "occurrences": zod.number(),
+  "typicalAmount": zod.number(),
+  "lastDate": zod.string()
+})
+export const ListAccountMerchantsResponse = zod.array(ListAccountMerchantsResponseItem)
+
+
+/**
  * @summary Suggest likely merchants for a (possibly unsaved) bill from its paying account's recent charges
  */
 export const SuggestBillMerchantsBody = zod.object({

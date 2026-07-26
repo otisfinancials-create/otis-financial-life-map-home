@@ -15,11 +15,11 @@ import type { BillLinkReviewItem, BillLinkCandidate } from "@workspace/api-clien
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormatCurrency } from "@/components/ui/format-currency";
+import { MerchantPicker } from "@/components/bills/merchant-picker";
 import { useToast } from "@/hooks/use-toast";
 
 function formatShortDate(iso: string): string {
@@ -77,8 +77,10 @@ function BillRow({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(item.candidates[0]?.merchant ?? null);
-  const [manualMode, setManualMode] = useState(item.candidates.length === 0);
-  const [manualValue, setManualValue] = useState("");
+  // Picker mode: choose from the account's REAL merchants (searchable).
+  // Default straight to it when there are no ranked suggestions.
+  const [pickerMode, setPickerMode] = useState(item.candidates.length === 0);
+  const [pickedMerchant, setPickedMerchant] = useState("");
 
   const linkMutation = useLinkBillMerchant({
     mutation: {
@@ -99,7 +101,7 @@ function BillRow({
   });
 
   const confirm = () => {
-    const merchant = manualMode ? manualValue.trim() : selected;
+    const merchant = pickerMode ? pickedMerchant.trim() : selected;
     if (!merchant) return;
     linkMutation.mutate({ id: item.bill.id, data: { matchMerchant: merchant } });
   };
@@ -129,11 +131,11 @@ function BillRow({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setManualMode((m) => !m)}
+                onClick={() => setPickerMode((m) => !m)}
                 data-testid={`button-manual-${item.bill.id}`}
               >
                 <PencilLine className="mr-1 h-4 w-4" />
-                {manualMode ? "Use suggestions" : "Enter manually"}
+                {pickerMode ? "Use suggestions" : "Pick another merchant"}
               </Button>
             )}
             <Button variant="ghost" size="sm" onClick={onSkip} data-testid={`button-skip-${item.bill.id}`}>
@@ -145,17 +147,17 @@ function BillRow({
 
       {!linked && !skipped && (
         <div className="mt-3 space-y-2">
-          {manualMode ? (
-            <div className="flex gap-2">
-              <Input
-                placeholder="Merchant name as it appears on the statement (e.g. AT&T MOBILITY)"
-                value={manualValue}
-                onChange={(e) => setManualValue(e.target.value)}
+          {pickerMode ? (
+            <div className="space-y-2">
+              <MerchantPicker
+                accountId={item.bill.paymentAccountId}
+                value={pickedMerchant}
+                onChange={setPickedMerchant}
                 data-testid={`input-manual-${item.bill.id}`}
               />
               <Button
                 onClick={confirm}
-                disabled={!manualValue.trim() || linkMutation.isPending}
+                disabled={!pickedMerchant.trim() || linkMutation.isPending}
                 data-testid={`button-confirm-${item.bill.id}`}
               >
                 {linkMutation.isPending ? "Linking…" : "Link"}

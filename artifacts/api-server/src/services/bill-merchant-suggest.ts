@@ -170,6 +170,74 @@ export function rankCandidates(bill: Bill, txns: Txn[]): BillLinkCandidate[] {
     .map(({ score: _score, ...rest }) => rest);
 }
 
+export interface AccountMerchant {
+  merchant: string;
+  displayName: string;
+  occurrences: number;
+  typicalAmount: number;
+  lastDate: string;
+}
+
+/**
+ * Distinct real merchants from posted money-out charges on an account,
+ * for exact match_merchant picking. Empty for manual accounts (no Plaid).
+ * Sorted by recency, then frequency.
+ */
+export async function listAccountMerchants(
+  userId: string,
+  accountId: number,
+  lookbackDays = 365,
+): Promise<AccountMerchant[] | null> {
+  const [account] = await db
+    .select()
+    .from(accountsTable)
+    .where(and(eq(accountsTable.id, accountId), eq(accountsTable.userId, userId)));
+  if (!account) return null;
+  if (!account.plaidAccountId) return [];
+
+  const sinceIso = new Date(Date.now() - lookbackDays * 86_400_000).toISOString().slice(0, 10);
+  const txns = await db
+    .select()
+    .from(plaidTransactionsTable)
+    .where(and(
+      eq(plaidTransactionsTable.accountId, account.plaidAccountId),
+      gt(plaidTransactionsTable.amount, "0"),
+      eq(plaidTransactionsTable.pending, false),
+      gte(plaidTransactionsTable.date, sinceIso),
+    ));
+
+  const groups = new Map<string, { displayName: string; amounts: number[]; lastDate: string }>();
+  for (const t of txns) {
+    const raw = t.merchantName || t.name || "";
+    const key = norm(raw);
+    if (!key) continue;
+    const g = groups.get(key);
+    const amt = parseFloat(String(t.amount));
+    if (!g) {
+      groups.set(key, { displayName: raw, amounts: [amt], lastDate: t.date });
+    } else {
+      g.amounts.push(amt);
+      if (t.date > g.lastDate) {
+        g.lastDate = t.date;
+        g.displayName = raw;
+      }
+    }
+  }
+
+  return [...groups.entries()]
+    .map(([merchant, g]) => {
+      const sorted = [...g.amounts].sort((a, b) => a - b);
+      return {
+        merchant,
+        displayName: g.displayName,
+        occurrences: g.amounts.length,
+        typicalAmount: sorted[Math.floor(sorted.length / 2)],
+        lastDate: g.lastDate,
+      };
+    })
+    .sort((a, b) => (b.lastDate < a.lastDate ? -1 : b.lastDate > a.lastDate ? 1 : b.occurrences - a.occurrences));
+}
+
 /**
  * Suggestions for a bill-like shape that may not be saved yet (create form)
  * or whose fields are being edited. Loads the paying account's recent

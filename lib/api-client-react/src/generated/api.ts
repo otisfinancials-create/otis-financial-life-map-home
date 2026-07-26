@@ -25,6 +25,7 @@ import type {
   AccountGoal,
   AccountGoalInput,
   AccountInput,
+  AccountMerchant,
   AccountUpdate,
   AccountsSummary,
   Asset,
@@ -57,6 +58,7 @@ import type {
   LifeEvent,
   LifeEventInput,
   LifeEventUpdate,
+  ListAccountMerchantsParams,
   ListForecastParams,
   ListPlaidTransactionsParams,
   Loan,
@@ -5923,6 +5925,90 @@ export const useLinkBillMerchant = <TError = ErrorType<void>,
       > => {
       return useMutation(getLinkBillMerchantMutationOptions(options));
     }
+
+export const getListAccountMerchantsUrl = (params: ListAccountMerchantsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/bills/account-merchants?${stringifiedParams}` : `/api/bills/account-merchants`
+}
+
+/**
+ * @summary Distinct real merchants from posted charges on an account, for exact match_merchant picking
+ */
+export const listAccountMerchants = async (params: ListAccountMerchantsParams, options?: RequestInit): Promise<AccountMerchant[]> => {
+
+  return customFetch<AccountMerchant[]>(getListAccountMerchantsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAccountMerchantsQueryKey = (params?: ListAccountMerchantsParams,) => {
+    return [
+    `/api/bills/account-merchants`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAccountMerchantsQueryOptions = <TData = Awaited<ReturnType<typeof listAccountMerchants>>, TError = ErrorType<void>>(params: ListAccountMerchantsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountMerchants>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAccountMerchantsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAccountMerchants>>> = ({ signal }) => listAccountMerchants(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAccountMerchants>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAccountMerchantsQueryResult = NonNullable<Awaited<ReturnType<typeof listAccountMerchants>>>
+export type ListAccountMerchantsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Distinct real merchants from posted charges on an account, for exact match_merchant picking
+ */
+
+export function useListAccountMerchants<TData = Awaited<ReturnType<typeof listAccountMerchants>>, TError = ErrorType<void>>(
+ params: ListAccountMerchantsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountMerchants>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAccountMerchantsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getSuggestBillMerchantsUrl = () => {
 

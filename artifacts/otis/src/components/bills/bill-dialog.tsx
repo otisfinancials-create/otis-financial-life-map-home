@@ -47,6 +47,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Bill, BillInputPaymentMethod } from "@workspace/api-client-react";
 import { useSyncForecast } from "@/hooks/use-sync-forecast";
+import { MerchantPicker } from "@/components/bills/merchant-picker";
 
 const CATEGORIES = [
   "Housing",
@@ -693,11 +694,10 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
                     )}
                   </div>
                   <FormControl>
-                    <Input
-                      placeholder="e.g. AT&T MOBILITY"
-                      maxLength={MAX_TEXT}
-                      {...field}
+                    <MerchantPicker
+                      accountId={form.watch("paymentAccountId") ? Number(form.watch("paymentAccountId")) : null}
                       value={field.value ?? ""}
+                      onChange={(m) => form.setValue("matchMerchant", m, { shouldDirty: true })}
                       data-testid="input-match-merchant"
                     />
                   </FormControl>
