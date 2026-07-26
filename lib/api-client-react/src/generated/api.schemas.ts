@@ -1362,6 +1362,8 @@ export interface DetectedBillDraft {
   dueDay: number;
   confidence: number;
   status: DetectedBillDraftStatus;
+  /** True while the detection is pending and the user has not yet viewed it on the review page */
+  isNew: boolean;
   duplicateOf?: number | null;
   duplicateBillName?: string | null;
   suggestedCategory: string;
@@ -1455,6 +1457,14 @@ endDate?: string;
 
 export type ListAccountMerchantsParams = {
 accountId: number;
+};
+
+export type GetDetectedNewBillCount200 = {
+  count: number;
+};
+
+export type MarkDetectedBillsSeen200 = {
+  marked: number;
 };
 
 export type ListPlaidTransactionsParams = {
