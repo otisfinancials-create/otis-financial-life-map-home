@@ -39,6 +39,7 @@ function getCategoryIcon(category: string): keyof typeof Feather.glyphMap {
     Subscriptions: "repeat",
     Transportation: "truck",
     Auto: "truck",
+    "Cell Phone": "smartphone",
     Food: "coffee",
     Medical: "activity",
     Health: "heart",

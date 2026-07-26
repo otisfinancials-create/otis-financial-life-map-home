@@ -14,6 +14,7 @@ export const BILL_CATEGORIES = [
   "Food",
   "Transportation",
   "Auto",
+  "Cell Phone",
   "Medical",
   "Health",
   "Childcare / Education",
@@ -52,6 +53,7 @@ const PLAID_PRIMARY_TO_CATEGORY: Record<string, BillCategory> = {
  * Matched by substring on personal_finance_category_detailed.
  */
 const PLAID_DETAILED_OVERRIDES: Array<[substring: string, category: BillCategory]> = [
+  ["TELEPHONE", "Cell Phone"],
   ["RENT_AND_UTILITIES_RENT", "Housing"],
   ["MORTGAGE", "Housing"],
   ["TAX_PAYMENT", "Taxes"],
