@@ -17,7 +17,10 @@ import {
   SyncBalanceBody,
   SyncBalanceResponse,
   ListBalanceSyncsResponse,
+  GetForecastCalendarQueryParams,
+  GetForecastCalendarResponse,
 } from "@workspace/api-zod";
+import { plaidTransactionsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -119,6 +122,271 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
   }));
 
   res.json(GetMonthlyForecastResponse.parse(result));
+});
+
+/**
+ * Hybrid month calendar (Phase 1 — existing data only).
+ * Future days (>= today) show the plan from forecasted_transactions; past
+ * days show posted Plaid actuals on cash accounts (non-bill spend bucketed by
+ * category). End-of-day balances roll forward from the ledger balance at the
+ * start of the month, re-anchoring at balance-update rows.
+ */
+router.get("/forecast/calendar", async (req, res): Promise<void> => {
+  const parsed = GetForecastCalendarQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const month = parsed.data.month;
+  const [yStr, mStr] = month.split("-");
+  const year = Number(yStr);
+  const mon = Number(mStr); // 1-based
+  if (mon < 1 || mon > 12) {
+    res.status(400).json({ error: "Invalid month" });
+    return;
+  }
+  const daysInMonth = new Date(year, mon, 0).getDate();
+  const monthStart = `${month}-01`;
+  const monthEnd = `${month}-${String(daysInMonth).padStart(2, "0")}`;
+  const todayStr = toLocalIso(new Date());
+
+  type Ev = {
+    kind: "income" | "bill" | "card-payment" | "spend" | "balance-update" | "other";
+    label: string;
+    amount: number;
+    cycleId?: number | null;
+    category?: string | null;
+    count?: number | null;
+    charges?: Array<{ date: string; name: string; amount: number }> | null;
+  };
+  const eventsByDate = new Map<string, Ev[]>();
+  const push = (date: string, ev: Ev) => {
+    const list = eventsByDate.get(date) ?? [];
+    list.push(ev);
+    eventsByDate.set(date, list);
+  };
+  const cents = (n: number) => Math.round(n * 100) / 100;
+
+  // All forecast rows (minimal columns) — needed both for the month's plan
+  // days and for anchoring the start-of-month balance.
+  const fRows = await db
+    .select({
+      transactionDate: forecastedTransactionsTable.transactionDate,
+      description: forecastedTransactionsTable.description,
+      amount: forecastedTransactionsTable.amount,
+      transactionType: forecastedTransactionsTable.transactionType,
+      category: forecastedTransactionsTable.category,
+      sourceBalanceSyncId: forecastedTransactionsTable.sourceBalanceSyncId,
+      sourceCardCycleId: forecastedTransactionsTable.sourceCardCycleId,
+      sourceBillId: forecastedTransactionsTable.sourceBillId,
+      ccAccountId: forecastedTransactionsTable.ccAccountId,
+      isCcParent: forecastedTransactionsTable.isCcParent,
+      status: forecastedTransactionsTable.status,
+      sortOrder: forecastedTransactionsTable.sortOrder,
+    })
+    .from(forecastedTransactionsTable)
+    .where(eq(forecastedTransactionsTable.userId, req.userId))
+    .orderBy(
+      forecastedTransactionsTable.transactionDate,
+      forecastedTransactionsTable.sortOrder,
+      forecastedTransactionsTable.id,
+    );
+  type FRow = (typeof fRows)[number];
+  const isOverride = (r: FRow) => r.sourceBalanceSyncId != null;
+  const isCcChild = (r: FRow) => r.ccAccountId != null && !r.isCcParent;
+  const countsForBalance = (r: FRow) => !isOverride(r) && !isCcChild(r) && r.status !== "missed";
+  const signedF = (r: FRow) => {
+    const amt = parseFloat(String(r.amount));
+    return r.transactionType === "income" ? amt : -amt;
+  };
+
+  // Ledger balance at the START of monthStart, mirroring sync-balance math:
+  // roll forward from the latest override before it, else backward from the
+  // earliest one after, else anchor startingBalance at the start of today.
+  const [settings] = await db
+    .select()
+    .from(userSettingsTable)
+    .where(eq(userSettingsTable.userId, req.userId));
+  const startingBalance = settings ? parseFloat(String(settings.startingBalance)) : 0;
+  const overrides = fRows.filter(isOverride);
+  const flows = fRows.filter(countsForBalance);
+  const before = overrides.filter((o) => o.transactionDate < monthStart).at(-1);
+  const after = overrides.find((o) => o.transactionDate >= monthStart);
+  let startBalance: number;
+  if (before) {
+    startBalance =
+      parseFloat(String(before.amount)) +
+      flows
+        .filter((r) => r.transactionDate >= before.transactionDate && r.transactionDate < monthStart)
+        .reduce((s, r) => s + signedF(r), 0);
+  } else if (after) {
+    startBalance =
+      parseFloat(String(after.amount)) -
+      flows
+        .filter((r) => r.transactionDate >= monthStart && r.transactionDate < after.transactionDate)
+        .reduce((s, r) => s + signedF(r), 0);
+  } else if (monthStart <= todayStr) {
+    startBalance =
+      startingBalance -
+      flows
+        .filter((r) => r.transactionDate >= monthStart && r.transactionDate < todayStr)
+        .reduce((s, r) => s + signedF(r), 0);
+  } else {
+    startBalance =
+      startingBalance +
+      flows
+        .filter((r) => r.transactionDate >= todayStr && r.transactionDate < monthStart)
+        .reduce((s, r) => s + signedF(r), 0);
+  }
+
+  // PLAN — today and future days of the month, from forecasted rows.
+  for (const r of fRows) {
+    if (r.transactionDate < monthStart || r.transactionDate > monthEnd) continue;
+    if (r.transactionDate < todayStr) {
+      // Past: only balance-update anchors are surfaced from the plan side.
+      if (isOverride(r))
+        push(r.transactionDate, {
+          kind: "balance-update",
+          label: r.description,
+          amount: parseFloat(String(r.amount)),
+        });
+      continue;
+    }
+    if (isCcChild(r) || r.status === "missed") continue;
+    if (isOverride(r)) {
+      push(r.transactionDate, {
+        kind: "balance-update",
+        label: r.description,
+        amount: parseFloat(String(r.amount)),
+      });
+      continue;
+    }
+    const kind: Ev["kind"] =
+      r.transactionType === "income"
+        ? "income"
+        : r.isCcParent
+          ? "card-payment"
+          : r.sourceBillId != null
+            ? "bill"
+            : "other";
+    push(r.transactionDate, {
+      kind,
+      label: r.description,
+      amount: cents(signedF(r)),
+      cycleId: r.sourceCardCycleId ?? null,
+      category: r.category,
+    });
+  }
+
+  // ACTUALS — past days, from posted Plaid transactions on cash accounts.
+  if (monthStart < todayStr) {
+    const pastEnd = monthEnd < todayStr ? monthEnd : addDaysIso(todayStr, -1);
+    const txns = await db
+      .select({
+        date: plaidTransactionsTable.date,
+        amount: plaidTransactionsTable.amount,
+        name: plaidTransactionsTable.name,
+        merchantName: plaidTransactionsTable.merchantName,
+        primary: plaidTransactionsTable.personalFinanceCategory,
+        detailed: plaidTransactionsTable.personalFinanceCategoryDetailed,
+        accountType: accountsTable.accountType,
+      })
+      .from(plaidTransactionsTable)
+      .leftJoin(accountsTable, eq(accountsTable.plaidAccountId, plaidTransactionsTable.accountId))
+      .where(
+        and(
+          eq(plaidTransactionsTable.userId, req.userId),
+          eq(plaidTransactionsTable.pending, false),
+          gte(plaidTransactionsTable.date, monthStart),
+          lte(plaidTransactionsTable.date, pastEnd),
+        ),
+      );
+    const userBills = await db
+      .select({ billName: billsTable.billName, matchMerchant: billsTable.matchMerchant })
+      .from(billsTable)
+      .where(and(eq(billsTable.userId, req.userId), eq(billsTable.isActive, true), isNotNull(billsTable.matchMerchant)));
+    const billOf = (label: string): string | null => {
+      const lower = label.toLowerCase();
+      for (const b of userBills) if (b.matchMerchant && lower.includes(b.matchMerchant.toLowerCase())) return b.billName;
+      return null;
+    };
+    const titleCase = (s: string) =>
+      s
+        .toLowerCase()
+        .split("_")
+        .map((w) => (w === "and" ? "&" : w.charAt(0).toUpperCase() + w.slice(1)))
+        .join(" ");
+
+    // Bucket cash-account spend by day + category; other kinds are lines.
+    const buckets = new Map<string, { date: string; category: string; charges: Array<{ date: string; name: string; amount: number }> }>();
+    for (const t of txns) {
+      if (t.accountType === "credit_card") continue; // card charges live inside cycles, not the cash view
+      const amt = parseFloat(String(t.amount)); // Plaid: positive = outflow
+      const label = t.merchantName ?? t.name ?? "Transaction";
+      if (amt < 0) {
+        push(t.date, { kind: "income", label, amount: cents(-amt) });
+        continue;
+      }
+      const isCardPayment =
+        (t.detailed ?? "").includes("CREDIT_CARD_PAYMENT") || (t.primary === "LOAN_PAYMENTS" && (t.detailed ?? "").includes("CREDIT_CARD"));
+      if (isCardPayment) {
+        push(t.date, { kind: "card-payment", label, amount: cents(-amt) });
+        continue;
+      }
+      const billName = billOf(label);
+      if (billName) {
+        push(t.date, { kind: "bill", label: billName, amount: cents(-amt) });
+        continue;
+      }
+      const category = titleCase(t.primary ?? "OTHER");
+      const key = `${t.date}|${category}`;
+      const bucket = buckets.get(key) ?? { date: t.date, category, charges: [] };
+      bucket.charges.push({ date: t.date, name: label, amount: cents(-amt) });
+      buckets.set(key, bucket);
+    }
+    for (const b of buckets.values()) {
+      const total = cents(b.charges.reduce((s, c) => s + c.amount, 0));
+      push(b.date, {
+        kind: "spend",
+        label: b.category,
+        amount: total,
+        category: b.category,
+        count: b.charges.length,
+        charges: b.charges.sort((x, y) => y.amount - x.amount || x.name.localeCompare(y.name)),
+      });
+    }
+  }
+
+  // Roll the balance across the month: re-anchor at balance updates, then
+  // apply the day's net. On override days the ledger treats the entered
+  // balance as the value at the override row (first row of its date) with the
+  // day's FORECAST rows applying after it — so step those days with the
+  // forecast net, not the displayed plaid net, to stay ledger-consistent and
+  // avoid double-applying actuals the entered balance already reflects.
+  const forecastNetByDate = new Map<string, number>();
+  for (const r of flows) {
+    if (r.transactionDate < monthStart || r.transactionDate > monthEnd) continue;
+    forecastNetByDate.set(r.transactionDate, (forecastNetByDate.get(r.transactionDate) ?? 0) + signedF(r));
+  }
+  const days: Array<{ date: string; net: number; endBalance: number; events: Ev[] }> = [];
+  let bal = startBalance;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = `${month}-${String(d).padStart(2, "0")}`;
+    const events = (eventsByDate.get(date) ?? []).sort((a, b) => {
+      const order = { "balance-update": 0, income: 1, bill: 2, "card-payment": 3, other: 4, spend: 5 } as const;
+      return order[a.kind] - order[b.kind] || b.amount - a.amount;
+    });
+    const anchor = events.find((e) => e.kind === "balance-update");
+    const net = cents(events.filter((e) => e.kind !== "balance-update").reduce((s, e) => s + e.amount, 0));
+    if (anchor) {
+      bal = cents(anchor.amount + (forecastNetByDate.get(date) ?? 0));
+    } else {
+      bal = cents(bal + net);
+    }
+    days.push({ date, net, endBalance: bal, events });
+  }
+
+  res.json(GetForecastCalendarResponse.parse({ month, today: todayStr, days }));
 });
 
 router.post("/forecast/regenerate", async (req, res): Promise<void> => {

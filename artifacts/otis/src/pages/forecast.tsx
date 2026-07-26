@@ -79,6 +79,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FormatCurrency } from "@/components/ui/format-currency";
+import CalendarView from "@/components/forecast/calendar-view";
 import {
   BarChart,
   Bar,
@@ -585,7 +586,7 @@ export default function Forecast() {
 
   // controls
   const [months, setMonths] = useState<1 | 3 | 6 | 12>(6);
-  const [view, setView] = useState<"ledger" | "summary">("ledger");
+  const [view, setView] = useState<"ledger" | "summary" | "calendar">("ledger");
   const [catFilter, setCatFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [showHistory, setShowHistory] = useState(false);
@@ -1395,14 +1396,15 @@ export default function Forecast() {
 
         {/* View mode — segmented Ledger / Monthly toggle (active: carolina) */}
         <div className="flex items-center rounded-[20px] border border-[#E3E7ED] bg-white p-[2px]">
-          {(["ledger", "summary"] as const).map((v) => (
+          {(["ledger", "summary", "calendar"] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
               className={`rounded-[18px] px-[13px] py-[4px] text-xs font-medium transition-colors duration-100 ${view === v ? "text-white" : "text-gray-500 hover:text-gray-800"}`}
               style={view === v ? { backgroundColor: "var(--color-carolina)" } : undefined}
+              data-testid={`view-toggle-${v}`}
             >
-              {v === "ledger" ? "Ledger" : "Monthly"}
+              {v === "ledger" ? "Ledger" : v === "summary" ? "Monthly" : "Calendar"}
             </button>
           ))}
         </div>
@@ -1424,6 +1426,7 @@ export default function Forecast() {
         )}
 
         {/* Hide/Show history toggle — navy active style when history is hidden */}
+        {view !== "calendar" && (
         <button
           onClick={() => setShowHistory((v) => !v)}
           className={`rounded-[20px] px-[13px] py-[5px] text-xs font-medium transition-colors duration-100 whitespace-nowrap ${showHistory ? "bg-white border border-[#E3E7ED] text-gray-500 hover:text-gray-800 hover:border-gray-300" : "text-white"}`}
@@ -1431,8 +1434,10 @@ export default function Forecast() {
         >
           {showHistory ? "Hide history" : "Show history"}
         </button>
+        )}
 
         {/* Category filter */}
+        {view !== "calendar" && (
         <Select value={catFilter} onValueChange={setCatFilter}>
           <SelectTrigger className="h-8 text-xs w-32 bg-card border-border">
             <SelectValue placeholder="All Categories" />
@@ -1442,10 +1447,12 @@ export default function Forecast() {
             {categories.map((c) => <SelectItem key={c} value={c}>{catLabel(c)}</SelectItem>)}
           </SelectContent>
         </Select>
+        )}
 
         <div className="flex-1" />
 
         {/* Search */}
+        {view !== "calendar" && (
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
@@ -1455,6 +1462,7 @@ export default function Forecast() {
             className="h-8 text-xs pl-8 w-44 bg-card border-border"
           />
         </div>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -1998,6 +2006,15 @@ export default function Forecast() {
               </div>
             )}
           </>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════════
+            CALENDAR VIEW (Phase 1 — hybrid month grid + day detail)
+        ══════════════════════════════════════════════════════════════════════ */}
+        {view === "calendar" && (
+          <div className="flex-1 min-h-0 overflow-y-auto pb-6">
+            <CalendarView todayStr={todayStr} />
+          </div>
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════

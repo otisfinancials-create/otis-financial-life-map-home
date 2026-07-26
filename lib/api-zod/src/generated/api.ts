@@ -2146,6 +2146,40 @@ export const DismissDetectedBillResponse = zod.object({
 
 
 /**
+ * @summary Hybrid month calendar — per-day events, net cash change, and rolled end-of-day balance
+ */
+export const getForecastCalendarQueryMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
+
+
+export const GetForecastCalendarQueryParams = zod.object({
+  "month": zod.coerce.string().regex(getForecastCalendarQueryMonthRegExp)
+})
+
+export const GetForecastCalendarResponse = zod.object({
+  "month": zod.string().describe('YYYY-MM'),
+  "today": zod.string().describe('YYYY-MM-DD (server-local)'),
+  "days": zod.array(zod.object({
+  "date": zod.string().describe('YYYY-MM-DD'),
+  "net": zod.number().describe('Signed sum of the day\'s cash events (income positive, outflows negative)'),
+  "endBalance": zod.number().describe('Projected\/rolled end-of-day cash balance'),
+  "events": zod.array(zod.object({
+  "kind": zod.enum(['income', 'bill', 'card-payment', 'spend', 'balance-update', 'other']),
+  "label": zod.string(),
+  "amount": zod.number().describe('Signed cash impact (positive in, negative out). For balance-update, the new balance itself.'),
+  "cycleId": zod.number().nullish().describe('card_cycles id for card-payment events (expandable to the P5 breakdown)'),
+  "category": zod.string().nullish(),
+  "count": zod.number().nullish().describe('Number of charges in a bucketed spend event'),
+  "charges": zod.array(zod.object({
+  "date": zod.string(),
+  "name": zod.string(),
+  "amount": zod.number()
+})).nullish()
+}))
+}))
+})
+
+
+/**
  * @summary Remove a Plaid Item — revokes it at Plaid and deletes local item data
  */
 export const RemovePlaidItemParams = zod.object({

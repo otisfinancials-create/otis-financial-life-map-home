@@ -53,10 +53,12 @@ import type {
   Envelope,
   EnvelopeInput,
   EnvelopeUpdate,
+  ForecastCalendarResponse,
   ForecastedTransaction,
   ForecastedTransactionInput,
   ForecastedTransactionUpdate,
   GetDetectedNewBillCount200,
+  GetForecastCalendarParams,
   HealthStatus,
   LifeEvent,
   LifeEventInput,
@@ -6673,6 +6675,90 @@ export const useDismissDetectedBill = <TError = ErrorType<void>,
       > => {
       return useMutation(getDismissDetectedBillMutationOptions(options));
     }
+
+export const getGetForecastCalendarUrl = (params: GetForecastCalendarParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/forecast/calendar?${stringifiedParams}` : `/api/forecast/calendar`
+}
+
+/**
+ * @summary Hybrid month calendar — per-day events, net cash change, and rolled end-of-day balance
+ */
+export const getForecastCalendar = async (params: GetForecastCalendarParams, options?: RequestInit): Promise<ForecastCalendarResponse> => {
+
+  return customFetch<ForecastCalendarResponse>(getGetForecastCalendarUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetForecastCalendarQueryKey = (params?: GetForecastCalendarParams,) => {
+    return [
+    `/api/forecast/calendar`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetForecastCalendarQueryOptions = <TData = Awaited<ReturnType<typeof getForecastCalendar>>, TError = ErrorType<unknown>>(params: GetForecastCalendarParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getForecastCalendar>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetForecastCalendarQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getForecastCalendar>>> = ({ signal }) => getForecastCalendar(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getForecastCalendar>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetForecastCalendarQueryResult = NonNullable<Awaited<ReturnType<typeof getForecastCalendar>>>
+export type GetForecastCalendarQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Hybrid month calendar — per-day events, net cash change, and rolled end-of-day balance
+ */
+
+export function useGetForecastCalendar<TData = Awaited<ReturnType<typeof getForecastCalendar>>, TError = ErrorType<unknown>>(
+ params: GetForecastCalendarParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getForecastCalendar>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetForecastCalendarQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getRemovePlaidItemUrl = (id: number,) => {
 

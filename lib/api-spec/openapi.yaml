@@ -1694,6 +1694,26 @@ paths:
         "404":
           description: Not found
 
+  /forecast/calendar:
+    get:
+      operationId: getForecastCalendar
+      tags: [forecast]
+      summary: Hybrid month calendar — per-day events, net cash change, and rolled end-of-day balance
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+      responses:
+        "200":
+          description: Calendar data for the requested month
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForecastCalendarResponse"
+
   /plaid/items/{id}/remove:
     post:
       operationId: removePlaidItem
@@ -3536,6 +3556,76 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DraftSampleTransaction"
+
+    ForecastCalendarResponse:
+      type: object
+      required: [month, today, days]
+      properties:
+        month:
+          type: string
+          description: YYYY-MM
+        today:
+          type: string
+          description: YYYY-MM-DD (server-local)
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/ForecastCalendarDay"
+
+    ForecastCalendarDay:
+      type: object
+      required: [date, net, endBalance, events]
+      properties:
+        date:
+          type: string
+          description: YYYY-MM-DD
+        net:
+          type: number
+          description: Signed sum of the day's cash events (income positive, outflows negative)
+        endBalance:
+          type: number
+          description: Projected/rolled end-of-day cash balance
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/ForecastCalendarEvent"
+
+    ForecastCalendarEvent:
+      type: object
+      required: [kind, label, amount]
+      properties:
+        kind:
+          type: string
+          enum: [income, bill, card-payment, spend, balance-update, other]
+        label:
+          type: string
+        amount:
+          type: number
+          description: Signed cash impact (positive in, negative out). For balance-update, the new balance itself.
+        cycleId:
+          type: integer
+          nullable: true
+          description: card_cycles id for card-payment events (expandable to the P5 breakdown)
+        category:
+          type: string
+          nullable: true
+        count:
+          type: integer
+          nullable: true
+          description: Number of charges in a bucketed spend event
+        charges:
+          type: array
+          nullable: true
+          items:
+            type: object
+            required: [date, name, amount]
+            properties:
+              date:
+                type: string
+              name:
+                type: string
+              amount:
+                type: number
 
     ConfirmDetectedBillInput:
       type: object

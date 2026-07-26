@@ -1372,6 +1372,55 @@ export interface DetectedBillDraft {
   sampleTransactions: DraftSampleTransaction[];
 }
 
+export type ForecastCalendarEventKind = typeof ForecastCalendarEventKind[keyof typeof ForecastCalendarEventKind];
+
+
+export const ForecastCalendarEventKind = {
+  income: 'income',
+  bill: 'bill',
+  'card-payment': 'card-payment',
+  spend: 'spend',
+  'balance-update': 'balance-update',
+  other: 'other',
+} as const;
+
+export type ForecastCalendarEventChargesItem = {
+  date: string;
+  name: string;
+  amount: number;
+};
+
+export interface ForecastCalendarEvent {
+  kind: ForecastCalendarEventKind;
+  label: string;
+  /** Signed cash impact (positive in, negative out). For balance-update, the new balance itself. */
+  amount: number;
+  /** card_cycles id for card-payment events (expandable to the P5 breakdown) */
+  cycleId?: number | null;
+  category?: string | null;
+  /** Number of charges in a bucketed spend event */
+  count?: number | null;
+  charges?: ForecastCalendarEventChargesItem[] | null;
+}
+
+export interface ForecastCalendarDay {
+  /** YYYY-MM-DD */
+  date: string;
+  /** Signed sum of the day's cash events (income positive, outflows negative) */
+  net: number;
+  /** Projected/rolled end-of-day cash balance */
+  endBalance: number;
+  events: ForecastCalendarEvent[];
+}
+
+export interface ForecastCalendarResponse {
+  /** YYYY-MM */
+  month: string;
+  /** YYYY-MM-DD (server-local) */
+  today: string;
+  days: ForecastCalendarDay[];
+}
+
 export type ConfirmDetectedBillInputFrequency = typeof ConfirmDetectedBillInputFrequency[keyof typeof ConfirmDetectedBillInputFrequency];
 
 
@@ -1465,6 +1514,13 @@ export type GetDetectedNewBillCount200 = {
 
 export type MarkDetectedBillsSeen200 = {
   marked: number;
+};
+
+export type GetForecastCalendarParams = {
+/**
+ * @pattern ^\d{4}-\d{2}$
+ */
+month: string;
 };
 
 export type RemovePlaidItem200 = {
