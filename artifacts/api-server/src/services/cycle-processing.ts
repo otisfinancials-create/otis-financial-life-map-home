@@ -71,12 +71,93 @@ function tokens(s: string | null | undefined): string[] {
 }
 
 /** Merchant/name similarity: any significant token shared between the bill
- * name and the transaction's name or merchant_name. */
+ * name and the transaction's name or merchant_name. LEGACY fallback used
+ * only when the bill has no match_merchant (P5.5). */
 function namesSimilar(bill: { billName: string }, txn: PlaidTransaction): boolean {
   const billTokens = tokens(bill.billName);
   if (billTokens.length === 0) return false;
   const txnTokens = new Set([...tokens(txn.name), ...tokens(txn.merchantName)]);
   return billTokens.some((t) => txnTokens.has(t));
+}
+
+/* ------------------------------------------- P5.5 merchant-based matching */
+
+/** Character trigram set with pg_trgm-style padding ("  ab", " abc", ...). */
+function trigrams(s: string): Set<string> {
+  const out = new Set<string>();
+  for (const word of s.split(" ")) {
+    if (!word) continue;
+    const padded = `  ${word} `;
+    for (let i = 0; i + 3 <= padded.length; i++) out.add(padded.slice(i, i + 3));
+  }
+  return out;
+}
+
+/** pg_trgm-style similarity: |intersection| / |union| of trigram sets. */
+export function trigramSimilarity(a: string, b: string): number {
+  const ta = trigrams(normalize(a));
+  const tb = trigrams(normalize(b));
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let inter = 0;
+  for (const t of ta) if (tb.has(t)) inter += 1;
+  return inter / (ta.size + tb.size - inter);
+}
+
+/** Whole-word containment either way: "att mobility" ⊂ "att mobility 8004886".*/
+function wholeWordContains(a: string, b: string): boolean {
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  if (!shorter || !longer) return false;
+  const words = new Set(longer.split(" "));
+  return shorter.split(" ").every((w) => words.has(w));
+}
+
+/**
+ * P5.5 merchant match: the transaction's merchant_name (or name) vs the
+ * bill's stored match_merchant pattern.
+ * - "strong": whole-word containment either way or trigram >= 0.85 — the
+ *   merchant is essentially identical ("at t" vs "AT&T MOBILITY EPAY").
+ * - "fuzzy": trigram >= 0.6 — similar but not conclusive on its own.
+ * - "none": no match.
+ */
+export function merchantMatchStrength(
+  matchMerchant: string,
+  txn: Pick<PlaidTransaction, "name" | "merchantName">,
+): "strong" | "fuzzy" | "none" {
+  const pattern = normalize(matchMerchant);
+  if (!pattern) return "none";
+  let best: "strong" | "fuzzy" | "none" = "none";
+  for (const candidate of [normalize(txn.merchantName), normalize(txn.name)]) {
+    if (!candidate) continue;
+    if (wholeWordContains(pattern, candidate) || trigramSimilarity(pattern, candidate) >= 0.85) return "strong";
+    if (trigramSimilarity(pattern, candidate) >= 0.6) best = "fuzzy";
+  }
+  return best;
+}
+
+/** Day difference between two YYYY-MM-DD strings (absolute, whole days). */
+function dayDiff(aIso: string, bIso: string): number {
+  return Math.abs(Date.parse(`${aIso}T00:00:00Z`) - Date.parse(`${bIso}T00:00:00Z`)) / 86_400_000;
+}
+
+/**
+ * Expected occurrence dates for a bill (by due_day) in and around the cycle
+ * window: the due_day of every month overlapping [start-7d, end+7d], clamped
+ * to the month's length (e.g. due_day 31 in February -> Feb 28/29).
+ */
+export function expectedDatesInWindow(dueDay: number, cycleStart: string, cycleEnd: string): string[] {
+  const out: string[] = [];
+  const start = new Date(`${cycleStart}T00:00:00Z`);
+  const end = new Date(`${cycleEnd}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - 7);
+  end.setUTCDate(end.getUTCDate() + 7);
+  const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+  while (cursor <= end) {
+    const daysInMonth = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0)).getUTCDate();
+    const d = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), Math.min(dueDay, daysInMonth)));
+    if (d >= start && d <= end) out.push(d.toISOString().slice(0, 10));
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+  return out;
 }
 
 /** Free-text fallback match: normalized equality or containment either way,
@@ -132,7 +213,13 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
     ));
 
   const cycleBills = await db
-    .select({ cycleBill: cardCycleBillsTable, billName: billsTable.billName })
+    .select({
+      cycleBill: cardCycleBillsTable,
+      billName: billsTable.billName,
+      matchMerchant: billsTable.matchMerchant,
+      paymentAccountId: billsTable.paymentAccountId,
+      dueDay: billsTable.dueDay,
+    })
     .from(cardCycleBillsTable)
     .innerJoin(billsTable, eq(cardCycleBillsTable.billId, billsTable.id))
     .where(eq(cardCycleBillsTable.cardCycleId, cardCycleId));
@@ -178,6 +265,15 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
   let allocated = 0;
   let skippedManual = 0;
 
+  // Precompute each bill's expected due-date occurrences once (used to
+  // corroborate fuzzy merchant matches) instead of per transaction.
+  const expectedDatesByBill = new Map<number, string[]>(
+    cycleBills.map(({ cycleBill, dueDay }) => [
+      cycleBill.id,
+      expectedDatesInWindow(dueDay, cycle.cycleStart, cycle.cycleEnd),
+    ]),
+  );
+
   // Room left in each carryover envelope. Manual allocations already pinned
   // to a carryover consume its room up front (they are skipped in the loop
   // below but still occupy the budget).
@@ -196,16 +292,41 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
       continue;
     }
 
-    // 1. Bill match: name similarity AND amount within ±15% of expected.
+    // 1. Bill match (P5.5): when the bill has a stored match_merchant, a
+    //    charge matches iff ALL of: (a) the bill is paid from this cycle's
+    //    account, (b) amount within ±15% of expected, (c) txn date within
+    //    ±7 days of the bill's expected due date, (d) merchant similarity
+    //    against match_merchant (trigram >= 0.6 or whole-word containment).
+    //    Bills WITHOUT match_merchant fall back to the legacy behavior
+    //    (display-name token similarity + amount) so nothing regresses.
     //    Prefer the closest amount when several bills qualify.
     const amount = num(txn.amount);
     let bestBill: { id: number; relDiff: number } | undefined;
-    for (const { cycleBill, billName } of cycleBills) {
+    for (const { cycleBill, billName, matchMerchant, paymentAccountId } of cycleBills) {
       const expected = num(cycleBill.expectedAmount);
       if (expected <= 0) continue;
       const relDiff = Math.abs(amount - expected) / expected;
-      if (relDiff <= 0.15 && namesSimilar({ billName }, txn)) {
-        if (!bestBill || relDiff < bestBill.relDiff) bestBill = { id: cycleBill.id, relDiff };
+      if (relDiff > 0.15) continue;
+
+      let matched: boolean;
+      if (matchMerchant) {
+        // A STRONG merchant match (essentially identical merchant) plus the
+        // amount test is conclusive by itself — real charge dates routinely
+        // drift far from the bill's nominal due_day (autopay posts when the
+        // merchant bills, not when the user filed the due date). The ±7-day
+        // due-date window is required only to corroborate FUZZY merchant
+        // matches, where date proximity guards against lookalike merchants.
+        const strength = merchantMatchStrength(matchMerchant, txn);
+        const dateOk = (expectedDatesByBill.get(cycleBill.id) ?? [])
+          .some((d) => dayDiff(txn.date, d) <= 7);
+        matched =
+          paymentAccountId === cycle.accountId &&
+          (strength === "strong" || (strength === "fuzzy" && dateOk));
+      } else {
+        matched = namesSimilar({ billName }, txn);
+      }
+      if (matched && (!bestBill || relDiff < bestBill.relDiff)) {
+        bestBill = { id: cycleBill.id, relDiff };
       }
     }
 

@@ -16,6 +16,10 @@ export const billsTable = pgTable("bills", {
   paymentMethod: text("payment_method"),
   // Which account pays this bill (nullable: cash/check bills may have none).
   paymentAccountId: integer("payment_account_id").references(() => accountsTable.id),
+  // P5.5 — normalized merchant pattern charges are matched against (e.g.
+  // "att mobility"), separate from the user-facing bill_name label. NULL =
+  // not yet linked; the matcher falls back to display-name matching.
+  matchMerchant: text("match_merchant"),
   isAutopay: boolean("is_autopay").notNull().default(false),
   amountType: text("amount_type").notNull().default("negative"),
   startDate: date("start_date", { mode: "string" }),
