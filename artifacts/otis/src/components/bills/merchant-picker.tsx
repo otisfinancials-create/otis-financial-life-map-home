@@ -130,7 +130,13 @@ export function MerchantPicker({ accountId, value, onChange, placeholder, ...res
               <CommandList>
                 <CommandEmpty>No merchant found in this account's charges.</CommandEmpty>
                 <CommandGroup>
-                  {(loadedMerchants ?? []).map((m: AccountMerchant) => (
+                  {[...(loadedMerchants ?? [])]
+                    // Relevance first (most frequent), then alphabetical.
+                    .sort(
+                      (a: AccountMerchant, b: AccountMerchant) =>
+                        b.occurrences - a.occurrences || a.displayName.localeCompare(b.displayName),
+                    )
+                    .map((m: AccountMerchant) => (
                     <CommandItem
                       key={m.merchant}
                       value={`${m.merchant} ${m.displayName}`}

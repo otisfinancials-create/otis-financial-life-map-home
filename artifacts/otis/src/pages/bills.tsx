@@ -245,8 +245,8 @@ export default function Bills() {
       <div className="flex items-center gap-2">
         {([
           ["bills", "Bills"],
-          ["planned", "Planned vs Actual"],
           ["budget", "Budget"],
+          ["planned", "Planned vs Actual"],
         ] as const).map(([key, label]) => (
           <button
             key={key}

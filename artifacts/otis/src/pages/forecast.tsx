@@ -350,7 +350,7 @@ function CycleBreakdownRows({ cycleId, ccAccountId }: { cycleId: number; ccAccou
                   </button>
                 )}
               </span>
-              <span className="font-mono tabular-nums whitespace-nowrap text-muted-foreground">
+              <span className={`font-mono tabular-nums whitespace-nowrap ${e.spentAmount != null && e.spentAmount > e.plannedAmount ? "text-[var(--color-negative)] font-medium" : "text-muted-foreground"}`}>
                 {e.spentAmount != null ? <FormatCurrency amount={e.spentAmount} /> : "—"}
                 <span className="text-[10px]"> / planned </span>
                 {editing ? (
@@ -405,7 +405,7 @@ function CycleBreakdownRows({ cycleId, ccAccountId }: { cycleId: number; ccAccou
               {b.status === "hit" ? "Bill · paid" : b.status === "missed" ? "Bill · missed" : "Bill · pending"}
             </span>
           </span>
-          <span className="font-mono tabular-nums whitespace-nowrap text-muted-foreground">
+          <span className={`font-mono tabular-nums whitespace-nowrap ${b.actualAmount != null && b.actualAmount > b.expectedAmount ? "text-[var(--color-negative)] font-medium" : "text-muted-foreground"}`}>
             {b.actualAmount != null ? <FormatCurrency amount={b.actualAmount} /> : "—"}
             <span className="text-[10px]"> / planned <FormatCurrency amount={b.expectedAmount} /></span>
           </span>
@@ -588,7 +588,7 @@ export default function Forecast() {
   const [view, setView] = useState<"ledger" | "summary">("ledger");
   const [catFilter, setCatFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [showHistory, setShowHistory] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   // CC groups are expanded by default; this tracks the ones the user collapsed.
   const [collapsedCc, setCollapsedCc] = useState<Set<number>>(new Set());
@@ -1393,19 +1393,35 @@ export default function Forecast() {
       {/* ── Controls Bar ─────────────────────────────────────────────────────── */}
       <div className="shrink-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border px-6 py-3 flex items-center gap-2 flex-wrap">
 
-        {/* Time range pill group (active: navy) */}
-        <div className="flex items-center gap-1.5">
-          {([1, 3, 6, 12] as const).map((m) => (
+        {/* View mode — segmented Ledger / Monthly toggle (active: carolina) */}
+        <div className="flex items-center rounded-[20px] border border-[#E3E7ED] bg-white p-[2px]">
+          {(["ledger", "summary"] as const).map((v) => (
             <button
-              key={m}
-              onClick={() => setMonths(m)}
-              className={`rounded-[20px] px-[13px] py-[5px] text-xs font-medium transition-colors duration-100 ${months === m ? "text-white" : "bg-white border border-[#E3E7ED] text-gray-500 hover:text-gray-800 hover:border-gray-300"}`}
-              style={months === m ? { backgroundColor: "#0D2B45" } : undefined}
+              key={v}
+              onClick={() => setView(v)}
+              className={`rounded-[18px] px-[13px] py-[4px] text-xs font-medium transition-colors duration-100 ${view === v ? "text-white" : "text-gray-500 hover:text-gray-800"}`}
+              style={view === v ? { backgroundColor: "var(--color-carolina)" } : undefined}
             >
-              {m}mo
+              {v === "ledger" ? "Ledger" : "Monthly"}
             </button>
           ))}
         </div>
+
+        {/* Time range — Ledger view only (active: navy) */}
+        {view === "ledger" && (
+          <div className="flex items-center gap-1.5 ml-1">
+            {([1, 3, 6, 12] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMonths(m)}
+                className={`rounded-[20px] px-[13px] py-[5px] text-xs font-medium transition-colors duration-100 ${months === m ? "text-white" : "bg-white border border-[#E3E7ED] text-gray-500 hover:text-gray-800 hover:border-gray-300"}`}
+                style={months === m ? { backgroundColor: "#0D2B45" } : undefined}
+              >
+                {m}mo
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Hide/Show history toggle — navy active style when history is hidden */}
         <button
@@ -1415,20 +1431,6 @@ export default function Forecast() {
         >
           {showHistory ? "Hide history" : "Show history"}
         </button>
-
-        {/* View toggle pill group (active: carolina) */}
-        <div className="flex items-center gap-1.5 ml-1">
-          {(["ledger", "summary"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`rounded-[20px] px-[13px] py-[5px] text-xs font-medium transition-colors duration-100 ${view === v ? "text-white" : "bg-white border border-[#E3E7ED] text-gray-500 hover:text-gray-800 hover:border-gray-300"}`}
-              style={view === v ? { backgroundColor: "var(--color-carolina)" } : undefined}
-            >
-              {v === "ledger" ? "Ledger" : "Monthly Summary"}
-            </button>
-          ))}
-        </div>
 
         {/* Category filter */}
         <Select value={catFilter} onValueChange={setCatFilter}>
@@ -1836,7 +1838,13 @@ export default function Forecast() {
                                       )}
                                     </span>
                                     {variance !== null && (
-                                      <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+                                      <span
+                                        className={`text-[10px] font-mono whitespace-nowrap ${
+                                          variance > 0 && tx.transactionType !== "income"
+                                            ? "text-[var(--color-negative)] font-medium"
+                                            : "text-muted-foreground"
+                                        }`}
+                                      >
                                         {variance > 0 ? "+" : "−"}<FormatCurrency amount={Math.abs(variance)} /> vs planned
                                       </span>
                                     )}

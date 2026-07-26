@@ -162,12 +162,6 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
           )}
           style={{ padding: "7px 10px", marginBottom: 1 }}
         >
-          <img
-            src={`${import.meta.env.BASE_URL}images/otis-avatar.png`}
-            alt=""
-            className="h-6 w-6 shrink-0 rounded-full object-cover"
-            aria-hidden="true"
-          />
           <span
             className={cn(
               "text-[12.5px]",
@@ -176,7 +170,7 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
                 : "text-[rgba(255,255,255,0.6)] font-normal"
             )}
           >
-            Otis AI
+            AI Assistant
           </span>
         </Link>
       </nav>
