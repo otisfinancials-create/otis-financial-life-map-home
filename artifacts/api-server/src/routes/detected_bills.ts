@@ -107,6 +107,12 @@ function dominantPlaidAccountId(txns: SampleTxn[]): string | null {
   );
 }
 
+/** Bill payment method implied by an account's type. */
+export function inferPaymentMethod(accountType: string | undefined | null): string | null {
+  if (!accountType) return null;
+  return accountType === "credit_card" ? "credit-card" : "bank-transfer";
+}
+
 function sampleTxnIdsOf(det: DetectedBill): string[] {
   return Array.isArray(det.sampleTxnIds) ? (det.sampleTxnIds as string[]) : [];
 }
@@ -318,6 +324,17 @@ router.post("/bills/detected/:id/confirm", async (req, res): Promise<void> => {
     paymentAccountId = account?.id ?? null;
   }
 
+  // Payment method follows the paying account's type — a card account means
+  // the bill is paid by card and belongs in that card's cycles.
+  let paymentMethod: string | null = null;
+  if (paymentAccountId != null) {
+    const [payAccount] = await db
+      .select({ accountType: accountsTable.accountType })
+      .from(accountsTable)
+      .where(and(eq(accountsTable.userId, req.userId), eq(accountsTable.id, paymentAccountId)));
+    paymentMethod = inferPaymentMethod(payAccount?.accountType);
+  }
+
   // Match merchant: explicit override wins (null clears); default to the
   // detection's BASE merchant key (sibling amount suffix stripped) so the
   // bill is pre-linked from day one — sibling bills share the merchant
@@ -341,6 +358,7 @@ router.post("/bills/detected/:id/confirm", async (req, res): Promise<void> => {
         frequency: ov.frequency ?? toBillFrequency(det.frequency),
         dueDay,
         paymentAccountId,
+        paymentMethod,
         matchMerchant: matchMerchant ?? null,
         isVariable: det.isVariable,
         isActive: true,
