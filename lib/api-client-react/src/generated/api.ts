@@ -35,6 +35,8 @@ import type {
   Bill,
   BillDetectionSummary,
   BillInput,
+  BillLinkMerchantInput,
+  BillLinkReviewItem,
   BillUpdate,
   CardCycle,
   CloseCycleResult,
@@ -5769,6 +5771,154 @@ export const useExchangePlaidToken = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getExchangePlaidTokenMutationOptions(options));
+    }
+
+export const getGetBillLinkReviewUrl = () => {
+
+
+
+
+  return `/api/bills/link-review`
+}
+
+/**
+ * @summary List bills lacking a match_merchant, each with suggested merchants and sample charges
+ */
+export const getBillLinkReview = async ( options?: RequestInit): Promise<BillLinkReviewItem[]> => {
+
+  return customFetch<BillLinkReviewItem[]>(getGetBillLinkReviewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBillLinkReviewQueryKey = () => {
+    return [
+    `/api/bills/link-review`
+    ] as const;
+    }
+
+
+export const getGetBillLinkReviewQueryOptions = <TData = Awaited<ReturnType<typeof getBillLinkReview>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBillLinkReview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBillLinkReviewQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBillLinkReview>>> = ({ signal }) => getBillLinkReview({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBillLinkReview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBillLinkReviewQueryResult = NonNullable<Awaited<ReturnType<typeof getBillLinkReview>>>
+export type GetBillLinkReviewQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List bills lacking a match_merchant, each with suggested merchants and sample charges
+ */
+
+export function useGetBillLinkReview<TData = Awaited<ReturnType<typeof getBillLinkReview>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBillLinkReview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBillLinkReviewQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getLinkBillMerchantUrl = (id: number,) => {
+
+
+
+
+  return `/api/bills/${id}/link-merchant`
+}
+
+/**
+ * @summary Store match_merchant on a bill and immediately re-run matching on its card's open cycles
+ */
+export const linkBillMerchant = async (id: number,
+    billLinkMerchantInput: BillLinkMerchantInput, options?: RequestInit): Promise<Bill> => {
+
+  return customFetch<Bill>(getLinkBillMerchantUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(billLinkMerchantInput)
+  }
+);}
+
+
+
+
+export const getLinkBillMerchantMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBillMerchant>>, TError,{id: number;data: BodyType<BillLinkMerchantInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkBillMerchant>>, TError,{id: number;data: BodyType<BillLinkMerchantInput>}, TContext> => {
+
+const mutationKey = ['linkBillMerchant'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkBillMerchant>>, {id: number;data: BodyType<BillLinkMerchantInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  linkBillMerchant(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkBillMerchantMutationResult = NonNullable<Awaited<ReturnType<typeof linkBillMerchant>>>
+    export type LinkBillMerchantMutationBody = BodyType<BillLinkMerchantInput>
+    export type LinkBillMerchantMutationError = ErrorType<void>
+
+    /**
+ * @summary Store match_merchant on a bill and immediately re-run matching on its card's open cycles
+ */
+export const useLinkBillMerchant = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBillMerchant>>, TError,{id: number;data: BodyType<BillLinkMerchantInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkBillMerchant>>,
+        TError,
+        {id: number;data: BodyType<BillLinkMerchantInput>},
+        TContext
+      > => {
+      return useMutation(getLinkBillMerchantMutationOptions(options));
     }
 
 export const getDetectBillsUrl = () => {

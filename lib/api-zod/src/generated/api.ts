@@ -52,6 +52,7 @@ export const ListBillsResponseItem = zod.object({
   "isVariable": zod.boolean(),
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
+  "matchMerchant": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -96,6 +97,7 @@ export const CreateBillResponse = zod.object({
   "isVariable": zod.boolean(),
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
+  "matchMerchant": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -140,6 +142,7 @@ export const GetBillResponse = zod.object({
   "isVariable": zod.boolean(),
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
+  "matchMerchant": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -187,6 +190,7 @@ export const UpdateBillResponse = zod.object({
   "isVariable": zod.boolean(),
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
+  "matchMerchant": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1851,6 +1855,83 @@ export const ExchangePlaidTokenResponse = zod.object({
 
 
 /**
+ * @summary List bills lacking a match_merchant, each with suggested merchants and sample charges
+ */
+export const GetBillLinkReviewResponseItem = zod.object({
+  "bill": zod.object({
+  "id": zod.number(),
+  "billName": zod.string(),
+  "category": zod.string(),
+  "amount": zod.number(),
+  "frequency": zod.string(),
+  "dueDay": zod.number(),
+  "amountType": zod.enum(['positive', 'negative']),
+  "paymentMethod": zod.union([zod.literal('credit-card'),zod.literal('debit-card'),zod.literal('bank-transfer'),zod.literal('check'),zod.literal('cash'),zod.literal(null)]).nullish(),
+  "paymentAccountId": zod.number().nullish(),
+  "isAutopay": zod.boolean(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "companyUrl": zod.string().nullish(),
+  "isVariable": zod.boolean(),
+  "isActive": zod.boolean(),
+  "notes": zod.string().nullish(),
+  "matchMerchant": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}),
+  "accountName": zod.string(),
+  "candidates": zod.array(zod.object({
+  "merchant": zod.string().describe('Normalized merchant key to store as match_merchant'),
+  "displayName": zod.string().describe('Best raw merchant\/transaction name for display'),
+  "occurrences": zod.number(),
+  "samples": zod.array(zod.object({
+  "date": zod.string(),
+  "amount": zod.number(),
+  "description": zod.string()
+}))
+}))
+})
+export const GetBillLinkReviewResponse = zod.array(GetBillLinkReviewResponseItem)
+
+
+/**
+ * @summary Store match_merchant on a bill and immediately re-run matching on its card's open cycles
+ */
+export const LinkBillMerchantParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const LinkBillMerchantBody = zod.object({
+  "matchMerchant": zod.string().min(1)
+})
+
+export const LinkBillMerchantResponse = zod.object({
+  "id": zod.number(),
+  "billName": zod.string(),
+  "category": zod.string(),
+  "amount": zod.number(),
+  "frequency": zod.string(),
+  "dueDay": zod.number(),
+  "amountType": zod.enum(['positive', 'negative']),
+  "paymentMethod": zod.union([zod.literal('credit-card'),zod.literal('debit-card'),zod.literal('bank-transfer'),zod.literal('check'),zod.literal('cash'),zod.literal(null)]).nullish(),
+  "paymentAccountId": zod.number().nullish(),
+  "isAutopay": zod.boolean(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "companyUrl": zod.string().nullish(),
+  "isVariable": zod.boolean(),
+  "isActive": zod.boolean(),
+  "notes": zod.string().nullish(),
+  "matchMerchant": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
  * @summary Run smart bill detection over synced Plaid transactions
  */
 export const DetectBillsResponse = zod.object({
@@ -1910,6 +1991,7 @@ export const ConfirmDetectedBillResponse = zod.object({
   "isVariable": zod.boolean(),
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
+  "matchMerchant": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })

@@ -1458,6 +1458,48 @@ paths:
         "502":
           description: Plaid error
 
+  /bills/link-review:
+    get:
+      operationId: getBillLinkReview
+      tags: [bills]
+      summary: List bills lacking a match_merchant, each with suggested merchants and sample charges
+      responses:
+        "200":
+          description: Bills needing linking with suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BillLinkReviewItem"
+
+  /bills/{id}/link-merchant:
+    post:
+      operationId: linkBillMerchant
+      tags: [bills]
+      summary: Store match_merchant on a bill and immediately re-run matching on its card's open cycles
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillLinkMerchantInput"
+      responses:
+        "200":
+          description: Updated bill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+        "404":
+          description: Not found
+
   /bills/detect:
     post:
       operationId: detectBills
@@ -1674,10 +1716,61 @@ components:
           type: boolean
         notes:
           type: ["string", "null"]
+        matchMerchant:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
           type: string
+
+    BillLinkSample:
+      type: object
+      required: [date, amount, description]
+      properties:
+        date:
+          type: string
+        amount:
+          type: number
+        description:
+          type: string
+
+    BillLinkCandidate:
+      type: object
+      required: [merchant, displayName, occurrences, samples]
+      properties:
+        merchant:
+          type: string
+          description: Normalized merchant key to store as match_merchant
+        displayName:
+          type: string
+          description: Best raw merchant/transaction name for display
+        occurrences:
+          type: integer
+        samples:
+          type: array
+          items:
+            $ref: "#/components/schemas/BillLinkSample"
+
+    BillLinkReviewItem:
+      type: object
+      required: [bill, accountName, candidates]
+      properties:
+        bill:
+          $ref: "#/components/schemas/Bill"
+        accountName:
+          type: string
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/BillLinkCandidate"
+
+    BillLinkMerchantInput:
+      type: object
+      required: [matchMerchant]
+      properties:
+        matchMerchant:
+          type: string
+          minLength: 1
 
     BillInput:
       type: object

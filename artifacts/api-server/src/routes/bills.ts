@@ -2,7 +2,12 @@ import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, billsTable, forecastedTransactionsTable, accountsTable } from "@workspace/db";
 import { syncBillWithCycles, detachBillFromAllCycles, refreshClosedCycles } from "../services/bill-cycle-sync";
+import { listBillLinkReview } from "../services/bill-merchant-suggest";
 import {
+  GetBillLinkReviewResponse,
+  LinkBillMerchantParams,
+  LinkBillMerchantBody,
+  LinkBillMerchantResponse,
   CreateBillBody,
   UpdateBillBody,
   GetBillParams,
@@ -113,6 +118,60 @@ router.get("/bills/upcoming", async (req, res): Promise<void> => {
     .sort((a, b) => a.daysUntilDue - b.daysUntilDue);
 
   res.json(GetUpcomingBillsResponse.parse(upcoming));
+});
+
+// P5.5 one-time "link existing bills" pass — must be registered before
+// /bills/:id so "link-review" isn't parsed as a bill id.
+router.get("/bills/link-review", async (req, res): Promise<void> => {
+  const items = await listBillLinkReview(req.userId);
+  res.json(GetBillLinkReviewResponse.parse(items.map((item) => ({
+    bill: serializeBill(item.bill),
+    accountName: item.accountName,
+    candidates: item.candidates,
+  }))));
+});
+
+router.post("/bills/:id/link-merchant", async (req, res): Promise<void> => {
+  const params = LinkBillMerchantParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = LinkBillMerchantBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  // Store the merchant normalized the same way the matcher normalizes
+  // transaction names, so stored keys and match-time keys line up.
+  const matchMerchant = parsed.data.matchMerchant
+    .toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!matchMerchant) {
+    res.status(400).json({ error: "Merchant name must contain letters or digits" });
+    return;
+  }
+  const [bill] = await db
+    .update(billsTable)
+    .set({ matchMerchant, updatedAt: new Date() })
+    .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)))
+    .returning();
+  if (!bill) {
+    res.status(404).json({ error: "Bill not found" });
+    return;
+  }
+  // Immediate effect: re-run matching on the card's open cycles so the
+  // charge leaves Misc and lands on the bill line right away.
+  if (bill.paymentAccountId != null) {
+    try {
+      const sync = await syncBillWithCycles({ userId: req.userId, billId: bill.id });
+      req.log.info({ sync }, "bill-cycle sync after merchant link");
+    } catch (err) {
+      req.log.error({ err }, "bill-cycle sync failed after merchant link");
+      res.status(503).json({ error: "Merchant was saved, but re-matching the card cycles failed. Reprocess the cycle to refresh.", billId: bill.id });
+      return;
+    }
+  }
+  res.json(LinkBillMerchantResponse.parse(serializeBill(bill)));
 });
 
 router.get("/bills/:id", async (req, res): Promise<void> => {

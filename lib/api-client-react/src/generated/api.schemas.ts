@@ -66,8 +66,36 @@ export interface Bill {
   isActive: boolean;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  matchMerchant?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BillLinkSample {
+  date: string;
+  amount: number;
+  description: string;
+}
+
+export interface BillLinkCandidate {
+  /** Normalized merchant key to store as match_merchant */
+  merchant: string;
+  /** Best raw merchant/transaction name for display */
+  displayName: string;
+  occurrences: number;
+  samples: BillLinkSample[];
+}
+
+export interface BillLinkReviewItem {
+  bill: Bill;
+  accountName: string;
+  candidates: BillLinkCandidate[];
+}
+
+export interface BillLinkMerchantInput {
+  /** @minLength 1 */
+  matchMerchant: string;
 }
 
 export type BillInputAmountType = typeof BillInputAmountType[keyof typeof BillInputAmountType];

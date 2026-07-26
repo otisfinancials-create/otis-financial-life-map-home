@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon, ArrowUp, ArrowDown, ChevronsUpDown, X } from "lucide-react";
+import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon, ArrowUp, ArrowDown, ChevronsUpDown, X, Link2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link as WouterLink } from "wouter";
 
 import {
   useListBills,
+  useGetBillLinkReview,
   useDeleteBill,
   useUpdateBill,
   getListBillsQueryKey,
@@ -91,6 +93,7 @@ export default function Bills() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: bills, isLoading } = useListBills();
+  const { data: linkReview } = useGetBillLinkReview();
   const deleteBill = useDeleteBill();
   const updateBill = useUpdateBill();
   const { sync: syncForecast } = useSyncForecast();
@@ -206,6 +209,14 @@ export default function Bills() {
               onClick={() => setShowInactive((v) => !v)}
             >
               {showInactive ? "Hide Inactive" : `Show Inactive (${inactiveCount})`}
+            </Button>
+          )}
+          {(linkReview?.length ?? 0) > 0 && (
+            <Button variant="outline" asChild data-testid="button-link-bills">
+              <WouterLink href="/bills/link">
+                <Link2 className="mr-2 h-4 w-4" />
+                Link bills ({linkReview!.length})
+              </WouterLink>
             </Button>
           )}
           <BillDialog

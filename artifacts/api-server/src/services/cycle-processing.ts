@@ -312,7 +312,7 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
       const expected = num(cycleBill.expectedAmount);
       if (expected <= 0) continue;
       const relDiff = Math.abs(amount - expected) / expected;
-      if (relDiff > 0.15) continue;
+      if (relDiff > 0.5) continue;
 
       let matched: boolean;
       if (matchMerchant) {
@@ -322,14 +322,27 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
         // merchant bills, not when the user filed the due date). The ±7-day
         // due-date window is required only to corroborate FUZZY merchant
         // matches, where date proximity guards against lookalike merchants.
+        //
+        // Amount gate is tiered: ±15% is enough on its own for a strong
+        // match; variable bills (utilities) routinely drift further, so a
+        // strong match that ALSO lands within ±7 days of the due date may
+        // drift up to ±50% (a user-confirmed merchant on the right cadence
+        // IS the bill, even when the amount moved). The relaxation is
+        // reserved for DISTINCTIVE patterns (>= 2 significant tokens, e.g.
+        // "amicalola emc") — a single generic word ("amazon") keeps the
+        // strict ±15% gate so broad patterns can't swallow lookalike
+        // charges that merely land near the due date.
         const strength = merchantMatchStrength(matchMerchant, txn);
         const dateOk = (expectedDatesByBill.get(cycleBill.id) ?? [])
           .some((d) => dayDiff(txn.date, d) <= 7);
+        const distinctive = tokens(matchMerchant).length >= 2;
         matched =
           paymentAccountId === cycle.accountId &&
-          (strength === "strong" || (strength === "fuzzy" && dateOk));
+          (strength === "strong"
+            ? relDiff <= 0.15 || (dateOk && distinctive)
+            : strength === "fuzzy" && dateOk && relDiff <= 0.15);
       } else {
-        matched = namesSimilar({ billName }, txn);
+        matched = relDiff <= 0.15 && namesSimilar({ billName }, txn);
       }
       if (matched && (!bestBill || relDiff < bestBill.relDiff)) {
         bestBill = { id: cycleBill.id, relDiff };

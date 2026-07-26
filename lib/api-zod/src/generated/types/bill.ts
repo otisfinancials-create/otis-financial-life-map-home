@@ -31,6 +31,8 @@ export interface Bill {
   isActive: boolean;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  matchMerchant?: string | null;
   createdAt: string;
   updatedAt: string;
 }
