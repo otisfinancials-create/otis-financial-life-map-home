@@ -19,7 +19,7 @@ import {
   DismissDetectedBillResponse,
   suggestCategoryFromPlaid,
 } from "@workspace/api-zod";
-import { detectBills } from "../services/bill-detection";
+import { detectBills, baseMerchantKey } from "../services/bill-detection";
 import { syncBillWithCycles } from "../services/bill-cycle-sync";
 import { normalizeMatchMerchant, paymentAccountBelongsToUser } from "./bills";
 
@@ -212,7 +212,7 @@ router.get("/bills/detected-drafts", async (req, res): Promise<void> => {
     return {
       id: det.id,
       displayName: det.displayName,
-      matchMerchant: normalizeMatchMerchant(det.merchantKey) ?? det.merchantKey,
+      matchMerchant: normalizeMatchMerchant(baseMerchantKey(det.merchantKey)) ?? baseMerchantKey(det.merchantKey),
       amount: parseFloat(String(det.amount)),
       amountMin: det.amountMin === null ? null : parseFloat(String(det.amountMin)),
       amountMax: det.amountMax === null ? null : parseFloat(String(det.amountMax)),
@@ -285,11 +285,13 @@ router.post("/bills/detected/:id/confirm", async (req, res): Promise<void> => {
   }
 
   // Match merchant: explicit override wins (null clears); default to the
-  // detection's merchant key so the bill is pre-linked from day one.
+  // detection's BASE merchant key (sibling amount suffix stripped) so the
+  // bill is pre-linked from day one — sibling bills share the merchant
+  // pattern and are disambiguated by amount/date at matching time.
   const matchMerchant =
     ov.matchMerchant !== undefined
       ? normalizeMatchMerchant(ov.matchMerchant)
-      : (normalizeMatchMerchant(det.merchantKey) ?? null);
+      : (normalizeMatchMerchant(baseMerchantKey(det.merchantKey)) ?? null);
 
   const category = ov.category ?? suggestCategoryFromSamples(txns);
   const dueDay = ov.dueDay ?? dueDayFrom(det);

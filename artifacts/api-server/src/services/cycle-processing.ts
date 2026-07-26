@@ -307,7 +307,7 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
     //    (display-name token similarity + amount) so nothing regresses.
     //    Prefer the closest amount when several bills qualify.
     const amount = num(txn.amount);
-    let bestBill: { id: number; relDiff: number } | undefined;
+    let bestBill: { id: number; relDiff: number; dateDist: number } | undefined;
     for (const { cycleBill, billName, matchMerchant, paymentAccountId } of cycleBills) {
       const expected = num(cycleBill.expectedAmount);
       if (expected <= 0) continue;
@@ -344,8 +344,21 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
       } else {
         matched = relDiff <= 0.15 && namesSimilar({ billName }, txn);
       }
-      if (matched && (!bestBill || relDiff < bestBill.relDiff)) {
-        bestBill = { id: cycleBill.id, relDiff };
+      // Disambiguation among same-merchant sibling bills (multi-policy
+      // merchants): closest amount wins; when amounts tie, the bill whose
+      // expected due date is nearest to the charge date wins.
+      if (matched) {
+        const dateDist = (expectedDatesByBill.get(cycleBill.id) ?? []).reduce(
+          (min, d) => Math.min(min, dayDiff(txn.date, d)),
+          Infinity,
+        );
+        if (
+          !bestBill ||
+          relDiff < bestBill.relDiff - 1e-9 ||
+          (Math.abs(relDiff - bestBill.relDiff) <= 1e-9 && dateDist < bestBill.dateDist)
+        ) {
+          bestBill = { id: cycleBill.id, relDiff, dateDist };
+        }
       }
     }
 

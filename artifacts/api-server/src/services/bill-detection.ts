@@ -99,6 +99,42 @@ const MONTHLY_BAND_MIN_GAPS = 2;
  *  Groups containing these words also get the raised CV ceiling — insurance
  *  premiums and utilities legitimately vary in amount (e.g. USAA CV ≈ 0.44). */
 const EXCLUSION_ALLOWLIST = ["insurance", "premium", "mortgage", "loan payment", "utilities"];
+/** Sub-clustering (multi-policy merchants): adjacent amounts whose relative gap
+ *  exceeds this split into separate sub-clusters, each analyzed independently.
+ *  Adjacent-gap (chain) clustering keeps genuinely variable bills (utilities
+ *  drifting 10% month to month) in ONE cluster while separating distinct
+ *  charges (USAA $620 policy vs $200 policy). */
+const SUBCLUSTER_REL_GAP = 0.4;
+/** Cadences a sibling sub-cluster may have for a split to be trusted:
+ *  multi-policy merchants bill monthly or longer; weekly/biweekly clusters
+ *  are almost always ordinary spending (groceries, gas). */
+const SIBLING_FREQUENCIES = new Set(["monthly", "quarterly", "annual"]);
+
+/** Strip the sibling-disambiguation amount suffix (" ~620", " ~620#2") from a
+ *  merchant key, recovering the base merchant for match_merchant purposes. */
+export function baseMerchantKey(key: string): string {
+  return key.replace(/ ~\d+(?:#\d+)?$/, "");
+}
+
+/** Chain-cluster transactions by amount: sort ascending, split where the
+ *  relative gap between adjacent amounts exceeds SUBCLUSTER_REL_GAP. */
+function subClusterByAmount(txns: Txn[]): Txn[][] {
+  const sorted = [...txns].sort((a, b) => parseFloat(String(a.amount)) - parseFloat(String(b.amount)));
+  const clusters: Txn[][] = [];
+  let current: Txn[] = [];
+  let prevAmt = 0;
+  for (const txn of sorted) {
+    const amt = parseFloat(String(txn.amount));
+    if (current.length > 0 && prevAmt > 0 && (amt - prevAmt) / prevAmt > SUBCLUSTER_REL_GAP) {
+      clusters.push(current);
+      current = [];
+    }
+    current.push(txn);
+    prevAmt = amt;
+  }
+  if (current.length > 0) clusters.push(current);
+  return clusters;
+}
 
 export interface DetectionSummary {
   detected: number;
@@ -300,14 +336,47 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
   logger.info({ mergesPerformed: merges, groupsAfterMerge: merged.length }, "Bill detection: fuzzy merge complete");
 
   let detected = 0;
-  const detectedKeys: string[] = [];
+  const detectedPairs: Array<{ merchantKey: string; frequency: string }> = [];
   for (const group of merged) {
     if (group.txns.length < MIN_GROUP_SIZE) continue;
     const merchantKey = group.key;
+    // Sub-cluster by amount BEFORE cadence analysis: a merchant that bills
+    // multiple distinct amounts per period (e.g. two USAA policies) must
+    // produce SEPARATE detections, not one averaged/erratic one. Each
+    // sub-cluster runs the full cadence/CV/confidence pipeline independently
+    // with the same thresholds. A merchant with uniform amounts yields a
+    // single cluster containing every transaction — identical to before.
+    const clusters = subClusterByAmount(group.txns);
+    if (clusters.length > 1) {
+      logger.info(
+        { merchantKey, clusters: clusters.map((c) => c.length) },
+        "Bill detection: amount sub-clusters within merchant",
+      );
+    }
+    const candidates: Array<{
+      displayName: string;
+      medianAmount: number;
+      amount: string;
+      amountMin: string;
+      amountMax: string;
+      isVariable: boolean;
+      frequency: string;
+      occurrenceCount: number;
+      firstSeen: string;
+      lastSeen: string;
+      nextExpectedDate: string;
+      confidence: string;
+      sampleTxnIds: string[];
+      medGap: number;
+      cv: number;
+      rawConfidence: number;
+    }> = [];
+    const analyzeCluster = (clusterTxns: Txn[]): void => {
+    if (clusterTxns.length < MIN_GROUP_SIZE) return;
     // Collapse same-day charges into one occurrence (summed amount): duplicate
     // same-day rows create 0-day gaps that break the median-gap cadence math.
     const byDate = new Map<string, Txn[]>();
-    for (const txn of group.txns) {
+    for (const txn of clusterTxns) {
       const list = byDate.get(txn.date) ?? [];
       list.push(txn);
       byDate.set(txn.date, list);
@@ -322,7 +391,7 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
       }));
     const gaps: number[] = [];
     for (let i = 1; i < sorted.length; i++) gaps.push(dayGap(sorted[i - 1]!.date, sorted[i]!.date));
-    if (gaps.length === 0) continue;
+    if (gaps.length === 0) return;
     const medGap = median(gaps);
     // Change 2: robust cadence classification.
     //   a) implied cadence = span / (occurrences - 1)
@@ -352,7 +421,7 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
       bucketIdx = impliedBucketIdx;
       cadenceRule = "implied";
     }
-    if (bucketIdx === -1) continue;
+    if (bucketIdx === -1) return;
     const bucket = CADENCE_BUCKETS[bucketIdx]!;
     logger.info(
       {
@@ -365,7 +434,7 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
       "Bill detection: cadence classification",
     );
     const minOccurrences = SHORT_FREQUENCIES.has(bucket.frequency) ? MIN_OCCURRENCES_SHORT : MIN_OCCURRENCES_LONG;
-    if (sorted.length < minOccurrences) continue;
+    if (sorted.length < minOccurrences) return;
 
     const amounts = sorted.map((t) => parseFloat(String(t.amount)));
     const mean = amounts.reduce((a, b) => a + b, 0) / amounts.length;
@@ -379,7 +448,7 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
       EXCLUSION_ALLOWLIST.some((w) => merchantKey.includes(w))
         ? CV_MAX_SUBSCRIPTION
         : CV_MAX;
-    if (cv > cvMax) continue;
+    if (cv > cvMax) return;
     const isVariable = cv > CV_VARIABLE_THRESHOLD;
 
     // Confidence: cadence tightness + amount stability + occurrence count.
@@ -405,11 +474,11 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
 
     const first = sorted[0]!;
     const last = sorted[sorted.length - 1]!;
-    const values = {
-      userId,
-      merchantKey,
+    const medianAmount = median(amounts);
+    candidates.push({
       displayName,
-      amount: median(amounts).toFixed(2),
+      medianAmount,
+      amount: medianAmount.toFixed(2),
       amountMin: Math.min(...amounts).toFixed(2),
       amountMax: Math.max(...amounts).toFixed(2),
       isVariable,
@@ -420,54 +489,114 @@ export async function detectBills(userId: string): Promise<DetectionSummary> {
       nextExpectedDate: addDaysIso(last.date, bucket.days),
       confidence: confidence.toFixed(2),
       sampleTxnIds: sorted.flatMap((t) => t.allTxns.map((x) => x.plaidTransactionId)),
-      updatedAt: new Date(),
-    };
-    // Upsert; never overwrite status/duplicateOf on rows already reviewed.
-    await db
-      .insert(detectedBillsTable)
-      .values(values)
-      .onConflictDoUpdate({
-        target: [detectedBillsTable.userId, detectedBillsTable.merchantKey, detectedBillsTable.frequency],
-        set: {
+      medGap,
+      cv,
+      rawConfidence,
+    });
+    }; // end analyzeCluster
+
+    for (const clusterTxns of clusters) analyzeCluster(clusterTxns);
+    // Splitting is only trusted when it looks like a genuine multi-policy
+    // merchant: >=2 sub-clusters qualify AND every one has a monthly-or-longer
+    // cadence (policies bill monthly/quarterly/annually). Otherwise fall back
+    // to whole-group analysis — this prevents (a) erratic-spend merchants
+    // (groceries, gas) being "rescued" into pseudo-bills by tight sub-clusters
+    // that the whole group's CV filter would have rejected, and (b) variable
+    // utilities being fragmented.
+    if (clusters.length > 1) {
+      const trustworthySplit =
+        candidates.length > 1 && candidates.every((c) => SIBLING_FREQUENCIES.has(c.frequency));
+      if (!trustworthySplit) {
+        candidates.length = 0;
+        analyzeCluster(group.txns);
+      }
+    }
+
+    // Siblings (>1 surviving sub-cluster) get disambiguated keys and display
+    // names ("usaa insurance ~620" / "USAA Insurance (~$620)"); a lone
+    // survivor keeps the plain merchant key so existing detections are stable.
+    const siblings = candidates.length > 1;
+    const usedKeys = new Set<string>();
+    for (const cand of candidates) {
+      let key = merchantKey;
+      let displayName = cand.displayName;
+      if (siblings) {
+        const rounded = Math.round(cand.medianAmount);
+        key = `${merchantKey} ~${rounded}`;
+        let n = 2;
+        while (usedKeys.has(key)) key = `${merchantKey} ~${rounded}#${n++}`;
+        displayName = `${cand.displayName} (~$${rounded})`;
+      }
+      usedKeys.add(key);
+      const values = {
+        userId,
+        merchantKey: key,
+        displayName,
+        amount: cand.amount,
+        amountMin: cand.amountMin,
+        amountMax: cand.amountMax,
+        isVariable: cand.isVariable,
+        frequency: cand.frequency,
+        occurrenceCount: cand.occurrenceCount,
+        firstSeen: cand.firstSeen,
+        lastSeen: cand.lastSeen,
+        nextExpectedDate: cand.nextExpectedDate,
+        confidence: cand.confidence,
+        sampleTxnIds: cand.sampleTxnIds,
+        updatedAt: new Date(),
+      };
+      // Upsert; never overwrite status/duplicateOf on rows already reviewed.
+      await db
+        .insert(detectedBillsTable)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [detectedBillsTable.userId, detectedBillsTable.merchantKey, detectedBillsTable.frequency],
+          set: {
+            displayName: values.displayName,
+            amount: values.amount,
+            amountMin: values.amountMin,
+            amountMax: values.amountMax,
+            isVariable: values.isVariable,
+            occurrenceCount: values.occurrenceCount,
+            firstSeen: values.firstSeen,
+            lastSeen: values.lastSeen,
+            nextExpectedDate: values.nextExpectedDate,
+            confidence: values.confidence,
+            sampleTxnIds: values.sampleTxnIds,
+            updatedAt: values.updatedAt,
+          },
+        });
+      detected++;
+      detectedPairs.push({ merchantKey: key, frequency: values.frequency });
+      logger.info(
+        {
+          merchantKey: key,
           displayName: values.displayName,
-          amount: values.amount,
-          amountMin: values.amountMin,
-          amountMax: values.amountMax,
-          isVariable: values.isVariable,
+          frequency: values.frequency,
           occurrenceCount: values.occurrenceCount,
-          firstSeen: values.firstSeen,
-          lastSeen: values.lastSeen,
-          nextExpectedDate: values.nextExpectedDate,
-          confidence: values.confidence,
-          sampleTxnIds: values.sampleTxnIds,
-          updatedAt: values.updatedAt,
+          medianGap: cand.medGap,
+          amount: values.amount,
+          cv: Number(cand.cv.toFixed(3)),
+          rawConfidence: Number(cand.rawConfidence.toFixed(3)),
+          adjustedConfidence: values.confidence,
         },
-      });
-    detected++;
-    detectedKeys.push(merchantKey);
-    logger.info(
-      {
-        merchantKey,
-        displayName: values.displayName,
-        frequency: values.frequency,
-        occurrenceCount: values.occurrenceCount,
-        medianGap: medGap,
-        amount: values.amount,
-        cv: Number(cv.toFixed(3)),
-        rawConfidence: Number(rawConfidence.toFixed(3)),
-        adjustedConfidence: values.confidence,
-      },
-      "Bill detection: candidate detected",
-    );
+        "Bill detection: candidate detected",
+      );
+    }
   }
 
-  // Cleanup: merchant keys change when fuzzy grouping merges; drop stale PENDING rows
-  // whose key no longer appears in this run. Confirmed/dismissed/duplicate rows are kept.
-  const staleFilter = detectedKeys.length
+  // Cleanup: merchant keys change when fuzzy grouping merges (and sibling
+  // suffixes / frequencies change across runs); drop stale PENDING rows whose
+  // (merchantKey, frequency) identity — the upsert identity — no longer
+  // appears in this run. Confirmed/dismissed/duplicate rows are kept.
+  const staleFilter = detectedPairs.length
     ? and(
         eq(detectedBillsTable.userId, userId),
         eq(detectedBillsTable.status, "pending"),
-        notInArray(detectedBillsTable.merchantKey, detectedKeys),
+        sql`(${detectedBillsTable.merchantKey}, ${detectedBillsTable.frequency}) NOT IN (${sql.join(
+          detectedPairs.map((p) => sql`(${p.merchantKey}, ${p.frequency})`),
+          sql`, `,
+        )})`,
       )
     : and(eq(detectedBillsTable.userId, userId), eq(detectedBillsTable.status, "pending"));
   const stale = await db.delete(detectedBillsTable).where(staleFilter).returning({ id: detectedBillsTable.id });
