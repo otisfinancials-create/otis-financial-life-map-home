@@ -447,6 +447,9 @@ importers:
       '@clerk/themes':
         specifier: ^2.4.57
         version: 2.4.57(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@workspace/api-zod':
+        specifier: workspace:*
+        version: link:../../lib/api-zod
       react-markdown:
         specifier: ^9.0.1
         version: 9.1.0(@types/react@19.2.17)(react@19.1.0)
@@ -648,6 +651,10 @@ importers:
         version: 3.25.76
 
   artifacts/otis-mobile:
+    dependencies:
+      '@workspace/api-zod':
+        specifier: workspace:*
+        version: link:../../lib/api-zod
     devDependencies:
       '@babel/core':
         specifier: ^7.25.2

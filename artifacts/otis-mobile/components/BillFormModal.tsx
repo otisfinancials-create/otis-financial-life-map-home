@@ -20,19 +20,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useColors } from "@/hooks/useColors";
+import { BILL_CATEGORIES } from "@workspace/api-zod";
 
-const CATEGORIES = [
-  "Housing",
-  "Utilities",
-  "Insurance",
-  "Subscriptions",
-  "Transportation",
-  "Food",
-  "Healthcare",
-  "Entertainment",
-  "Education",
-  "Other",
-] as const;
+const CATEGORIES = BILL_CATEGORIES;
 
 const FREQUENCIES = [
   { label: "Monthly", value: "monthly" },

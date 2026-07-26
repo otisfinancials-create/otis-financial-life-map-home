@@ -38,10 +38,18 @@ function getCategoryIcon(category: string): keyof typeof Feather.glyphMap {
     Insurance: "shield",
     Subscriptions: "repeat",
     Transportation: "truck",
+    Auto: "truck",
     Food: "coffee",
+    Medical: "activity",
+    Health: "heart",
     Healthcare: "activity",
     Entertainment: "tv",
+    "Childcare / Education": "book",
     Education: "book",
+    "Debt Payments": "credit-card",
+    Taxes: "file-text",
+    Pets: "github",
+    "Giving / Charity": "gift",
   };
   return (map[category] as keyof typeof Feather.glyphMap) ?? "dollar-sign";
 }

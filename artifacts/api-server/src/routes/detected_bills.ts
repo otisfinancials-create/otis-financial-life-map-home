@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, eq, inArray, desc } from "drizzle-orm";
-import { db, detectedBillsTable, billsTable, type DetectedBill } from "@workspace/db";
+import { db, detectedBillsTable, billsTable, plaidTransactionsTable, type DetectedBill } from "@workspace/db";
 import {
   DetectBillsResponse,
   ListDetectedBillsResponse,
@@ -8,6 +8,7 @@ import {
   ConfirmDetectedBillResponse,
   DismissDetectedBillParams,
   DismissDetectedBillResponse,
+  suggestCategoryFromPlaid,
 } from "@workspace/api-zod";
 import { detectBills } from "../services/bill-detection";
 
@@ -74,6 +75,47 @@ router.post("/bills/detected/:id/confirm", async (req, res): Promise<void> => {
     res.status(409).json({ error: `Already ${det.status}` });
     return;
   }
+  // Pre-fill the category from the Plaid personal_finance_category of the
+  // detected bill's sample transactions (most common primary wins). This is a
+  // suggestion only — the user can edit the created bill's category anytime.
+  let suggestedCategory = "Other";
+  const sampleTxnIds = Array.isArray(det.sampleTxnIds) ? (det.sampleTxnIds as string[]) : [];
+  if (sampleTxnIds.length > 0) {
+    const txns = await db
+      .select({
+        primary: plaidTransactionsTable.personalFinanceCategory,
+        detailed: plaidTransactionsTable.personalFinanceCategoryDetailed,
+      })
+      .from(plaidTransactionsTable)
+      .where(
+        and(
+          eq(plaidTransactionsTable.userId, req.userId),
+          inArray(plaidTransactionsTable.plaidTransactionId, sampleTxnIds),
+        ),
+      );
+    // Deterministic aggregation: most-common primary wins; ties break
+    // lexicographically. For the winning primary, the most-common detailed
+    // value wins (same tie-break) before applying the override mapping.
+    const primaryCounts = new Map<string, number>();
+    for (const t of txns) {
+      if (!t.primary) continue;
+      primaryCounts.set(t.primary, (primaryCounts.get(t.primary) ?? 0) + 1);
+    }
+    const bestPrimary = [...primaryCounts.entries()].sort(
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+    )[0]?.[0];
+    if (bestPrimary) {
+      const detailedCounts = new Map<string, number>();
+      for (const t of txns) {
+        if (t.primary !== bestPrimary || !t.detailed) continue;
+        detailedCounts.set(t.detailed, (detailedCounts.get(t.detailed) ?? 0) + 1);
+      }
+      const bestDetailed =
+        [...detailedCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ??
+        null;
+      suggestedCategory = suggestCategoryFromPlaid(bestPrimary, bestDetailed);
+    }
+  }
   const dueDaySource = det.nextExpectedDate ?? det.lastSeen;
   const parsedDay = dueDaySource ? Number(dueDaySource.slice(8, 10)) : NaN;
   const dueDay = Number.isInteger(parsedDay) && parsedDay >= 1 && parsedDay <= 31 ? parsedDay : 1;
@@ -83,7 +125,7 @@ router.post("/bills/detected/:id/confirm", async (req, res): Promise<void> => {
       .values({
         userId: req.userId,
         billName: det.displayName,
-        category: "Other",
+        category: suggestedCategory,
         amount: String(det.amount),
         frequency: det.frequency,
         dueDay,

@@ -10,10 +10,12 @@
 
 import {
   Briefcase,
+  Bus,
   Car,
   CreditCard,
   GraduationCap,
   Hammer,
+  HeartHandshake,
   HeartPulse,
   Home,
   Landmark,
@@ -43,6 +45,8 @@ export type CategoryKey =
   | "insurance"
   | "subscriptions"
   | "auto"
+  | "transportation"
+  | "giving"
   | "cellPhone"
   | "utilities"
   | "food"
@@ -78,6 +82,8 @@ export const CATEGORY_META: Record<CategoryKey, CategoryMeta> = {
   insurance:        { icon: Shield,          color: "#D85A30", bg: "#FAECE7", text: "#712B13", label: "Insurance" },
   subscriptions:    { icon: Tv,              color: "#534AB7", bg: "#EEEDFE", text: "#3C3489", label: "Subscriptions" },
   auto:             { icon: Car,             color: "#BA7517", bg: "#FAEEDA", text: "#633806", label: "Auto" },
+  transportation:   { icon: Bus,             color: "#0E7490", bg: "#E0F2FE", text: "#155E75", label: "Transportation" },
+  giving:           { icon: HeartHandshake,  color: "#D4537E", bg: "#FBEAF0", text: "#72243E", label: "Giving / Charity" },
   cellPhone:        { icon: Smartphone,      color: "#8B5CF6", bg: "#F1EBFD", text: "#5B21B6", label: "Cell Phone" },
   utilities:        { icon: Zap,             color: "#0F6E56", bg: "#E1F5EE", text: "#085041", label: "Utilities" },
   food:             { icon: UtensilsCrossed,  color: "#D85A30", bg: "#FAECE7", text: "#712B13", label: "Food" },
@@ -104,7 +110,10 @@ const NAME_TO_KEY: Record<string, CategoryKey> = {
   housing: "housing", mortgage: "housing", rent: "housing",
   insurance: "insurance",
   subscriptions: "subscriptions", subscription: "subscriptions",
-  auto: "auto", gas: "auto", car: "auto", transportation: "auto", vehicle: "auto",
+  auto: "auto", gas: "auto", car: "auto", vehicle: "auto",
+  transportation: "transportation", transit: "transportation",
+  "childcare / education": "education", childcare: "education", "childcare/education": "education",
+  "giving / charity": "giving", "giving/charity": "giving", giving: "giving", charity: "giving", donations: "giving",
   "cell phone": "cellPhone", cellphone: "cellPhone", cell_phone: "cellPhone", phone: "cellPhone", mobile: "cellPhone",
   utilities: "utilities", electric: "utilities", water: "utilities",
   food: "food", groceries: "food",

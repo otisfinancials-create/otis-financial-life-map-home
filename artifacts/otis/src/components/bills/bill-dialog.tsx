@@ -48,20 +48,9 @@ import {
 import type { Bill, BillInputPaymentMethod } from "@workspace/api-client-react";
 import { useSyncForecast } from "@/hooks/use-sync-forecast";
 import { MerchantPicker } from "@/components/bills/merchant-picker";
+import { BILL_CATEGORIES } from "@workspace/api-zod";
 
-const CATEGORIES = [
-  "Housing",
-  "Insurance",
-  "Subscriptions",
-  "Utilities",
-  "Auto",
-  "Cell Phone",
-  "Food",
-  "Medical",
-  "Pets",
-  "Debt Payments",
-  "Other",
-];
+const CATEGORIES = BILL_CATEGORIES;
 
 const FREQUENCIES = [
   { value: "weekly", label: "Weekly" },
