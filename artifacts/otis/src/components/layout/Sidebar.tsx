@@ -36,7 +36,7 @@ const sections: { label: string; items: NavItem[] }[] = [
     label: "Accounts",
     items: [
       { name: "Connected accounts", href: "/accounts", icon: Landmark },
-      { name: "Assets & Investments", href: "/assets-investments", icon: Scale },
+      { name: "Assets", href: "/assets-investments", icon: Scale },
       { name: "Loans", href: "/loans", icon: CreditCard },
     ],
   },

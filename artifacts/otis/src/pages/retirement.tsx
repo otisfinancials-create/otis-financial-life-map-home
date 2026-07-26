@@ -146,7 +146,7 @@ export default function Retirement() {
           Here's where you stand today, and where your current path is taking you.
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          Retirement savings pulled from accounts marked as 'Retirement' type in Connected Accounts.
+          Retirement savings pulled from accounts marked as 'Retirement' type in Accounts.
         </p>
       </div>
 
@@ -519,7 +519,7 @@ export default function Retirement() {
           <CardHeader>
             <CardTitle className="text-base">Your retirement accounts</CardTitle>
             <CardDescription>
-              Retirement savings pulled from accounts marked as 'Retirement' type in Connected Accounts.
+              Retirement savings pulled from accounts marked as 'Retirement' type in Accounts.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -529,7 +529,7 @@ export default function Retirement() {
               <EmptyState
                 icon={<PiggyBank className="h-8 w-8" />}
                 title="No retirement accounts yet"
-                description="Add your retirement accounts in Connected Accounts to get started."
+                description="Add your retirement accounts in Accounts to get started."
               />
             ) : (
               <div className="space-y-3">

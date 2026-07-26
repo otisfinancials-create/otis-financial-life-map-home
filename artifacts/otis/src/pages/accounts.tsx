@@ -243,7 +243,7 @@ export default function Accounts() {
       <div className="space-y-6 animate-in fade-in duration-500">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Connected Accounts</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Accounts</h1>
             <p className="text-muted-foreground mt-1">Link your bank accounts or add them manually.</p>
           </div>
           <div className="flex items-center gap-2">

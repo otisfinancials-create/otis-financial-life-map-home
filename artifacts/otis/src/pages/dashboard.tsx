@@ -650,7 +650,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Row 3: Cash Flow Trend + Connected Accounts */}
+      {/* Row 3: Cash Flow Trend + Accounts */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Cash Flow Trend */}
         <Card className={cardChrome}>
@@ -716,11 +716,11 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Connected Accounts */}
+        {/* Accounts */}
         <Card className={cardChrome}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg font-semibold tracking-tight">Connected Accounts</CardTitle>
+              <CardTitle className="text-lg font-semibold tracking-tight">Accounts</CardTitle>
               <Link
                 href="/accounts"
                 className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"

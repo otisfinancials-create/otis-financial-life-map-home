@@ -310,7 +310,7 @@ export default function AssetsInvestments() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Assets &amp; Investments</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Assets</h1>
           <p className="text-muted-foreground mt-1">
             Your complete picture of things you own plus your savings and investments
           </p>
@@ -329,7 +329,7 @@ export default function AssetsInvestments() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <SummaryCard
           icon={<Scale className="h-5 w-5 text-[#56A0D3]" strokeWidth={1.5} />}
-          label="Total Assets & Investments"
+          label="Total Assets"
           amount={manualTotal + savingsTotal}
           isLoading={isLoadingTotals}
         />
@@ -480,7 +480,7 @@ export default function AssetsInvestments() {
           </div>
         ) : savingsAccounts.length === 0 ? (
           <Card className="border-card-border bg-card rounded-xl p-8 text-center text-sm text-muted-foreground">
-            No savings or investment accounts yet. Add them in Connected Accounts by selecting
+            No savings or investment accounts yet. Add them in Accounts by selecting
             type Savings, Investment, or Brokerage.
           </Card>
         ) : (
@@ -526,7 +526,7 @@ export default function AssetsInvestments() {
         </div>
         <div className="mt-2 space-y-0.5 text-[12px] text-muted-foreground">
           <p>Retirement accounts are tracked separately in the Retirement section</p>
-          <p>Connected checking and credit accounts are tracked in Connected Accounts</p>
+          <p>Connected checking and credit accounts are tracked in Accounts</p>
         </div>
       </Card>
 
