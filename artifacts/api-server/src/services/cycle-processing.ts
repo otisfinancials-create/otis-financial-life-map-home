@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, lte, inArray } from "drizzle-orm";
+import { and, eq, gt, gte, lte, inArray, sql } from "drizzle-orm";
 import {
   db,
   cardCyclesTable,
@@ -51,7 +51,13 @@ export async function populateCycleBills(cardCycleId: number): Promise<CardCycle
         actualAmount: null,
         status: "pending",
       })
-      .onConflictDoNothing();
+      // Bill edits (amount changes) must flow into cycles immediately —
+      // but only for rows still pending; reconciled rows keep their history.
+      .onConflictDoUpdate({
+        target: [cardCycleBillsTable.cardCycleId, cardCycleBillsTable.billId],
+        set: { expectedAmount: String(bill.amount) },
+        setWhere: sql`${cardCycleBillsTable.status} = 'pending'`,
+      });
   }
 
   return db.select().from(cardCycleBillsTable).where(eq(cardCycleBillsTable.cardCycleId, cardCycleId));

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, billsTable, forecastedTransactionsTable, accountsTable } from "@workspace/db";
+import { syncBillWithCycles, detachBillFromAllCycles, refreshClosedCycles } from "../services/bill-cycle-sync";
 import {
   CreateBillBody,
   UpdateBillBody,
@@ -67,6 +68,19 @@ router.post("/bills", async (req, res): Promise<void> => {
     isVariable: data.isVariable ?? false,
     isActive: data.isActive ?? true,
   }).returning();
+  // Real-time cycle sync: a new card bill must appear in its card's open
+  // cycles immediately. A sync failure is surfaced (503), not swallowed —
+  // the bill IS saved, so the client should refresh rather than re-create.
+  if (bill.paymentAccountId != null) {
+    try {
+      const sync = await syncBillWithCycles({ userId: req.userId, billId: bill.id });
+      req.log.info({ sync }, "bill-cycle sync after create");
+    } catch (err) {
+      req.log.error({ err }, "bill-cycle sync failed after create");
+      res.status(503).json({ error: "Bill was saved, but updating its card cycles failed. Refresh and retry — do not re-create the bill.", billId: bill.id });
+      return;
+    }
+  }
   res.status(201).json(CreateBillResponse.parse(serializeBill(bill)));
 });
 
@@ -136,6 +150,12 @@ router.patch("/bills/:id", async (req, res): Promise<void> => {
     return;
   }
   const { amount: rawBillAmount, ...restBillData } = canonicalized;
+  // Capture the pre-update paying account so a moved bill leaves the old
+  // card's cycles as part of the sync.
+  const [before] = await db
+    .select({ paymentAccountId: billsTable.paymentAccountId })
+    .from(billsTable)
+    .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)));
   const [bill] = await db
     .update(billsTable)
     .set({
@@ -149,6 +169,23 @@ router.patch("/bills/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Bill not found" });
     return;
   }
+  // Real-time cycle sync for edits: amount/due-day changes refresh pending
+  // cycle rows; account changes / deactivation remove the bill from cycles
+  // it no longer belongs to (reconciled rows are kept and flagged).
+  if (bill.paymentAccountId != null || before?.paymentAccountId != null) {
+    try {
+      const sync = await syncBillWithCycles({
+        userId: req.userId,
+        billId: bill.id,
+        previousAccountId: before?.paymentAccountId ?? null,
+      });
+      req.log.info({ sync }, "bill-cycle sync after update");
+    } catch (err) {
+      req.log.error({ err }, "bill-cycle sync failed after update");
+      res.status(503).json({ error: "Bill was updated, but updating its card cycles failed. Refresh and retry the edit.", billId: bill.id });
+      return;
+    }
+  }
   res.json(UpdateBillResponse.parse(serializeBill(bill)));
 });
 
@@ -158,13 +195,31 @@ router.delete("/bills/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  // Hard delete: remove the bill and all of its forecasted transactions.
+  const [existing] = await db
+    .select()
+    .from(billsTable)
+    .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)));
+  if (!existing) {
+    res.status(404).json({ error: "Bill not found" });
+    return;
+  }
+
+  // Atomic hard delete: detach from every cycle (card_cycle_bills.bill_id
+  // has no cascade; reconciled actuals move to the catch-all — keep the
+  // actual, detach the plan), then remove forecasted transactions and the
+  // bill itself, all in ONE transaction so a failure can't leave the bill
+  // half-detached.
   const deleted = await db.transaction(async (tx) => {
     const [bill] = await tx
       .select()
       .from(billsTable)
       .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)));
     if (!bill) return null;
+
+    const detach = await detachBillFromAllCycles(tx, req.userId, params.data.id);
+    if (detach.detachedAllocations > 0) {
+      req.log.info({ detach, billId: params.data.id }, "reconciled bill allocations moved to catch-all on delete");
+    }
 
     await tx
       .delete(forecastedTransactionsTable)
@@ -175,11 +230,31 @@ router.delete("/bills/:id", async (req, res): Promise<void> => {
     await tx
       .delete(billsTable)
       .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)));
-    return bill;
+    return { bill, closedCyclesToRecompute: detach.closedCyclesToRecompute, openCyclesToReprocess: detach.openCyclesToReprocess };
   });
 
   if (!deleted) {
     res.status(404).json({ error: "Bill not found" });
+    return;
+  }
+  // Post-commit recomputes (derived data, idempotent — safe to retry):
+  // closed cycles whose reconciled allocations moved to the catch-all, then
+  // the affected card's open cycles so totals reflect the removal.
+  try {
+    await refreshClosedCycles(deleted.closedCyclesToRecompute);
+    if (existing.paymentAccountId != null || deleted.openCyclesToReprocess.length > 0) {
+      const sync = await syncBillWithCycles({
+        userId: req.userId,
+        billId: params.data.id,
+        previousAccountId: existing.paymentAccountId,
+        deleted: true,
+        extraCycleIds: deleted.openCyclesToReprocess,
+      });
+      req.log.info({ sync }, "bill-cycle sync after delete");
+    }
+  } catch (err) {
+    req.log.error({ err }, "bill-cycle sync failed after delete");
+    res.status(503).json({ error: "Bill was deleted, but updating its card cycles failed. Reprocess the cycle to refresh totals." });
     return;
   }
   res.sendStatus(204);
