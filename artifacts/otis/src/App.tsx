@@ -12,6 +12,7 @@ import { Shell } from "@/components/layout/Shell";
 import Dashboard from "@/pages/dashboard";
 import Bills from "@/pages/bills";
 import LinkBills from "@/pages/link-bills";
+import BillDrafts from "@/pages/bill-drafts";
 import Goals from "@/pages/goals";
 import Accounts from "@/pages/accounts";
 import AssetsInvestments from "@/pages/assets-investments";
@@ -223,6 +224,9 @@ function ClerkProviderWithRoutes() {
             </Route>
             <Route path="/bills/link">
               <ProtectedShell><LinkBills /></ProtectedShell>
+            </Route>
+            <Route path="/bills/review">
+              <ProtectedShell><BillDrafts /></ProtectedShell>
             </Route>
             <Route path="/budget">
               <Redirect to="/bills" />

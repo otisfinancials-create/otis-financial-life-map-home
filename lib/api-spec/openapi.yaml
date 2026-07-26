@@ -1595,6 +1595,21 @@ paths:
                 items:
                   $ref: "#/components/schemas/DetectedBill"
 
+  /bills/detected-drafts:
+    get:
+      operationId: listDetectedBillDrafts
+      tags: [bills]
+      summary: Pending detections enriched into pre-filled, pre-linked bill drafts
+      responses:
+        "200":
+          description: Draft bills, highest confidence first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DetectedBillDraft"
+
   /bills/detected/{id}/confirm:
     post:
       operationId: confirmDetectedBill
@@ -1606,6 +1621,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmDetectedBillInput"
       responses:
         "200":
           description: Bill created
@@ -3381,6 +3402,100 @@ components:
         duplicateOf:
           type: integer
           nullable: true
+
+    DraftSampleTransaction:
+      type: object
+      required: [date, amount, name]
+      properties:
+        date:
+          type: string
+        amount:
+          type: number
+        name:
+          type: string
+
+    DetectedBillDraft:
+      type: object
+      required: [id, displayName, matchMerchant, amount, isVariable, frequency, occurrenceCount, dueDay, confidence, status, suggestedCategory, sampleTransactions]
+      properties:
+        id:
+          type: integer
+        displayName:
+          type: string
+        matchMerchant:
+          type: string
+          description: Normalized merchant key, ready to store as bills.match_merchant
+        amount:
+          type: number
+        amountMin:
+          type: number
+          nullable: true
+        amountMax:
+          type: number
+          nullable: true
+        isVariable:
+          type: boolean
+        frequency:
+          type: string
+          enum: [weekly, biweekly, monthly, quarterly, annually]
+        occurrenceCount:
+          type: integer
+        firstSeen:
+          type: string
+          nullable: true
+        lastSeen:
+          type: string
+          nullable: true
+        nextExpectedDate:
+          type: string
+          nullable: true
+        dueDay:
+          type: integer
+        confidence:
+          type: number
+        status:
+          type: string
+          enum: [pending, duplicate]
+        duplicateOf:
+          type: integer
+          nullable: true
+        duplicateBillName:
+          type: string
+          nullable: true
+        suggestedCategory:
+          type: string
+        paymentAccountId:
+          type: integer
+          nullable: true
+        paymentAccountName:
+          type: string
+          nullable: true
+        sampleTransactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/DraftSampleTransaction"
+
+    ConfirmDetectedBillInput:
+      type: object
+      description: Optional overrides applied when confirming a detected bill
+      properties:
+        billName:
+          type: string
+        category:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+          enum: [weekly, biweekly, monthly, quarterly, annually]
+        dueDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+        paymentAccountId:
+          type: ["integer", "null"]
+        matchMerchant:
+          type: ["string", "null"]
 
     PlaidWebhookInput:
       type: object

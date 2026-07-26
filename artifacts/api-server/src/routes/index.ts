@@ -40,8 +40,10 @@ router.use(plaidWebhookRouter);
 router.use(requireAuth);
 router.use(otisCacheInvalidation);
 router.use(dashboardRouter);
-router.use(billsRouter);
+// detectedBillsRouter must come first: its literal /bills/detected* paths
+// would otherwise be swallowed by billsRouter's /bills/:id param routes.
 router.use(detectedBillsRouter);
+router.use(billsRouter);
 router.use(lifeEventsRouter);
 router.use(paySchedulesRouter);
 router.use(accountsRouter);

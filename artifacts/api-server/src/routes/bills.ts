@@ -54,7 +54,7 @@ function canonicalizeDueDay<T extends { frequency?: string | null; startDate?: s
  * normalizes transaction names, so stored keys and match-time keys line up.
  * Empty/whitespace-only input clears the link (null).
  */
-function normalizeMatchMerchant(raw: string | null | undefined): string | null | undefined {
+export function normalizeMatchMerchant(raw: string | null | undefined): string | null | undefined {
   if (raw === undefined) return undefined; // not part of this request
   if (raw === null) return null;
   const norm = raw.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -62,7 +62,7 @@ function normalizeMatchMerchant(raw: string | null | undefined): string | null |
 }
 
 /** Reject paymentAccountId values that don't belong to the requesting user. */
-async function paymentAccountBelongsToUser(userId: string, paymentAccountId: number | null | undefined): Promise<boolean> {
+export async function paymentAccountBelongsToUser(userId: string, paymentAccountId: number | null | undefined): Promise<boolean> {
   if (paymentAccountId == null) return true;
   const [account] = await db
     .select({ id: accountsTable.id })

@@ -2026,11 +2026,58 @@ export const ListDetectedBillsResponse = zod.array(ListDetectedBillsResponseItem
 
 
 /**
+ * @summary Pending detections enriched into pre-filled, pre-linked bill drafts
+ */
+export const ListDetectedBillDraftsResponseItem = zod.object({
+  "id": zod.number(),
+  "displayName": zod.string(),
+  "matchMerchant": zod.string().describe('Normalized merchant key, ready to store as bills.match_merchant'),
+  "amount": zod.number(),
+  "amountMin": zod.number().nullish(),
+  "amountMax": zod.number().nullish(),
+  "isVariable": zod.boolean(),
+  "frequency": zod.enum(['weekly', 'biweekly', 'monthly', 'quarterly', 'annually']),
+  "occurrenceCount": zod.number(),
+  "firstSeen": zod.string().nullish(),
+  "lastSeen": zod.string().nullish(),
+  "nextExpectedDate": zod.string().nullish(),
+  "dueDay": zod.number(),
+  "confidence": zod.number(),
+  "status": zod.enum(['pending', 'duplicate']),
+  "duplicateOf": zod.number().nullish(),
+  "duplicateBillName": zod.string().nullish(),
+  "suggestedCategory": zod.string(),
+  "paymentAccountId": zod.number().nullish(),
+  "paymentAccountName": zod.string().nullish(),
+  "sampleTransactions": zod.array(zod.object({
+  "date": zod.string(),
+  "amount": zod.number(),
+  "name": zod.string()
+}))
+})
+export const ListDetectedBillDraftsResponse = zod.array(ListDetectedBillDraftsResponseItem)
+
+
+/**
  * @summary Confirm a detected bill and create a real bill from it
  */
 export const ConfirmDetectedBillParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const confirmDetectedBillBodyDueDayMax = 31;
+
+
+
+export const ConfirmDetectedBillBody = zod.object({
+  "billName": zod.string().optional(),
+  "category": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "frequency": zod.enum(['weekly', 'biweekly', 'monthly', 'quarterly', 'annually']).optional(),
+  "dueDay": zod.number().min(1).max(confirmDetectedBillBodyDueDayMax).optional(),
+  "paymentAccountId": zod.number().nullish(),
+  "matchMerchant": zod.string().nullish()
+}).describe('Optional overrides applied when confirming a detected bill')
 
 export const ConfirmDetectedBillResponse = zod.object({
   "id": zod.number(),

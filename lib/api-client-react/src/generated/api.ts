@@ -44,10 +44,12 @@ import type {
   BillUpdate,
   CardCycle,
   CloseCycleResult,
+  ConfirmDetectedBillInput,
   CycleBreakdown,
   CycleConfigInput,
   DashboardSummary,
   DetectedBill,
+  DetectedBillDraft,
   Envelope,
   EnvelopeInput,
   EnvelopeUpdate,
@@ -6304,6 +6306,83 @@ export function useListDetectedBills<TData = Awaited<ReturnType<typeof listDetec
 
 
 
+export const getListDetectedBillDraftsUrl = () => {
+
+
+
+
+  return `/api/bills/detected-drafts`
+}
+
+/**
+ * @summary Pending detections enriched into pre-filled, pre-linked bill drafts
+ */
+export const listDetectedBillDrafts = async ( options?: RequestInit): Promise<DetectedBillDraft[]> => {
+
+  return customFetch<DetectedBillDraft[]>(getListDetectedBillDraftsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDetectedBillDraftsQueryKey = () => {
+    return [
+    `/api/bills/detected-drafts`
+    ] as const;
+    }
+
+
+export const getListDetectedBillDraftsQueryOptions = <TData = Awaited<ReturnType<typeof listDetectedBillDrafts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDetectedBillDrafts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDetectedBillDraftsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDetectedBillDrafts>>> = ({ signal }) => listDetectedBillDrafts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDetectedBillDrafts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDetectedBillDraftsQueryResult = NonNullable<Awaited<ReturnType<typeof listDetectedBillDrafts>>>
+export type ListDetectedBillDraftsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Pending detections enriched into pre-filled, pre-linked bill drafts
+ */
+
+export function useListDetectedBillDrafts<TData = Awaited<ReturnType<typeof listDetectedBillDrafts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDetectedBillDrafts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDetectedBillDraftsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getConfirmDetectedBillUrl = (id: number,) => {
 
 
@@ -6315,14 +6394,15 @@ export const getConfirmDetectedBillUrl = (id: number,) => {
 /**
  * @summary Confirm a detected bill and create a real bill from it
  */
-export const confirmDetectedBill = async (id: number, options?: RequestInit): Promise<Bill> => {
+export const confirmDetectedBill = async (id: number,
+    confirmDetectedBillInput?: ConfirmDetectedBillInput, options?: RequestInit): Promise<Bill> => {
 
   return customFetch<Bill>(getConfirmDetectedBillUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(confirmDetectedBillInput)
   }
 );}
 
@@ -6330,8 +6410,8 @@ export const confirmDetectedBill = async (id: number, options?: RequestInit): Pr
 
 
 export const getConfirmDetectedBillMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedBill>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedBill>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedBill>>, TError,{id: number;data?: BodyType<ConfirmDetectedBillInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedBill>>, TError,{id: number;data?: BodyType<ConfirmDetectedBillInput>}, TContext> => {
 
 const mutationKey = ['confirmDetectedBill'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -6343,10 +6423,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmDetectedBill>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmDetectedBill>>, {id: number;data?: BodyType<ConfirmDetectedBillInput>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  confirmDetectedBill(id,requestOptions)
+          return  confirmDetectedBill(id,data,requestOptions)
         }
 
 
@@ -6357,18 +6437,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ConfirmDetectedBillMutationResult = NonNullable<Awaited<ReturnType<typeof confirmDetectedBill>>>
-
+    export type ConfirmDetectedBillMutationBody = BodyType<ConfirmDetectedBillInput> | undefined
     export type ConfirmDetectedBillMutationError = ErrorType<void>
 
     /**
  * @summary Confirm a detected bill and create a real bill from it
  */
 export const useConfirmDetectedBill = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedBill>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedBill>>, TError,{id: number;data?: BodyType<ConfirmDetectedBillInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof confirmDetectedBill>>,
         TError,
-        {id: number},
+        {id: number;data?: BodyType<ConfirmDetectedBillInput>},
         TContext
       > => {
       return useMutation(getConfirmDetectedBillMutationOptions(options));

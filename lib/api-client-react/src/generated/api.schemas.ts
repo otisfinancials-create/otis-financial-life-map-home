@@ -1320,6 +1320,86 @@ export interface DetectedBill {
   duplicateOf?: number | null;
 }
 
+export interface DraftSampleTransaction {
+  date: string;
+  amount: number;
+  name: string;
+}
+
+export type DetectedBillDraftFrequency = typeof DetectedBillDraftFrequency[keyof typeof DetectedBillDraftFrequency];
+
+
+export const DetectedBillDraftFrequency = {
+  weekly: 'weekly',
+  biweekly: 'biweekly',
+  monthly: 'monthly',
+  quarterly: 'quarterly',
+  annually: 'annually',
+} as const;
+
+export type DetectedBillDraftStatus = typeof DetectedBillDraftStatus[keyof typeof DetectedBillDraftStatus];
+
+
+export const DetectedBillDraftStatus = {
+  pending: 'pending',
+  duplicate: 'duplicate',
+} as const;
+
+export interface DetectedBillDraft {
+  id: number;
+  displayName: string;
+  /** Normalized merchant key, ready to store as bills.match_merchant */
+  matchMerchant: string;
+  amount: number;
+  amountMin?: number | null;
+  amountMax?: number | null;
+  isVariable: boolean;
+  frequency: DetectedBillDraftFrequency;
+  occurrenceCount: number;
+  firstSeen?: string | null;
+  lastSeen?: string | null;
+  nextExpectedDate?: string | null;
+  dueDay: number;
+  confidence: number;
+  status: DetectedBillDraftStatus;
+  duplicateOf?: number | null;
+  duplicateBillName?: string | null;
+  suggestedCategory: string;
+  paymentAccountId?: number | null;
+  paymentAccountName?: string | null;
+  sampleTransactions: DraftSampleTransaction[];
+}
+
+export type ConfirmDetectedBillInputFrequency = typeof ConfirmDetectedBillInputFrequency[keyof typeof ConfirmDetectedBillInputFrequency];
+
+
+export const ConfirmDetectedBillInputFrequency = {
+  weekly: 'weekly',
+  biweekly: 'biweekly',
+  monthly: 'monthly',
+  quarterly: 'quarterly',
+  annually: 'annually',
+} as const;
+
+/**
+ * Optional overrides applied when confirming a detected bill
+ */
+export interface ConfirmDetectedBillInput {
+  billName?: string;
+  category?: string;
+  amount?: number;
+  frequency?: ConfirmDetectedBillInputFrequency;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  dueDay?: number;
+  /** @nullable */
+  paymentAccountId?: number | null;
+  /** @nullable */
+  matchMerchant?: string | null;
+}
+
 export interface PlaidWebhookInput {
   webhook_type?: string;
   webhook_code?: string;

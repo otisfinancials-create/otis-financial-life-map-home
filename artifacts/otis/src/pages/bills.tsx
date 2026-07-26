@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon, ArrowUp, ArrowDown, ChevronsUpDown, X, Link2 } from "lucide-react";
+import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon, ArrowUp, ArrowDown, ChevronsUpDown, X, Link2, Sparkles } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link as WouterLink } from "wouter";
 
 import {
   useListBills,
   useGetBillLinkReview,
+  useListDetectedBillDrafts,
   useDeleteBill,
   useUpdateBill,
   getListBillsQueryKey,
@@ -94,6 +95,7 @@ export default function Bills() {
   const queryClient = useQueryClient();
   const { data: bills, isLoading } = useListBills();
   const { data: linkReview } = useGetBillLinkReview();
+  const { data: detectedDrafts } = useListDetectedBillDrafts();
   const deleteBill = useDeleteBill();
   const updateBill = useUpdateBill();
   const { sync: syncForecast } = useSyncForecast();
@@ -209,6 +211,15 @@ export default function Bills() {
               onClick={() => setShowInactive((v) => !v)}
             >
               {showInactive ? "Hide Inactive" : `Show Inactive (${inactiveCount})`}
+            </Button>
+          )}
+          {(detectedDrafts?.length ?? 0) > 0 && (
+            <Button variant="outline" asChild data-testid="button-review-detected">
+              <WouterLink href="/bills/review">
+                <Sparkles className="mr-2 h-4 w-4" />
+                Review detected bills
+                <Badge variant="secondary" className="ml-2">{detectedDrafts!.length}</Badge>
+              </WouterLink>
             </Button>
           )}
           {(linkReview?.length ?? 0) > 0 && (

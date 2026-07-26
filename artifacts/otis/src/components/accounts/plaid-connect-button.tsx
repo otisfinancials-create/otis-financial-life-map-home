@@ -2,16 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { Link2, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 
 import {
   useCreatePlaidLinkToken,
   useExchangePlaidToken,
+  useDetectBills,
   getListAccountsQueryKey,
   getGetAccountsSummaryQueryKey,
   getGetDashboardSummaryQueryKey,
+  getListDetectedBillDraftsQueryKey,
 } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
+import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 
 export function PlaidConnectButton() {
@@ -21,6 +25,35 @@ export function PlaidConnectButton() {
 
   const createLinkToken = useCreatePlaidLinkToken();
   const exchangeToken = useExchangePlaidToken();
+  const detectBills = useDetectBills();
+  const [, navigate] = useLocation();
+
+  // Onboarding hook: after a bank is connected, run bill detection and — if
+  // recurring bills were found — offer the draft review page in one click.
+  const runDetection = useCallback(() => {
+    detectBills.mutate(undefined, {
+      onSuccess: (summary) => {
+        queryClient.invalidateQueries({ queryKey: getListDetectedBillDraftsQueryKey() });
+        const found = summary.pending + summary.duplicates;
+        if (found > 0) {
+          toast({
+            title: "We found recurring bills",
+            description: `${found} detected from your transactions — review and confirm them.`,
+            action: (
+              <ToastAction altText="Review detected bills" onClick={() => navigate("/bills/review")}>
+                Review
+              </ToastAction>
+            ),
+          });
+        }
+      },
+      // Detection is a bonus step — a failure here shouldn't mar the
+      // successful bank connection, so stay quiet and let the Bills page
+      // badge pick it up later.
+      onError: () => {},
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryClient, navigate, toast]);
 
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
@@ -50,6 +83,7 @@ export function PlaidConnectButton() {
                   ? `${result.accountsAdded} account${result.accountsAdded === 1 ? "" : "s"} imported.`
                   : "Your accounts are up to date.",
             });
+            runDetection();
           },
           onError: () => {
             toast({
