@@ -26,8 +26,9 @@ import {
   GenerateAccountCyclesParams,
   GenerateAccountCyclesResponse,
 } from "@workspace/api-zod";
-import { cardCyclesTable, type CardCycle } from "@workspace/db";
-import { generateCyclesForAccount } from "../services/card-cycles";
+import { cardCyclesTable, billsTable, type CardCycle } from "@workspace/db";
+import { generateCyclesForAccount, deleteCycleWithDependentsTx } from "../services/card-cycles";
+import { regenerateForecastForUser } from "./forecast";
 
 const SAVINGS_INVESTMENT_TYPES = ["savings", "investment", "brokerage"];
 
@@ -299,14 +300,30 @@ router.delete("/accounts/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [account] = await db
-    .delete(accountsTable)
-    .where(and(eq(accountsTable.id, params.data.id), eq(accountsTable.userId, req.userId)))
-    .returning();
+  const account = await ownedAccount(params.data.id, req.userId);
   if (!account) {
     res.status(404).json({ error: "Account not found" });
     return;
   }
+  // Clear rows referencing this account, or the delete hits FK errors:
+  // card cycles (with envelopes/allocations/forecast rows), bills that pay
+  // from it (detach, keep the bill), and account goals. One transaction so a
+  // failure can't leave the account half-detached.
+  await db.transaction(async (tx) => {
+    const cycles = await tx
+      .select({ id: cardCyclesTable.id })
+      .from(cardCyclesTable)
+      .where(eq(cardCyclesTable.accountId, account.id));
+    for (const c of cycles) await deleteCycleWithDependentsTx(tx, c.id);
+    await tx
+      .update(billsTable)
+      .set({ paymentAccountId: null })
+      .where(eq(billsTable.paymentAccountId, account.id));
+    await tx.delete(accountGoalsTable).where(eq(accountGoalsTable.accountId, account.id));
+    await tx.delete(accountsTable).where(eq(accountsTable.id, account.id));
+  });
+  // Detached bills / removed cycles change the forecast — always rebuild.
+  await regenerateForecastForUser(req.userId);
   res.sendStatus(204);
 });
 
@@ -356,6 +373,8 @@ router.patch("/accounts/:id/cycle-config", async (req, res): Promise<void> => {
     .set({ statementDay: body.data.statementDay, dueDay: body.data.dueDay, updatedAt: new Date() })
     .where(eq(accountsTable.id, account.id));
   const cycles = await generateCyclesForAccount(account.id);
+  // Cycle windows may have been replaced/removed — rebuild their payment rows.
+  await regenerateForecastForUser(req.userId);
   res.json(UpdateAccountCycleConfigResponse.parse(cycles.map(serializeCycle)));
 });
 
@@ -390,6 +409,7 @@ router.post("/accounts/:id/generate-cycles", async (req, res): Promise<void> => 
     return;
   }
   const cycles = await generateCyclesForAccount(account.id);
+  await regenerateForecastForUser(req.userId);
   res.json(GenerateAccountCyclesResponse.parse(cycles.map(serializeCycle)));
 });
 

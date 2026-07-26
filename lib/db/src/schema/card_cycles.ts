@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, serial, text, numeric, integer, date, timestamp, unique, boolean, check } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, integer, date, timestamp, unique, uniqueIndex, boolean, check } from "drizzle-orm/pg-core";
 import { accountsTable } from "./accounts";
 import { billsTable } from "./bills";
 
@@ -19,7 +19,13 @@ export const cardCyclesTable = pgTable("card_cycles", {
   status: text("status").default("open"), // 'open' | 'closed' | 'paid'
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [unique("card_cycles_account_start_unique").on(t.accountId, t.cycleStart)]);
+}, (t) => [
+  unique("card_cycles_account_start_unique").on(t.accountId, t.cycleStart),
+  // Duplicate guard by PERIOD: two windows shifted by a day (07-15 vs 07-16)
+  // close in the same month and are the same statement period — never allow
+  // both. (The cycle_start-only constraint missed exactly that case.)
+  uniqueIndex("card_cycles_account_period_unique").on(t.accountId, sql`date_trunc('month', (cycle_end)::timestamp)`),
+]);
 
 /** Spending envelopes within a card cycle (CRUD in Stage 2). */
 export const envelopesTable = pgTable("envelopes", {

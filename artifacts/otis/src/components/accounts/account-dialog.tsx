@@ -70,19 +70,16 @@ const accountSchema = z
         message: "Monthly contribution must be a positive number.",
       }),
     notes: z.string().max(200, { message: "Notes are limited to 200 characters." }),
-    ccCycleStartDate: z.string(),
-    ccCycleEndDate: z.string(),
-    ccPaymentDueDate: z.string(),
     statementDay: z.string(),
     dueDay: z.string(),
   })
   .superRefine((vals, ctx) => {
     if (vals.accountType === "credit_card") {
-      // Envelope cycles need both days or neither.
+      // Billing cycle needs both days or neither.
       if ((vals.statementDay === "") !== (vals.dueDay === "")) {
         ctx.addIssue({ code: "custom", path: [vals.statementDay === "" ? "statementDay" : "dueDay"], message: "Set both statement and due day, or neither." });
       }
-      for (const key of ["ccCycleStartDate", "ccCycleEndDate", "ccPaymentDueDate", "statementDay", "dueDay"] as const) {
+      for (const key of ["statementDay", "dueDay"] as const) {
         const v = vals[key];
         if (v !== "" && !(/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 31)) {
           ctx.addIssue({ code: "custom", path: [key], message: "Enter a day of month (1-31)." });
@@ -100,6 +97,54 @@ const accountSchema = z
   });
 
 type AccountFormValues = z.infer<typeof accountSchema>;
+
+// ─── Billing-cycle plain-English preview ─────────────────────────────────────
+
+const ordinal = (n: number) => {
+  const s = ["th", "st", "nd", "rd"] as const;
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+};
+
+/** Day clamped to the given month (year, monthIndex 0-based, may overflow). */
+function clampedDate(year: number, monthIndex: number, day: number): Date {
+  const y = year + Math.floor(monthIndex / 12);
+  const m = ((monthIndex % 12) + 12) % 12;
+  const last = new Date(y, m + 1, 0).getDate();
+  return new Date(y, m, Math.min(day, last));
+}
+
+const monD = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+/**
+ * Live preview of the derived cycle: start = day after close, end = closing
+ * day, due = due day in the month AFTER the close. Short months clamp the
+ * closing day (e.g. 31 → Feb 28/29); the example uses real calendar dates.
+ */
+function CyclePreview({ statementDay, dueDay }: { statementDay: string; dueDay: string }) {
+  const close = /^\d+$/.test(statementDay) ? Number(statementDay) : NaN;
+  const due = /^\d+$/.test(dueDay) ? Number(dueDay) : NaN;
+  if (!(close >= 1 && close <= 31 && due >= 1 && due <= 31)) return null;
+
+  const now = new Date();
+  const y = now.getFullYear();
+  // Example window: the CURRENT cycle — first statement close on/after today
+  // (same rule the server uses when generating cycles).
+  let m = now.getMonth();
+  if (clampedDate(y, m, close).getTime() < new Date(y, now.getMonth(), now.getDate()).getTime()) m += 1;
+  const exampleClose = clampedDate(y, m, close);
+  const exampleStart = new Date(clampedDate(y, m - 1, close));
+  exampleStart.setDate(exampleStart.getDate() + 1);
+  const exampleDue = clampedDate(y, m + 1, due);
+
+  const startDay = close >= 31 ? 1 : close + 1;
+  return (
+    <p className="text-xs text-foreground bg-white border border-border rounded-md px-2.5 py-2" data-testid="cycle-preview">
+      Runs the {ordinal(startDay)} to the {ordinal(close)} each month, payment due the {ordinal(due)} of the
+      following month. Example: {monD(exampleStart)} – {monD(exampleClose)}, due {monD(exampleDue)}.
+    </p>
+  );
+}
 
 interface AccountDialogProps {
   account?: Account;
@@ -129,9 +174,6 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
     accountNumberLast4: account?.accountNumberLast4 || "",
     monthlyContribution: account?.monthlyContribution || 0,
     notes: account?.notes || "",
-    ccCycleStartDate: account?.ccCycleStartDate != null ? String(account.ccCycleStartDate) : "",
-    ccCycleEndDate: account?.ccCycleEndDate != null ? String(account.ccCycleEndDate) : "",
-    ccPaymentDueDate: account?.ccPaymentDueDate != null ? String(account.ccPaymentDueDate) : "",
     statementDay: account?.statementDay != null ? String(account.statementDay) : "",
     dueDay: account?.dueDay != null ? String(account.dueDay) : "",
   });
@@ -161,9 +203,14 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
       accountNumberLast4: values.accountNumberLast4 || null,
       monthlyContribution: values.accountType === "retirement" ? values.monthlyContribution : 0,
       notes: values.notes || null,
-      ccCycleStartDate: values.accountType === "credit_card" && values.ccCycleStartDate !== "" ? Number(values.ccCycleStartDate) : null,
-      ccCycleEndDate: values.accountType === "credit_card" && values.ccCycleEndDate !== "" ? Number(values.ccCycleEndDate) : null,
-      ccPaymentDueDate: values.accountType === "credit_card" && values.ccPaymentDueDate !== "" ? Number(values.ccPaymentDueDate) : null,
+      // Legacy per-account cycle fields are retired: the single statement/due
+      // day config is the only cycle definition. Clear the stale values so the
+      // old forecast grouping path can't disagree with the cycles — but only
+      // once a real cycle config exists, so a card still mid-migration (legacy
+      // fields set, no statement/due day yet) keeps its forecast grouping.
+      ...(values.accountType === "credit_card" && values.statementDay !== "" && values.dueDay !== ""
+        ? { ccCycleStartDate: null, ccCycleEndDate: null, ccPaymentDueDate: null }
+        : {}),
     };
     const invalidate = () => {
       queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
@@ -299,16 +346,16 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
             </div>
             {form.watch("accountType") === "credit_card" && (
               <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
-                <p className="text-sm font-semibold">Credit Card Billing Cycle</p>
-                <div className="grid grid-cols-3 gap-3">
+                <p className="text-sm font-semibold">Billing Cycle</p>
+                <div className="grid grid-cols-2 gap-3">
                   <FormField
                     control={form.control}
-                    name="ccCycleStartDate"
+                    name="statementDay"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">Start Date</FormLabel>
+                        <FormLabel className="text-xs">Statement closing day</FormLabel>
                         <FormControl>
-                          <Input placeholder="1" inputMode="numeric" {...field} />
+                          <Input placeholder="14" inputMode="numeric" data-testid="input-statement-day" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -316,64 +363,23 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                   />
                   <FormField
                     control={form.control}
-                    name="ccCycleEndDate"
+                    name="dueDay"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">End Date</FormLabel>
+                        <FormLabel className="text-xs">Payment due day</FormLabel>
                         <FormControl>
-                          <Input placeholder="31" inputMode="numeric" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="ccPaymentDueDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Payment Due Date</FormLabel>
-                        <FormControl>
-                          <Input placeholder="15" inputMode="numeric" {...field} />
+                          <Input placeholder="8" inputMode="numeric" data-testid="input-due-day" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">Day of month (1-31). Bills paid by this card are grouped in the forecast on the payment due date.</p>
-                <div className="border-t border-border pt-3 space-y-2">
-                  <p className="text-sm font-semibold">Envelope Budgeting Cycles</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                      control={form.control}
-                      name="statementDay"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Statement Day</FormLabel>
-                          <FormControl>
-                            <Input placeholder="14" inputMode="numeric" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="dueDay"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Payment Due Day</FormLabel>
-                          <FormControl>
-                            <Input placeholder="8" inputMode="numeric" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">Set these to generate billing cycles with spending envelopes. For cards without a bank connection, you can then record charges by hand from "Manage envelopes".</p>
-                </div>
+                <CyclePreview
+                  statementDay={form.watch("statementDay")}
+                  dueDay={form.watch("dueDay")}
+                />
+                <p className="text-xs text-muted-foreground">The cycle window and due date are derived from these two days. Billing cycles with spending envelopes are generated automatically; for cards without a bank connection you can record charges by hand from "Manage envelopes".</p>
               </div>
             )}
             {form.watch("accountType") === "retirement" && (
