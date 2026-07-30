@@ -1194,6 +1194,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReorderForecastResult"
 
+  /forecast/anchor:
+    post:
+      operationId: anchorForecast
+      tags: [forecasts]
+      summary: Set the forecast start date and reconstruct the anchor balance as of that date (preview or save)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnchorForecastInput"
+      responses:
+        "200":
+          description: Anchor computed (and saved unless preview)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnchorForecastResult"
+        "400":
+          description: Invalid input
+
   /forecast/reconcile-candidates:
     get:
       operationId: listReconcileCandidates
@@ -3073,6 +3094,9 @@ components:
         matchedPlaidTransactionId:
           type: ["integer", "null"]
           description: Posted bank transaction confirmed as this bill's payment (P6 reconciliation)
+        isUnplanned:
+          type: boolean
+          description: Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable
         forecastedDate:
           type: ["string", "null"]
           description: Original planned date, kept when the row moved to the actual posted date
@@ -3097,6 +3121,46 @@ components:
           type: number
         postedName:
           type: string
+
+    AnchorForecastInput:
+      type: object
+      required: [startDate]
+      properties:
+        startDate:
+          type: string
+          description: Forecast start date (YYYY-MM-DD), today or earlier
+        preview:
+          type: boolean
+          description: When true, compute and return the anchor without saving
+
+    AnchorForecastResult:
+      type: object
+      required: [startDate, anchorBalance, accounts, saved]
+      properties:
+        startDate:
+          type: string
+        anchorBalance:
+          type: number
+          description: Sum of reconstructed bank balances as of the start date
+        saved:
+          type: boolean
+        accounts:
+          type: array
+          items:
+            type: object
+            required: [accountId, accountName, currentBalance, netSinceStart, startBalance]
+            properties:
+              accountId:
+                type: integer
+              accountName:
+                type: string
+              currentBalance:
+                type: number
+              netSinceStart:
+                type: number
+                description: Net cash flow (inflows positive) from the start date to today
+              startBalance:
+                type: number
 
     ReconcileForecastInput:
       type: object
@@ -3236,6 +3300,9 @@ components:
           type: number
         balanceAsOfDate:
           type: string
+        forecastStartDate:
+          type: ["string", "null"]
+          description: The forecast's start date; startingBalance is the anchored balance as of this date
         updatedAt:
           type: string
 

@@ -40,6 +40,10 @@ export const forecastedTransactionsTable = pgTable("forecasted_transactions", {
   // original planned date so un-confirm can revert.
   matchedPlaidTransactionId: integer("matched_plaid_transaction_id"),
   forecastedDate: date("forecasted_date", { mode: "string" }),
+  // P6 part 2: derived "unplanned actual" row — posted bank spending/income
+  // (start date → today) not matched to any planned bill/paycheck, bucketed
+  // by day+category. Rebuilt idempotently by rollActualsForUser; not editable.
+  isUnplanned: boolean("is_unplanned").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

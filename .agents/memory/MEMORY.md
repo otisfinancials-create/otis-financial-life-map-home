@@ -11,11 +11,21 @@
 - [Loans amortization parity](loans-amortization-parity.md) — amortization engine duplicated on server (routes/loans.ts) and client (components/loans/amortization.ts); change both in lockstep.
 - [Codegen transient reload errors](codegen-transient-errors.md) — Orval codegen briefly deletes generated files; ignore Vite/Metro reload errors in that window, restart Expo to clear Metro's cached failure.
 - [Forecast cycle payments](forecast-cycle-payments.md) — derived rows need PATCH guards + survivor dedupe by source id, or mark-paid + regen double-counts; open cycles project $0 until processed.
+- [Forecast calendar view](forecast-calendar-view.md) — hybrid month calendar: server `today` is the actuals/plan seam; override days must step with forecast net, not plaid net.
 - [Forecast balance anchoring](forecast-balance-anchoring.md) — sync-adjustment rows must skip the past back-fill and survive regenerate/delete, or rebaselining silently breaks.
 - [pnpm @types/react hoist](pnpm-types-react-hoist.md) — duplicate @types/react (Expo pin vs catalog) breaks web typecheck via pnpm hidden hoist; align all pins to catalog:.
 - [Mobile AI tab dead endpoints](mobile-ai-dead-endpoints.md) — mobile ai.tsx targets /api/anthropic/* routes that never existed; typecheck patched with local hooks, real fix must retarget /api/otis SSE with auth plumbing.
 - [Plaid webhook verification](plaid-webhook-verification.md) — public webhooks must verify the Plaid JWT (raw-body sha256) and per-item debounce sync, or they are a DoS vector.
 - [Plaid initial sync historical wait](plaid-initial-sync-historical.md) — never persist an initial cursor before HISTORICAL_UPDATE_COMPLETE, or the item silently skips all history; fix by nulling the cursor.
 - [Plaid transactionsSync accounts array](plaid-sync-accounts-array.md) — accounts[] is empty on caught-up runs; balance snapshots only accrue when a sync has new transactions.
+- [Card cycle period identity](card-cycle-period-identity.md) — cycles are unique per (account, close-month); regeneration replaces by period, never accumulates; account delete must clear cycle FKs first.
+- [Forecast start date + actuals roll](forecast-actuals-roll.md) — anchored past: every posted bank txn steps the balance exactly once; roll order + per-user serialization matter.
+- [Bank-paid bill reconciliation](bill-bank-reconciliation.md) — confirm moves row to posted date; always snapshot pre-confirm amount; regen needs forecastedDate keys + paid-early query or it double-counts.
+- [Bill→cycle real-time sync](bill-cycle-sync.md) — card_cycle_bills.bill_id has no cascade; delete must detach in-transaction, reconciled rows keep the actual + detach the plan, every touched cycle needs rollup refresh.
+- [Bill↔charge merchant matching](bill-merchant-matching.md) — match on bills.match_merchant, tiered strength; never gate strong matches or backfill on due_day ±7d (real charge dates lag due days by weeks).
+- [Bill categories source of truth](bill-categories.md) — canonical 15-category list + Plaid pre-fill mapping in shared api-zod pkg; rebuild its dist or api-server typecheck sees stale exports.
+- [New-detection notification](new-detection-notification.md) — seen_at is the "new" marker; upsert never touches it; per-user coalesced post-sync detection; review page snapshots drafts before mark-seen + invalidates caches.
+- [Detection sub-clustering](detection-subclustering.md) — amount splits are only trusted for ≥2 monthly+ sub-clusters, else whole-group fallback; prevents grocery/gas pseudo-bills and utility fragmentation.
+- [Express route ordering](express-route-ordering.md) — literal `/bills/detected*` routes must mount before the `/bills/:id` router or the param route swallows them.
 - [Drizzle db.execute result shape](drizzle-execute-rows.md) — raw SQL returns {rows}; destructuring as array throws "not iterable".
 - [Drizzle pg error codes](drizzle-pg-error-codes.md) — pg error code (23505 etc.) is on err.cause.code, not err.code; check the cause chain.

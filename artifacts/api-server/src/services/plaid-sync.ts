@@ -3,6 +3,7 @@ import { db, plaidItemsTable, plaidTransactionsTable, balanceSnapshotsTable, typ
 import type { Transaction, AccountBase } from "plaid";
 import { plaidClient } from "../lib/plaid";
 import { detectBills } from "./bill-detection";
+import { rollActualsForUser } from "./actuals-roll";
 import { logger } from "../lib/logger";
 
 export interface SyncCounts {
@@ -119,7 +120,7 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
   // Ongoing detection: new history can surface new recurring bills. detectBills
   // is idempotent (upsert + stale-pending cleanup), so re-running is safe; only
   // genuinely new detections are inserted unseen and trigger the login notice.
-  if (counts.added > 0 || counts.modified > 0) {
+  if (counts.added > 0 || counts.modified > 0 || counts.removed > 0) {
     scheduleDetection(item.userId);
   }
   return counts;
@@ -136,9 +137,18 @@ function scheduleDetection(userId: string): void {
   if (existing) clearTimeout(existing);
   const timer = setTimeout(() => {
     pendingDetection.delete(userId);
-    detectBills(userId).catch((err) => {
-      logger.error({ userId, err: sanitizeSyncError(err) }, "Post-sync bill detection failed");
-    });
+    detectBills(userId)
+      .catch((err) => {
+        logger.error({ userId, err: sanitizeSyncError(err) }, "Post-sync bill detection failed");
+      })
+      // P6 part 2: after detection, refresh the forecast past — resolve stale
+      // planned rows and rebuild unplanned actual buckets from new postings.
+      // Runs even when detection failed: the roll must always reflect the
+      // latest posted transactions (including removals).
+      .then(() => rollActualsForUser(userId), () => rollActualsForUser(userId))
+      .catch((err) => {
+        logger.error({ userId, err: sanitizeSyncError(err) }, "Post-sync actuals roll failed");
+      });
   }, DETECTION_COALESCE_MS);
   timer.unref?.();
   pendingDetection.set(userId, timer);

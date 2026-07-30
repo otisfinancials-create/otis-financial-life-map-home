@@ -984,6 +984,8 @@ export interface ForecastedTransaction {
      * @nullable
      */
   matchedPlaidTransactionId?: number | null;
+  /** Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable */
+  isUnplanned?: boolean;
   /**
      * Original planned date, kept when the row moved to the actual posted date
      * @nullable
@@ -1000,6 +1002,30 @@ export interface ReconcileCandidate {
   actualDate: string;
   actualAmount: number;
   postedName: string;
+}
+
+export interface AnchorForecastInput {
+  /** Forecast start date (YYYY-MM-DD), today or earlier */
+  startDate: string;
+  /** When true, compute and return the anchor without saving */
+  preview?: boolean;
+}
+
+export type AnchorForecastResultAccountsItem = {
+  accountId: number;
+  accountName: string;
+  currentBalance: number;
+  /** Net cash flow (inflows positive) from the start date to today */
+  netSinceStart: number;
+  startBalance: number;
+};
+
+export interface AnchorForecastResult {
+  startDate: string;
+  /** Sum of reconstructed bank balances as of the start date */
+  anchorBalance: number;
+  saved: boolean;
+  accounts: AnchorForecastResultAccountsItem[];
 }
 
 export interface ReconcileForecastInput {
@@ -1078,6 +1104,11 @@ export interface UserSettings {
   id: number;
   startingBalance: number;
   balanceAsOfDate: string;
+  /**
+     * The forecast's start date; startingBalance is the anchored balance as of this date
+     * @nullable
+     */
+  forecastStartDate?: string | null;
   updatedAt?: string;
 }
 

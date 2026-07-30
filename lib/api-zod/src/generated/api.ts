@@ -1445,6 +1445,7 @@ export const ListForecastResponseItem = zod.object({
   "notes": zod.string().nullish(),
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
+  "isUnplanned": zod.boolean().optional().describe('Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable'),
   "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
@@ -1488,6 +1489,7 @@ export const CreateForecastedTransactionResponse = zod.object({
   "notes": zod.string().nullish(),
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
+  "isUnplanned": zod.boolean().optional().describe('Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable'),
   "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
@@ -1563,6 +1565,28 @@ export const ReorderForecastResponse = zod.object({
 
 
 /**
+ * @summary Set the forecast start date and reconstruct the anchor balance as of that date (preview or save)
+ */
+export const AnchorForecastBody = zod.object({
+  "startDate": zod.string().describe('Forecast start date (YYYY-MM-DD), today or earlier'),
+  "preview": zod.boolean().optional().describe('When true, compute and return the anchor without saving')
+})
+
+export const AnchorForecastResponse = zod.object({
+  "startDate": zod.string(),
+  "anchorBalance": zod.number().describe('Sum of reconstructed bank balances as of the start date'),
+  "saved": zod.boolean(),
+  "accounts": zod.array(zod.object({
+  "accountId": zod.number(),
+  "accountName": zod.string(),
+  "currentBalance": zod.number(),
+  "netSinceStart": zod.number().describe('Net cash flow (inflows positive) from the start date to today'),
+  "startBalance": zod.number()
+}))
+})
+
+
+/**
  * @summary List planned bank-paid bill rows with a matching posted transaction (P6 reconciliation candidates)
  */
 export const ListReconcileCandidatesResponseItem = zod.object({
@@ -1608,6 +1632,7 @@ export const ReconcileForecastedTransactionResponse = zod.object({
   "notes": zod.string().nullish(),
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
+  "isUnplanned": zod.boolean().optional().describe('Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable'),
   "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
@@ -1642,6 +1667,7 @@ export const UnreconcileForecastedTransactionResponse = zod.object({
   "notes": zod.string().nullish(),
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
+  "isUnplanned": zod.boolean().optional().describe('Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable'),
   "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
@@ -1704,6 +1730,7 @@ export const UpdateForecastedTransactionResponse = zod.object({
   "notes": zod.string().nullish(),
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
+  "isUnplanned": zod.boolean().optional().describe('Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable'),
   "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
@@ -1727,6 +1754,7 @@ export const GetUserSettingsResponse = zod.object({
   "id": zod.number(),
   "startingBalance": zod.number(),
   "balanceAsOfDate": zod.string(),
+  "forecastStartDate": zod.string().nullish().describe('The forecast\'s start date; startingBalance is the anchored balance as of this date'),
   "updatedAt": zod.string().optional()
 })
 
@@ -1743,6 +1771,7 @@ export const SaveUserSettingsResponse = zod.object({
   "id": zod.number(),
   "startingBalance": zod.number(),
   "balanceAsOfDate": zod.string(),
+  "forecastStartDate": zod.string().nullish().describe('The forecast\'s start date; startingBalance is the anchored balance as of this date'),
   "updatedAt": zod.string().optional()
 })
 

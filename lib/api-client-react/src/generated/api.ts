@@ -28,6 +28,8 @@ import type {
   AccountMerchant,
   AccountUpdate,
   AccountsSummary,
+  AnchorForecastInput,
+  AnchorForecastResult,
   Asset,
   AssetInput,
   AssetUpdate,
@@ -4622,6 +4624,76 @@ export const useReorderForecast = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getReorderForecastMutationOptions(options));
+    }
+
+export const getAnchorForecastUrl = () => {
+
+
+
+
+  return `/api/forecast/anchor`
+}
+
+/**
+ * @summary Set the forecast start date and reconstruct the anchor balance as of that date (preview or save)
+ */
+export const anchorForecast = async (anchorForecastInput: AnchorForecastInput, options?: RequestInit): Promise<AnchorForecastResult> => {
+
+  return customFetch<AnchorForecastResult>(getAnchorForecastUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(anchorForecastInput)
+  }
+);}
+
+
+
+
+export const getAnchorForecastMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof anchorForecast>>, TError,{data: BodyType<AnchorForecastInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof anchorForecast>>, TError,{data: BodyType<AnchorForecastInput>}, TContext> => {
+
+const mutationKey = ['anchorForecast'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof anchorForecast>>, {data: BodyType<AnchorForecastInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  anchorForecast(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnchorForecastMutationResult = NonNullable<Awaited<ReturnType<typeof anchorForecast>>>
+    export type AnchorForecastMutationBody = BodyType<AnchorForecastInput>
+    export type AnchorForecastMutationError = ErrorType<void>
+
+    /**
+ * @summary Set the forecast start date and reconstruct the anchor balance as of that date (preview or save)
+ */
+export const useAnchorForecast = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof anchorForecast>>, TError,{data: BodyType<AnchorForecastInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof anchorForecast>>,
+        TError,
+        {data: BodyType<AnchorForecastInput>},
+        TContext
+      > => {
+      return useMutation(getAnchorForecastMutationOptions(options));
     }
 
 export const getListReconcileCandidatesUrl = () => {

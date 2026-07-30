@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, or, gte, lt, lte, gt, inArray, isNull, isNotNull, desc } from "drizzle-orm";
 import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable, cardCyclesTable, billMatchDismissalsTable } from "@workspace/db";
 import { findReconcileCandidates } from "../services/bill-reconciliation";
+import { rollActualsForUser } from "../services/actuals-roll";
 import {
   CreateForecastedTransactionBody,
   UpdateForecastedTransactionBody,
@@ -21,6 +22,7 @@ import {
   GetForecastCalendarQueryParams,
   GetForecastCalendarResponse,
   ReconcileForecastedTransactionBody,
+  AnchorForecastBody,
 } from "@workspace/api-zod";
 import { plaidTransactionsTable } from "@workspace/db";
 
@@ -426,12 +428,25 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
   //     any bill/loan/life-event change triggers a background regenerate,
   //     which used to delete every future non-paid row including user edits.
   const regenTodayStr = toLocalIso(new Date());
+  // P6 part 2: with an anchored forecast start date, planned rows are also
+  // generated for the PAST window [startDate, today) so the actuals roll can
+  // reconcile them against posted transactions or mark them missed. The
+  // delete/regenerate boundary extends back to the start date; paid/committed
+  // rows still survive, and missed rows are simply re-derived.
+  const [regenSettings] = await db
+    .select({ forecastStartDate: userSettingsTable.forecastStartDate })
+    .from(userSettingsTable)
+    .where(eq(userSettingsTable.userId, userId));
+  const genStartStr =
+    regenSettings?.forecastStartDate && regenSettings.forecastStartDate < regenTodayStr
+      ? regenSettings.forecastStartDate
+      : regenTodayStr;
   await db.delete(forecastedTransactionsTable).where(
     and(
       eq(forecastedTransactionsTable.isActual, false),
       eq(forecastedTransactionsTable.isCommitted, false),
       isNull(forecastedTransactionsTable.sourceBalanceSyncId),
-      gte(forecastedTransactionsTable.transactionDate, regenTodayStr),
+      gte(forecastedTransactionsTable.transactionDate, genStartStr),
       eq(forecastedTransactionsTable.userId, userId),
     )
   );
@@ -493,7 +508,7 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
       eq(forecastedTransactionsTable.userId, userId),
       eq(forecastedTransactionsTable.isCcParent, false),
       isNull(forecastedTransactionsTable.sourceBalanceSyncId),
-      gte(forecastedTransactionsTable.transactionDate, regenTodayStr),
+      gte(forecastedTransactionsTable.transactionDate, genStartStr),
       or(
         eq(forecastedTransactionsTable.isActual, true),
         eq(forecastedTransactionsTable.isCommitted, true),
@@ -558,7 +573,7 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
         ? ccById.get(bill.paymentAccountId)
         : undefined;
 
-    for (const dateStr of generateBillOccurrences(bill, todayStr, endStr)) {
+    for (const dateStr of generateBillOccurrences(bill, genStartStr, endStr)) {
       if (card) {
         const dueDate = ccPaymentDueDateFor(dateStr, card.ccCycleEndDate!, card.ccPaymentDueDate!);
         const key = `${card.id}|${dueDate}`;
@@ -691,7 +706,7 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     let current = new Date(ps.nextPayDate);
 
     while (current <= endDate) {
-      if (current >= today && !preservedKeys.has(`pay|${ps.id}|${current.toISOString().split("T")[0]}`)) {
+      if (toLocalIso(current) >= genStartStr && !preservedKeys.has(`pay|${ps.id}|${current.toISOString().split("T")[0]}`)) {
         toInsert.push({
           userId,
           transactionDate: current.toISOString().split("T")[0],
@@ -770,8 +785,79 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     await db.insert(forecastedTransactionsTable).values(toInsert);
   }
 
+  // P6 part 2: refresh the forecast past (resolve stale planned rows and
+  // rebuild the unplanned actual buckets) whenever the plan is rebuilt.
+  await rollActualsForUser(userId);
+
   return toInsert.length;
 }
+
+// ── P6 part 2: forecast start date + anchor balance ─────────────────────────
+// Reconstructs each bank account's balance as of the chosen start date:
+//   balance(start) = current_balance + Σ posted outflows − Σ posted inflows
+// over [start, today]  (Plaid amounts are positive for outflows, so this is
+// simply current + Σ amount). Saves the anchor into user_settings and rebuilds
+// the forecast unless preview=true.
+router.post("/forecast/anchor", async (req, res): Promise<void> => {
+  const parsed = AnchorForecastBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { startDate, preview } = parsed.data;
+  const todayStr = toLocalIso(new Date());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || startDate > todayStr) {
+    res.status(400).json({ error: "startDate must be a past or current date (YYYY-MM-DD)" });
+    return;
+  }
+
+  const bankAccounts = await db
+    .select()
+    .from(accountsTable)
+    .where(and(
+      eq(accountsTable.userId, req.userId),
+      isNotNull(accountsTable.plaidAccountId),
+    ));
+  const cashAccounts = bankAccounts.filter((a) => a.accountType !== "credit_card");
+
+  const breakdown: Array<{ accountId: number; accountName: string; currentBalance: number; netSinceStart: number; startBalance: number }> = [];
+  for (const acct of cashAccounts) {
+    const txns = await db
+      .select({ amount: plaidTransactionsTable.amount })
+      .from(plaidTransactionsTable)
+      .where(and(
+        eq(plaidTransactionsTable.userId, req.userId),
+        eq(plaidTransactionsTable.accountId, acct.plaidAccountId!),
+        eq(plaidTransactionsTable.pending, false),
+        gte(plaidTransactionsTable.date, startDate),
+        lte(plaidTransactionsTable.date, todayStr), // never let future-dated records bias the anchor
+      ));
+    const netOut = txns.reduce((s, t) => s + parseFloat(String(t.amount)), 0);
+    const current = parseFloat(String(acct.currentBalance ?? 0));
+    const startBal = Math.round((current + netOut) * 100) / 100;
+    breakdown.push({
+      accountId: acct.id,
+      accountName: acct.accountName,
+      currentBalance: Math.round(current * 100) / 100,
+      netSinceStart: Math.round(-netOut * 100) / 100, // net cash flow (inflow positive) since start
+      startBalance: startBal,
+    });
+  }
+  const anchorBalance = Math.round(breakdown.reduce((s, a) => s + a.startBalance, 0) * 100) / 100;
+
+  if (!preview) {
+    await db
+      .insert(userSettingsTable)
+      .values({ userId: req.userId, startingBalance: String(anchorBalance), balanceAsOfDate: startDate, forecastStartDate: startDate })
+      .onConflictDoUpdate({
+        target: userSettingsTable.userId,
+        set: { startingBalance: String(anchorBalance), balanceAsOfDate: startDate, forecastStartDate: startDate, updatedAt: new Date() },
+      });
+    await regenerateForecastForUser(req.userId); // also rolls actuals
+  }
+
+  res.json({ startDate, anchorBalance, accounts: breakdown, saved: !preview });
+});
 
 // "Update Current Balance": reconciles the forecast against the user's real
 // bank balance. Records the update in balance_syncs and inserts (or replaces)
@@ -816,7 +902,11 @@ router.post("/forecast/sync-balance", async (req, res): Promise<void> => {
     .from(userSettingsTable)
     .where(eq(userSettingsTable.userId, req.userId));
   const startingBalance = settings ? parseFloat(String(settings.startingBalance)) : 0;
+  const forecastStartDate = settings?.forecastStartDate ?? null;
 
+  // With an anchored start date, flows from the start date forward define the
+  // balance; without one, keep the legacy 30-day lookback.
+  const rowsFrom = forecastStartDate && forecastStartDate < windowStart ? forecastStartDate : windowStart;
   const rows = await db
     .select({
       transactionDate: forecastedTransactionsTable.transactionDate,
@@ -828,7 +918,7 @@ router.post("/forecast/sync-balance", async (req, res): Promise<void> => {
     .from(forecastedTransactionsTable)
     .where(and(
       eq(forecastedTransactionsTable.userId, req.userId),
-      gte(forecastedTransactionsTable.transactionDate, windowStart),
+      gte(forecastedTransactionsTable.transactionDate, rowsFrom),
       lte(forecastedTransactionsTable.transactionDate, todayStr),
     ));
 
@@ -854,7 +944,14 @@ router.post("/forecast/sync-balance", async (req, res): Promise<void> => {
     bal = parseFloat(String(after.amount)) - flows
       .filter((r) => r.transactionDate >= syncDate && r.transactionDate < after.transactionDate)
       .reduce((s, r) => s + signed(r), 0);
+  } else if (forecastStartDate && syncDate >= forecastStartDate) {
+    // Anchored mode: startingBalance is the balance AS OF forecastStartDate;
+    // roll forward through the flows between the start date and syncDate.
+    bal = startingBalance + flows
+      .filter((r) => r.transactionDate >= forecastStartDate && r.transactionDate < syncDate)
+      .reduce((s, r) => s + signed(r), 0);
   } else {
+    // Legacy mode: startingBalance is the balance at the start of today.
     bal = startingBalance - flows
       .filter((r) => r.transactionDate >= syncDate && r.transactionDate < todayStr)
       .reduce((s, r) => s + signed(r), 0);
@@ -1083,6 +1180,7 @@ router.post("/forecast/:id/reconcile", async (req, res): Promise<void> => {
     })
     .where(eq(forecastedTransactionsTable.id, row.id))
     .returning();
+  await rollActualsForUser(req.userId); // the linked txn leaves the unplanned buckets
   res.json(serialize(updated));
 });
 
@@ -1114,6 +1212,7 @@ router.post("/forecast/:id/unreconcile", async (req, res): Promise<void> => {
     })
     .where(eq(forecastedTransactionsTable.id, row.id))
     .returning();
+  await rollActualsForUser(req.userId); // the unlinked txn may re-enter the buckets
   res.json(serialize(updated));
 });
 
@@ -1146,6 +1245,7 @@ router.post("/forecast/:id/dismiss-match", async (req, res): Promise<void> => {
     .insert(billMatchDismissalsTable)
     .values({ userId: req.userId, billId: row.sourceBillId, plaidTransactionId: body.data.plaidTransactionId })
     .onConflictDoNothing();
+  await rollActualsForUser(req.userId); // a dismissed txn becomes unplanned spend
   res.sendStatus(204);
 });
 
@@ -1179,6 +1279,13 @@ router.patch("/forecast/:id", async (req, res): Promise<void> => {
   // isCommitted rows survive regeneration) risk duplicate payment rows.
   if (existing.sourceCardCycleId != null) {
     res.status(400).json({ error: "Card cycle payments are managed automatically from the card's cycle — they can't be edited or marked paid here" });
+    return;
+  }
+
+  // Unplanned actual rows are derived from posted bank activity and rebuilt
+  // on every sync — edits would be silently overwritten.
+  if (existing.isUnplanned) {
+    res.status(400).json({ error: "Unplanned spending rows reflect posted bank activity and can't be edited" });
     return;
   }
 
@@ -1264,6 +1371,7 @@ router.delete("/forecast/:id", async (req, res): Promise<void> => {
       ccAccountId: forecastedTransactionsTable.ccAccountId,
       isCcParent: forecastedTransactionsTable.isCcParent,
       transactionDate: forecastedTransactionsTable.transactionDate,
+      isUnplanned: forecastedTransactionsTable.isUnplanned,
     })
     .from(forecastedTransactionsTable)
     .where(and(eq(forecastedTransactionsTable.id, params.data.id), eq(forecastedTransactionsTable.userId, req.userId)));
@@ -1273,6 +1381,10 @@ router.delete("/forecast/:id", async (req, res): Promise<void> => {
   }
   if (existing.sourceBalanceSyncId != null) {
     res.status(400).json({ error: "Balance update rows cannot be deleted — they keep the running balance in sync with your bank" });
+    return;
+  }
+  if (existing.isUnplanned) {
+    res.status(400).json({ error: "Unplanned spending rows reflect posted bank activity and can't be deleted — they are rebuilt on every sync" });
     return;
   }
   await db.transaction(async (trx) => {

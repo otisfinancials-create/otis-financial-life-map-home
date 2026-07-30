@@ -27,6 +27,7 @@ import {
   getGetMonthlyForecastQueryKey,
   useListReconcileCandidates,
   getListReconcileCandidatesQueryKey,
+  useAnchorForecast,
   useReconcileForecastedTransaction,
   useUnreconcileForecastedTransaction,
   useDismissReconcileMatch,
@@ -569,6 +570,7 @@ type TxRow = {
   forecastedAmount?: number | null;
   matchedPlaidTransactionId?: number | null;
   forecastedDate?: string | null;
+  isUnplanned?: boolean;
   sortOrder: number;
   createdAt: string;
   runningBalance: number;
@@ -653,10 +655,12 @@ export default function Forecast() {
   const [, navigate] = useLocation();
 
   // ── Date window ──────────────────────────────────────────────────────────
-  // Rolling lookback: include the 30 days before today so recently-due
-  // transactions (paid / missed / overdue) show alongside the future forecast.
-  // Anything older is archived — still stored in history, no longer shown.
-  const startDate = format(subDays(today, 30), "yyyy-MM-dd");
+  // With an anchored forecast start date, the ledger begins there — the past
+  // section reflects actuals from that date. Without one (legacy), a rolling
+  // 30-day lookback shows recently-due rows alongside the future forecast.
+  const { data: userSettings, isLoading: loadingSettings } = useGetUserSettings();
+  const forecastStartDate: string | null = userSettings?.forecastStartDate ?? null;
+  const startDate = forecastStartDate ?? format(subDays(today, 30), "yyyy-MM-dd");
   const endDate   = format(addMonths(today, months), "yyyy-MM-dd");
 
   // ── Queries ──────────────────────────────────────────────────────────────
@@ -671,7 +675,6 @@ export default function Forecast() {
     { query: { queryKey: getListForecastQueryKey(), refetchOnMount: "always" } },
   );
   const { data: monthlyData = [], isLoading: loadingMonthly } = useGetMonthlyForecast();
-  const { data: userSettings, isLoading: loadingSettings } = useGetUserSettings();
   const { data: bills = [] } = useListBills();
   const { data: balanceSyncs = [] } = useListBalanceSyncs();
   const lastSync = balanceSyncs[0] ?? null;
@@ -751,6 +754,18 @@ export default function Forecast() {
         if (isOverride(sorted[i])) back = sorted[i].amount;
         balances[i] = back;
       }
+    } else if (forecastStartDate) {
+      // Anchored mode: startingBalance is the balance AS OF the forecast
+      // start date; every row (past actuals included) steps it forward.
+      let run = startingBalance;
+      for (let i = 0; i < sorted.length; i++) {
+        run = isOverride(sorted[i]) ? sorted[i].amount : run + signed(sorted[i]);
+        balances[i] = run;
+      }
+      return sorted.map((t, i) => {
+        const bill = t.sourceBillId ? billsMap[t.sourceBillId] : undefined;
+        return { ...t, runningBalance: balances[i], isVariable: bill?.isVariable ?? false, companyUrl: bill?.companyUrl ?? null };
+      });
     } else {
       const pastNet = sorted
         .filter((t) => t.transactionDate < todayStr)
@@ -772,7 +787,7 @@ export default function Forecast() {
         companyUrl: bill?.companyUrl ?? null,
       };
     });
-  }, [rawTxs, startingBalance, billsMap, todayStr]);
+  }, [rawTxs, startingBalance, billsMap, todayStr, forecastStartDate]);
 
   // ── Deep-link highlight (#4) ──────────────────────────────────────────────
   // On mount, read ?tx=<id> or ?txdate=&txdesc= from the URL, scroll the
@@ -1048,6 +1063,33 @@ export default function Forecast() {
     });
   };
 
+  // ── P6 part 2: forecast start date + anchor balance ───────────────────────
+  const firstOfMonth = format(new Date(today.getFullYear(), today.getMonth(), 1), "yyyy-MM-dd");
+  const [anchorDate, setAnchorDate] = useState(firstOfMonth);
+  const [anchorPreview, setAnchorPreview] = useState<{ anchorBalance: number; accounts: Array<{ accountName: string; startBalance: number }> } | null>(null);
+  const anchorForecast = useAnchorForecast();
+
+  const handleAnchorPreview = (date: string) => {
+    setAnchorDate(date);
+    setAnchorPreview(null);
+    if (!date || date > todayStr) return;
+    anchorForecast.mutate({ data: { startDate: date, preview: true } }, {
+      onSuccess: (r) => setAnchorPreview({ anchorBalance: r.anchorBalance, accounts: r.accounts.map((a) => ({ accountName: a.accountName, startBalance: a.startBalance })) }),
+    });
+  };
+
+  const handleAnchorSave = () => {
+    if (!anchorDate || anchorDate > todayStr) return;
+    anchorForecast.mutate({ data: { startDate: anchorDate } }, {
+      onSuccess: (r) => {
+        invalidate();
+        queryClient.invalidateQueries({ queryKey: getGetUserSettingsQueryKey() });
+        toast({ title: "Forecast anchored", description: `Starting ${format(new Date(r.startDate + "T00:00:00"), "MMM d, yyyy")} at $${r.anchorBalance.toFixed(2)}.` });
+      },
+      onError: () => toast({ title: "Failed to set start date", variant: "destructive" }),
+    });
+  };
+
   const handleUnreconcile = (tx: TxRow) => {
     unreconcileTx.mutate({ id: tx.id }, {
       onSuccess: () => {
@@ -1287,6 +1329,9 @@ export default function Forecast() {
   const openTx = (tx: TxRow) => {
     // CC parent rows are payment aggregators — not editable via the edit sheet.
     if (tx.isCcParent) return;
+    // Unplanned actual rows are derived from posted bank activity and rebuilt
+    // on every sync — not editable.
+    if (tx.isUnplanned) return;
     setSelectedTx(tx);
     setEditErrors({});
     setEditForm({
@@ -1573,8 +1618,52 @@ export default function Forecast() {
 
       <div className="px-6 py-4 flex-1 min-h-0 flex flex-col gap-4">
 
+        {/* ── Forecast start date banner (P6 part 2) ──────────────────────────── */}
+        {!loadingSettings && forecastStartDate == null && (
+          <div data-testid="banner-forecast-anchor" className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 text-sm space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-foreground font-medium text-[13px]">Where should your forecast begin?</span>
+              <input
+                type="date"
+                data-testid="input-anchor-date"
+                value={anchorDate}
+                max={todayStr}
+                onChange={(e) => handleAnchorPreview(e.target.value)}
+                className="h-7 rounded-md border border-[#D6DBE3] bg-white px-2 text-xs"
+              />
+              <Button size="sm" className="h-7 text-xs" data-testid="button-anchor-save"
+                disabled={anchorForecast.isPending || !anchorDate || anchorDate > todayStr}
+                onClick={handleAnchorSave}>
+                Set start date
+              </Button>
+              {anchorPreview == null && !anchorForecast.isPending && (
+                <button className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  onClick={() => handleAnchorPreview(anchorDate)}>
+                  Preview balance
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Your past from this date on will reflect actual bank activity, anchored to your reconstructed balance on that day.
+              {anchorPreview && (
+                <span data-testid="text-anchor-preview" className="ml-1 text-foreground">
+                  Balance on {format(new Date(anchorDate + "T00:00:00"), "MMM d")}:{" "}
+                  <span className="font-mono font-semibold">
+                    {anchorPreview.anchorBalance < 0 && "−"}<FormatCurrency amount={Math.abs(anchorPreview.anchorBalance)} />
+                  </span>
+                  {anchorPreview.accounts.length > 1 && (
+                    <span className="text-muted-foreground">
+                      {" "}({anchorPreview.accounts.map((a) => `${a.accountName}: $${a.startBalance.toFixed(2)}`).join(" · ")})
+                    </span>
+                  )}
+                </span>
+              )}
+            </p>
+          </div>
+        )}
+
         {/* ── Starting Balance Banner ─────────────────────────────────────────── */}
-        {!loadingSettings && startingBalance === 0 && (
+        {!loadingSettings && forecastStartDate == null && startingBalance === 0 && (
           <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-2.5 text-sm">
             <span className="text-muted-foreground text-xs">
               Running balance starts from <span className="text-foreground font-mono font-semibold">$0.00</span>. Add your current balance for accurate projections.
@@ -1793,6 +1882,15 @@ export default function Forecast() {
                                 >
                                   {isAdjustment ? "Balance updated" : tx.description}
                                 </span>
+                                {tx.isUnplanned && (
+                                  <span
+                                    data-testid={`badge-unplanned-${tx.id}`}
+                                    className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-[1px] text-[10px] font-medium text-amber-700 whitespace-nowrap"
+                                    title="Posted bank activity not matched to any planned bill or paycheck"
+                                  >
+                                    Unplanned
+                                  </span>
+                                )}
                                 {isAdjustment && (
                                   <span className="text-[12px] text-muted-foreground whitespace-nowrap shrink-0">
                                     · {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d")}

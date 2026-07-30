@@ -9,6 +9,7 @@ function serialize(s: typeof userSettingsTable.$inferSelect) {
     id: s.id,
     startingBalance: parseFloat(String(s.startingBalance)),
     balanceAsOfDate: s.balanceAsOfDate,
+    forecastStartDate: s.forecastStartDate ?? null,
     updatedAt: s.updatedAt.toISOString(),
   };
 }
@@ -21,7 +22,7 @@ router.get("/user-settings", async (req, res): Promise<void> => {
     .limit(1);
 
   if (!settings) {
-    res.json({ id: 0, startingBalance: 0, balanceAsOfDate: new Date().toISOString().split("T")[0], updatedAt: new Date().toISOString() });
+    res.json({ id: 0, startingBalance: 0, balanceAsOfDate: new Date().toISOString().split("T")[0], forecastStartDate: null, updatedAt: new Date().toISOString() });
     return;
   }
   res.json(serialize(settings));

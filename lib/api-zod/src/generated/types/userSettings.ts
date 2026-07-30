@@ -10,5 +10,10 @@ export interface UserSettings {
   id: number;
   startingBalance: number;
   balanceAsOfDate: string;
+  /**
+     * The forecast's start date; startingBalance is the anchored balance as of this date
+     * @nullable
+     */
+  forecastStartDate?: string | null;
   updatedAt?: string;
 }

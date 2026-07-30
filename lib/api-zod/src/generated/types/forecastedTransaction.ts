@@ -58,6 +58,8 @@ export interface ForecastedTransaction {
      * @nullable
      */
   matchedPlaidTransactionId?: number | null;
+  /** Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable */
+  isUnplanned?: boolean;
   /**
      * Original planned date, kept when the row moved to the actual posted date
      * @nullable
