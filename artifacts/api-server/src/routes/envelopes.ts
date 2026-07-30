@@ -127,6 +127,24 @@ router.get("/cycles/:cycleId/breakdown", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Cycle not found" });
     return;
   }
+  // Self-heal: an open cycle with zero bill rows but active card-paid bills
+  // predates the population fix (bills confirmed before cycles existed).
+  // Process it once so the composition fills in on view.
+  const existingBillRows = await db
+    .select({ id: cardCycleBillsTable.id })
+    .from(cardCycleBillsTable)
+    .where(eq(cardCycleBillsTable.cardCycleId, cycle.id));
+  if (existingBillRows.length === 0 && cycle.status === "open") {
+    const activeCardBills = await db
+      .select({ id: billsTable.id })
+      .from(billsTable)
+      .where(and(
+        eq(billsTable.userId, req.userId),
+        eq(billsTable.paymentAccountId, cycle.accountId),
+        eq(billsTable.isActive, true),
+      ));
+    if (activeCardBills.length > 0) await processCycle(cycle.id);
+  }
   const envelopes = await db.select().from(envelopesTable).where(eq(envelopesTable.cardCycleId, cycle.id));
   const cycleBills = await db
     .select({ cb: cardCycleBillsTable, billName: billsTable.billName })

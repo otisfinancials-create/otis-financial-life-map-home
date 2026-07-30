@@ -189,5 +189,17 @@ export async function generateCyclesForAccount(accountId: number): Promise<CardC
   for (const row of results) {
     if (insertedIds.has(row.id)) await populateNewCycle(row);
   }
+
+  // Run the full processing pipeline (populate bills → allocate → spent →
+  // rollup) on every managed cycle. Bills confirmed BEFORE the card's cycles
+  // were configured have no card_cycle_bills rows yet — syncBillWithCycles was
+  // a no-op when they were created — so generation must pull them in. Covers
+  // both orders: bill-then-cycle (here) and cycle-then-bill (bill-cycle-sync).
+  // Dynamic import mirrors cycle-processing's own import of this module and
+  // avoids a static circular dependency.
+  const { processCycle } = await import("./cycle-processing");
+  for (const row of results) {
+    if (row.status === "open") await processCycle(row.id);
+  }
   return results;
 }
