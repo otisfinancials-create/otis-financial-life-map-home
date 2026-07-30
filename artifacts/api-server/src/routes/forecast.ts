@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, or, gte, lt, lte, gt, inArray, isNull, isNotNull, desc } from "drizzle-orm";
-import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable, cardCyclesTable } from "@workspace/db";
+import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable, cardCyclesTable, billMatchDismissalsTable } from "@workspace/db";
+import { findReconcileCandidates } from "../services/bill-reconciliation";
 import {
   CreateForecastedTransactionBody,
   UpdateForecastedTransactionBody,
@@ -19,6 +20,7 @@ import {
   ListBalanceSyncsResponse,
   GetForecastCalendarQueryParams,
   GetForecastCalendarResponse,
+  ReconcileForecastedTransactionBody,
 } from "@workspace/api-zod";
 import { plaidTransactionsTable } from "@workspace/db";
 
@@ -283,6 +285,7 @@ router.get("/forecast/calendar", async (req, res): Promise<void> => {
     const pastEnd = monthEnd < todayStr ? monthEnd : addDaysIso(todayStr, -1);
     const txns = await db
       .select({
+        id: plaidTransactionsTable.id,
         date: plaidTransactionsTable.date,
         amount: plaidTransactionsTable.amount,
         name: plaidTransactionsTable.name,
@@ -310,6 +313,20 @@ router.get("/forecast/calendar", async (req, res): Promise<void> => {
       for (const b of userBills) if (b.matchMerchant && lower.includes(b.matchMerchant.toLowerCase())) return b.billName;
       return null;
     };
+    // P6: transactions confirmed as a bill's payment are that bill — never
+    // bucketed as separate spend (the reconciled forecast row and the posted
+    // transaction are ONE cash event).
+    const reconciled = await db
+      .select({
+        matchedId: forecastedTransactionsTable.matchedPlaidTransactionId,
+        description: forecastedTransactionsTable.description,
+      })
+      .from(forecastedTransactionsTable)
+      .where(and(
+        eq(forecastedTransactionsTable.userId, req.userId),
+        isNotNull(forecastedTransactionsTable.matchedPlaidTransactionId),
+      ));
+    const billNameByTxnId = new Map(reconciled.map((r) => [r.matchedId!, r.description]));
     const titleCase = (s: string) =>
       s
         .toLowerCase()
@@ -333,7 +350,7 @@ router.get("/forecast/calendar", async (req, res): Promise<void> => {
         push(t.date, { kind: "card-payment", label, amount: cents(-amt) });
         continue;
       }
-      const billName = billOf(label);
+      const billName = billNameByTxnId.get(t.id) ?? billOf(label);
       if (billName) {
         push(t.date, { kind: "bill", label: billName, amount: cents(-amt) });
         continue;
@@ -499,6 +516,31 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
       if (row.sourceBillId != null) preservedKeys.add(`bill|${row.sourceBillId}|${row.transactionDate}`);
       if (row.sourcePayId != null) preservedKeys.add(`pay|${row.sourcePayId}|${row.transactionDate}`);
       if (row.sourceLifeEventId != null) preservedKeys.add(`life|${row.sourceLifeEventId}|${row.transactionDate}`);
+      // A reconciled row was MOVED to the actual posted date; its planned
+      // occurrence (forecastedDate) is covered by it too — don't re-emit it.
+      if (row.sourceBillId != null && row.forecastedDate != null) {
+        preservedKeys.add(`bill|${row.sourceBillId}|${row.forecastedDate}`);
+      }
+    }
+  }
+  // Reconciled rows moved to a PAST date (paid early) fall outside the
+  // preservedRows window above, but their planned occurrence may still be in
+  // the future — regeneration must not re-emit it as a duplicate planned bill.
+  const pastReconciled = await db
+    .select({
+      sourceBillId: forecastedTransactionsTable.sourceBillId,
+      forecastedDate: forecastedTransactionsTable.forecastedDate,
+    })
+    .from(forecastedTransactionsTable)
+    .where(and(
+      eq(forecastedTransactionsTable.userId, userId),
+      isNotNull(forecastedTransactionsTable.matchedPlaidTransactionId),
+      lt(forecastedTransactionsTable.transactionDate, regenTodayStr),
+      gte(forecastedTransactionsTable.forecastedDate, regenTodayStr),
+    ));
+  for (const row of pastReconciled) {
+    if (row.sourceBillId != null && row.forecastedDate != null) {
+      preservedKeys.add(`bill|${row.sourceBillId}|${row.forecastedDate}`);
     }
   }
 
@@ -976,6 +1018,135 @@ router.post("/forecast/reorder", async (req, res): Promise<void> => {
   });
 
   res.json(ReorderForecastResponse.parse({ updated: ids.length }));
+});
+
+// ── P6: planned-vs-actual reconciliation for bank-paid bills ────────────────
+
+router.get("/forecast/reconcile-candidates", async (req, res): Promise<void> => {
+  const candidates = await findReconcileCandidates(req.userId);
+  res.json(candidates);
+});
+
+/** Load a user's forecast row + validate it's a bank-paid bill row. */
+async function ownedRow(id: number, userId: string) {
+  const [row] = await db
+    .select()
+    .from(forecastedTransactionsTable)
+    .where(and(eq(forecastedTransactionsTable.id, id), eq(forecastedTransactionsTable.userId, userId)));
+  return row;
+}
+
+router.post("/forecast/:id/reconcile", async (req, res): Promise<void> => {
+  const params = UpdateForecastedTransactionParams.safeParse(req.params);
+  const body = ReconcileForecastedTransactionBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: (params.success ? body : params).error!.message });
+    return;
+  }
+  const row = await ownedRow(params.data.id, req.userId);
+  if (!row) {
+    res.status(404).json({ error: "Forecasted transaction not found" });
+    return;
+  }
+  if (row.sourceBillId == null || row.sourceCardCycleId != null || row.ccAccountId != null) {
+    res.status(400).json({ error: "Only standalone bank-paid bill rows can be reconciled" });
+    return;
+  }
+  if (row.isActual || row.matchedPlaidTransactionId != null) {
+    res.status(400).json({ error: "This row is already confirmed" });
+    return;
+  }
+  // Re-derive candidates server-side so a stale client can't link an
+  // arbitrary transaction: the pair must still be a valid match.
+  const candidates = await findReconcileCandidates(req.userId);
+  const match = candidates.find(
+    (c) => c.forecastTransactionId === row.id && c.plaidTransactionId === body.data.plaidTransactionId,
+  );
+  if (!match) {
+    res.status(400).json({ error: "That transaction is no longer a valid match for this bill" });
+    return;
+  }
+  const [updated] = await db
+    .update(forecastedTransactionsTable)
+    .set({
+      transactionDate: match.actualDate,
+      amount: String(match.actualAmount),
+      // Snapshot the immediate pre-confirm values so un-confirm reverts to
+      // them (always overwrite: a stale forecastedAmount from an older manual
+      // edit would otherwise revert the row to the wrong baseline).
+      forecastedDate: row.transactionDate,
+      forecastedAmount: row.amount,
+      isActual: true,
+      isCommitted: true,
+      status: null,
+      matchedPlaidTransactionId: match.plaidTransactionId,
+    })
+    .where(eq(forecastedTransactionsTable.id, row.id))
+    .returning();
+  res.json(serialize(updated));
+});
+
+router.post("/forecast/:id/unreconcile", async (req, res): Promise<void> => {
+  const params = UpdateForecastedTransactionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const row = await ownedRow(params.data.id, req.userId);
+  if (!row) {
+    res.status(404).json({ error: "Forecasted transaction not found" });
+    return;
+  }
+  if (row.matchedPlaidTransactionId == null) {
+    res.status(400).json({ error: "This row is not reconciled to a transaction" });
+    return;
+  }
+  const [updated] = await db
+    .update(forecastedTransactionsTable)
+    .set({
+      transactionDate: row.forecastedDate ?? row.transactionDate,
+      ...(row.forecastedAmount != null && { amount: String(row.forecastedAmount), forecastedAmount: null }),
+      forecastedDate: null,
+      isActual: false,
+      isCommitted: false,
+      status: null,
+      matchedPlaidTransactionId: null,
+    })
+    .where(eq(forecastedTransactionsTable.id, row.id))
+    .returning();
+  res.json(serialize(updated));
+});
+
+router.post("/forecast/:id/dismiss-match", async (req, res): Promise<void> => {
+  const params = UpdateForecastedTransactionParams.safeParse(req.params);
+  const body = ReconcileForecastedTransactionBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: (params.success ? body : params).error!.message });
+    return;
+  }
+  const row = await ownedRow(params.data.id, req.userId);
+  if (!row || row.sourceBillId == null) {
+    res.status(404).json({ error: "Forecasted transaction not found" });
+    return;
+  }
+  // The dismissed transaction must belong to this user (prevents arbitrary
+  // pair inserts against other users' transaction ids).
+  const [txn] = await db
+    .select({ id: plaidTransactionsTable.id })
+    .from(plaidTransactionsTable)
+    .where(and(
+      eq(plaidTransactionsTable.id, body.data.plaidTransactionId),
+      eq(plaidTransactionsTable.userId, req.userId),
+    ));
+  if (!txn) {
+    res.status(404).json({ error: "Transaction not found" });
+    return;
+  }
+  await db
+    .insert(billMatchDismissalsTable)
+    .values({ userId: req.userId, billId: row.sourceBillId, plaidTransactionId: body.data.plaidTransactionId })
+    .onConflictDoNothing();
+  res.sendStatus(204);
 });
 
 router.patch("/forecast/:id", async (req, res): Promise<void> => {

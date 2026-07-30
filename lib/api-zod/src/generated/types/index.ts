@@ -114,6 +114,8 @@ export * from './plaidWebhookInput';
 export * from './processCycleSummary';
 export * from './processCycleSummaryByTargetItem';
 export * from './processCycleSummaryByTargetItemType';
+export * from './reconcileCandidate';
+export * from './reconcileForecastInput';
 export * from './regenerateForecastResult';
 export * from './removePlaidItem200';
 export * from './reorderForecastInput';

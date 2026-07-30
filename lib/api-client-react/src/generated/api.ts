@@ -91,6 +91,8 @@ import type {
   PlaidTransaction,
   PlaidWebhookInput,
   ProcessCycleSummary,
+  ReconcileCandidate,
+  ReconcileForecastInput,
   RegenerateForecastResult,
   RemovePlaidItem200,
   ReorderForecastInput,
@@ -4620,6 +4622,295 @@ export const useReorderForecast = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getReorderForecastMutationOptions(options));
+    }
+
+export const getListReconcileCandidatesUrl = () => {
+
+
+
+
+  return `/api/forecast/reconcile-candidates`
+}
+
+/**
+ * @summary List planned bank-paid bill rows with a matching posted transaction (P6 reconciliation candidates)
+ */
+export const listReconcileCandidates = async ( options?: RequestInit): Promise<ReconcileCandidate[]> => {
+
+  return customFetch<ReconcileCandidate[]>(getListReconcileCandidatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListReconcileCandidatesQueryKey = () => {
+    return [
+    `/api/forecast/reconcile-candidates`
+    ] as const;
+    }
+
+
+export const getListReconcileCandidatesQueryOptions = <TData = Awaited<ReturnType<typeof listReconcileCandidates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReconcileCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListReconcileCandidatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listReconcileCandidates>>> = ({ signal }) => listReconcileCandidates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listReconcileCandidates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListReconcileCandidatesQueryResult = NonNullable<Awaited<ReturnType<typeof listReconcileCandidates>>>
+export type ListReconcileCandidatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List planned bank-paid bill rows with a matching posted transaction (P6 reconciliation candidates)
+ */
+
+export function useListReconcileCandidates<TData = Awaited<ReturnType<typeof listReconcileCandidates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReconcileCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListReconcileCandidatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReconcileForecastedTransactionUrl = (id: number,) => {
+
+
+
+
+  return `/api/forecast/${id}/reconcile`
+}
+
+/**
+ * @summary Confirm a matched posted transaction as this planned bill's payment (moves the row to the actual date/amount)
+ */
+export const reconcileForecastedTransaction = async (id: number,
+    reconcileForecastInput: ReconcileForecastInput, options?: RequestInit): Promise<ForecastedTransaction> => {
+
+  return customFetch<ForecastedTransaction>(getReconcileForecastedTransactionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reconcileForecastInput)
+  }
+);}
+
+
+
+
+export const getReconcileForecastedTransactionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reconcileForecastedTransaction>>, TError,{id: number;data: BodyType<ReconcileForecastInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reconcileForecastedTransaction>>, TError,{id: number;data: BodyType<ReconcileForecastInput>}, TContext> => {
+
+const mutationKey = ['reconcileForecastedTransaction'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reconcileForecastedTransaction>>, {id: number;data: BodyType<ReconcileForecastInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reconcileForecastedTransaction(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReconcileForecastedTransactionMutationResult = NonNullable<Awaited<ReturnType<typeof reconcileForecastedTransaction>>>
+    export type ReconcileForecastedTransactionMutationBody = BodyType<ReconcileForecastInput>
+    export type ReconcileForecastedTransactionMutationError = ErrorType<void>
+
+    /**
+ * @summary Confirm a matched posted transaction as this planned bill's payment (moves the row to the actual date/amount)
+ */
+export const useReconcileForecastedTransaction = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reconcileForecastedTransaction>>, TError,{id: number;data: BodyType<ReconcileForecastInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reconcileForecastedTransaction>>,
+        TError,
+        {id: number;data: BodyType<ReconcileForecastInput>},
+        TContext
+      > => {
+      return useMutation(getReconcileForecastedTransactionMutationOptions(options));
+    }
+
+export const getUnreconcileForecastedTransactionUrl = (id: number,) => {
+
+
+
+
+  return `/api/forecast/${id}/unreconcile`
+}
+
+/**
+ * @summary Revert a confirmed reconciliation back to the planned date/amount
+ */
+export const unreconcileForecastedTransaction = async (id: number, options?: RequestInit): Promise<ForecastedTransaction> => {
+
+  return customFetch<ForecastedTransaction>(getUnreconcileForecastedTransactionUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getUnreconcileForecastedTransactionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unreconcileForecastedTransaction>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unreconcileForecastedTransaction>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['unreconcileForecastedTransaction'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unreconcileForecastedTransaction>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unreconcileForecastedTransaction(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnreconcileForecastedTransactionMutationResult = NonNullable<Awaited<ReturnType<typeof unreconcileForecastedTransaction>>>
+
+    export type UnreconcileForecastedTransactionMutationError = ErrorType<void>
+
+    /**
+ * @summary Revert a confirmed reconciliation back to the planned date/amount
+ */
+export const useUnreconcileForecastedTransaction = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unreconcileForecastedTransaction>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unreconcileForecastedTransaction>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getUnreconcileForecastedTransactionMutationOptions(options));
+    }
+
+export const getDismissReconcileMatchUrl = (id: number,) => {
+
+
+
+
+  return `/api/forecast/${id}/dismiss-match`
+}
+
+/**
+ * @summary Reject a suggested transaction match for this bill row (never re-suggested)
+ */
+export const dismissReconcileMatch = async (id: number,
+    reconcileForecastInput: ReconcileForecastInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDismissReconcileMatchUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reconcileForecastInput)
+  }
+);}
+
+
+
+
+export const getDismissReconcileMatchMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissReconcileMatch>>, TError,{id: number;data: BodyType<ReconcileForecastInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof dismissReconcileMatch>>, TError,{id: number;data: BodyType<ReconcileForecastInput>}, TContext> => {
+
+const mutationKey = ['dismissReconcileMatch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dismissReconcileMatch>>, {id: number;data: BodyType<ReconcileForecastInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  dismissReconcileMatch(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DismissReconcileMatchMutationResult = NonNullable<Awaited<ReturnType<typeof dismissReconcileMatch>>>
+    export type DismissReconcileMatchMutationBody = BodyType<ReconcileForecastInput>
+    export type DismissReconcileMatchMutationError = ErrorType<void>
+
+    /**
+ * @summary Reject a suggested transaction match for this bill row (never re-suggested)
+ */
+export const useDismissReconcileMatch = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissReconcileMatch>>, TError,{id: number;data: BodyType<ReconcileForecastInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof dismissReconcileMatch>>,
+        TError,
+        {id: number;data: BodyType<ReconcileForecastInput>},
+        TContext
+      > => {
+      return useMutation(getDismissReconcileMatchMutationOptions(options));
     }
 
 export const getUpdateForecastedTransactionUrl = (id: number,) => {

@@ -16,3 +16,4 @@ export * from "./plaid_items";
 export * from "./plaid_transactions";
 export * from "./detected_bills";
 export * from "./card_cycles";
+export * from "./bill_match_dismissals";

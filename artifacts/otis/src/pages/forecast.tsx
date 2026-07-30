@@ -25,6 +25,11 @@ import {
   useListBalanceSyncs,
   getListForecastQueryKey,
   getGetMonthlyForecastQueryKey,
+  useListReconcileCandidates,
+  getListReconcileCandidatesQueryKey,
+  useReconcileForecastedTransaction,
+  useUnreconcileForecastedTransaction,
+  useDismissReconcileMatch,
   getGetUserSettingsQueryKey,
   getListBalanceSyncsQueryKey,
   useGetCycleBreakdown,
@@ -562,6 +567,8 @@ type TxRow = {
   status?: string | null;
   notes?: string | null;
   forecastedAmount?: number | null;
+  matchedPlaidTransactionId?: number | null;
+  forecastedDate?: string | null;
   sortOrder: number;
   createdAt: string;
   runningBalance: number;
@@ -997,6 +1004,59 @@ export default function Forecast() {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListForecastQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetMonthlyForecastQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListReconcileCandidatesQueryKey() });
+  };
+
+  // ── P6: bank-paid bill reconciliation ─────────────────────────────────────
+  const fmtShortDate = (iso: string) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return `${m}/${d}${y !== new Date().getFullYear() ? `/${String(y).slice(2)}` : ""}`;
+  };
+  const { data: reconcileCandidates = [] } = useListReconcileCandidates({
+    query: { queryKey: getListReconcileCandidatesQueryKey(), refetchOnMount: "always" },
+  });
+  const candidateByRowId = useMemo(
+    () => new Map(reconcileCandidates.map((c) => [c.forecastTransactionId, c])),
+    [reconcileCandidates],
+  );
+  const reconcileTx = useReconcileForecastedTransaction();
+  const unreconcileTx = useUnreconcileForecastedTransaction();
+  const dismissMatch = useDismissReconcileMatch();
+
+  const handleReconcile = (tx: TxRow) => {
+    const cand = candidateByRowId.get(tx.id);
+    if (!cand) return;
+    reconcileTx.mutate({ id: tx.id, data: { plaidTransactionId: cand.plaidTransactionId } }, {
+      onSuccess: () => {
+        invalidate();
+        flashSaved(tx.id);
+        toast({ title: "Payment confirmed", description: `Moved to ${fmtShortDate(cand.actualDate)} · $${cand.actualAmount.toFixed(2)}` });
+      },
+      onError: () => toast({ title: "Failed to confirm", variant: "destructive" }),
+    });
+  };
+
+  const handleDismissMatch = (tx: TxRow) => {
+    const cand = candidateByRowId.get(tx.id);
+    if (!cand) return;
+    dismissMatch.mutate({ id: tx.id, data: { plaidTransactionId: cand.plaidTransactionId } }, {
+      onSuccess: () => {
+        invalidate();
+        toast({ title: "Match dismissed", description: "That transaction won't be suggested for this bill again." });
+      },
+      onError: () => toast({ title: "Failed to dismiss", variant: "destructive" }),
+    });
+  };
+
+  const handleUnreconcile = (tx: TxRow) => {
+    unreconcileTx.mutate({ id: tx.id }, {
+      onSuccess: () => {
+        invalidate();
+        toast({ title: "Reverted to planned", description: "The bill is back on its planned date and amount." });
+        setSelectedTx(null);
+      },
+      onError: () => toast({ title: "Failed to revert", variant: "destructive" }),
+    });
   };
 
   const handleRegenerate = () => {
@@ -1266,6 +1326,12 @@ export default function Forecast() {
     // TC-F12: cannot flip a future-dated row to Paid.
     if (editForm.isActual && !selectedTx.isActual && editForm.transactionDate > todayStr) {
       setFuturePaidDate(editForm.transactionDate);
+      return;
+    }
+    // P6: un-confirming a bank-reconciled row reverts it to the planned
+    // date/amount and unlinks the posted transaction (server-side restore).
+    if (selectedTx.matchedPlaidTransactionId != null && selectedTx.isActual && !editForm.isActual) {
+      handleUnreconcile(selectedTx);
       return;
     }
     const amount = parseFloat(editForm.amount);
@@ -1895,7 +1961,35 @@ export default function Forecast() {
                                 className="px-3 py-[11px] flex items-center justify-end gap-1"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && tx.transactionType === "expense" && (
+                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && tx.transactionType === "expense" && candidateByRowId.has(tx.id) && (
+                                  <span
+                                    data-testid={`reconcile-suggestion-${tx.id}`}
+                                    className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 pl-2 pr-1 py-[3px] text-[11px] whitespace-nowrap"
+                                  >
+                                    <span className="text-gray-600">
+                                      Posted: <span className="font-semibold text-foreground">${candidateByRowId.get(tx.id)!.actualAmount.toFixed(2)}</span> on {fmtShortDate(candidateByRowId.get(tx.id)!.actualDate)}
+                                    </span>
+                                    <button
+                                      title="Confirm this posted transaction as this bill's payment"
+                                      data-testid={`button-reconcile-confirm-${tx.id}`}
+                                      onClick={() => handleReconcile(tx)}
+                                      disabled={reconcileTx.isPending}
+                                      className="inline-flex items-center gap-1 rounded border border-primary bg-white px-1.5 py-[1px] font-medium text-primary hover:bg-primary/10 transition-colors"
+                                    >
+                                      Confirm <Check className="h-3 w-3" />
+                                    </button>
+                                    <button
+                                      title="Not a match — don't suggest this transaction again"
+                                      data-testid={`button-reconcile-dismiss-${tx.id}`}
+                                      onClick={() => handleDismissMatch(tx)}
+                                      disabled={dismissMatch.isPending}
+                                      className="text-muted-foreground/60 hover:text-destructive transition-colors px-0.5"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </span>
+                                )}
+                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && tx.transactionType === "expense" && !candidateByRowId.has(tx.id) && (
                                   <button
                                     title="Mark as paid"
                                     onClick={() => handleMarkPaid(tx)}

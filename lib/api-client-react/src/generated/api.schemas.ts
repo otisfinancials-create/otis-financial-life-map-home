@@ -979,8 +979,31 @@ export interface ForecastedTransaction {
      * @nullable
      */
   forecastedAmount?: number | null;
+  /**
+     * Posted bank transaction confirmed as this bill's payment (P6 reconciliation)
+     * @nullable
+     */
+  matchedPlaidTransactionId?: number | null;
+  /**
+     * Original planned date, kept when the row moved to the actual posted date
+     * @nullable
+     */
+  forecastedDate?: string | null;
   sortOrder: number;
   createdAt: string;
+}
+
+export interface ReconcileCandidate {
+  forecastTransactionId: number;
+  plaidTransactionId: number;
+  billId: number;
+  actualDate: string;
+  actualAmount: number;
+  postedName: string;
+}
+
+export interface ReconcileForecastInput {
+  plaidTransactionId: number;
 }
 
 export interface BalanceSync {

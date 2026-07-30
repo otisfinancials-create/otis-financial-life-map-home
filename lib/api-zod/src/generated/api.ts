@@ -1444,6 +1444,8 @@ export const ListForecastResponseItem = zod.object({
   "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
   "notes": zod.string().nullish(),
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
+  "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
+  "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
 })
@@ -1485,6 +1487,8 @@ export const CreateForecastedTransactionResponse = zod.object({
   "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
   "notes": zod.string().nullish(),
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
+  "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
+  "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
 })
@@ -1559,6 +1563,106 @@ export const ReorderForecastResponse = zod.object({
 
 
 /**
+ * @summary List planned bank-paid bill rows with a matching posted transaction (P6 reconciliation candidates)
+ */
+export const ListReconcileCandidatesResponseItem = zod.object({
+  "forecastTransactionId": zod.number(),
+  "plaidTransactionId": zod.number(),
+  "billId": zod.number(),
+  "actualDate": zod.string(),
+  "actualAmount": zod.number(),
+  "postedName": zod.string()
+})
+export const ListReconcileCandidatesResponse = zod.array(ListReconcileCandidatesResponseItem)
+
+
+/**
+ * @summary Confirm a matched posted transaction as this planned bill's payment (moves the row to the actual date/amount)
+ */
+export const ReconcileForecastedTransactionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ReconcileForecastedTransactionBody = zod.object({
+  "plaidTransactionId": zod.number()
+})
+
+export const ReconcileForecastedTransactionResponse = zod.object({
+  "id": zod.number(),
+  "transactionDate": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "transactionType": zod.string(),
+  "category": zod.string(),
+  "sourceBillId": zod.number().nullish(),
+  "sourcePayId": zod.number().nullish(),
+  "sourceLifeEventId": zod.number().nullish(),
+  "sourceBalanceSyncId": zod.number().nullish(),
+  "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
+  "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
+  "sourceCardCycleId": zod.number().nullish().describe('When set, this row is a card cycle\'s due-date payment (no child rows)'),
+  "ccBasis": zod.union([zod.literal('actual'),zod.literal('projected'),zod.literal(null)]).nullish().describe('How a cycle payment amount was determined — \'actual\' (closed cycle) or \'projected\' (open cycle, max of accumulated and planned)'),
+  "isActual": zod.boolean(),
+  "isCommitted": zod.boolean(),
+  "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
+  "notes": zod.string().nullish(),
+  "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
+  "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
+  "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
+  "sortOrder": zod.number(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Revert a confirmed reconciliation back to the planned date/amount
+ */
+export const UnreconcileForecastedTransactionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UnreconcileForecastedTransactionResponse = zod.object({
+  "id": zod.number(),
+  "transactionDate": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "transactionType": zod.string(),
+  "category": zod.string(),
+  "sourceBillId": zod.number().nullish(),
+  "sourcePayId": zod.number().nullish(),
+  "sourceLifeEventId": zod.number().nullish(),
+  "sourceBalanceSyncId": zod.number().nullish(),
+  "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
+  "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
+  "sourceCardCycleId": zod.number().nullish().describe('When set, this row is a card cycle\'s due-date payment (no child rows)'),
+  "ccBasis": zod.union([zod.literal('actual'),zod.literal('projected'),zod.literal(null)]).nullish().describe('How a cycle payment amount was determined — \'actual\' (closed cycle) or \'projected\' (open cycle, max of accumulated and planned)'),
+  "isActual": zod.boolean(),
+  "isCommitted": zod.boolean(),
+  "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
+  "notes": zod.string().nullish(),
+  "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
+  "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
+  "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
+  "sortOrder": zod.number(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Reject a suggested transaction match for this bill row (never re-suggested)
+ */
+export const DismissReconcileMatchParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DismissReconcileMatchBody = zod.object({
+  "plaidTransactionId": zod.number()
+})
+
+export const DismissReconcileMatchResponse = zod.void()
+
+
+/**
  * @summary Update a forecasted transaction
  */
 export const UpdateForecastedTransactionParams = zod.object({
@@ -1599,6 +1703,8 @@ export const UpdateForecastedTransactionResponse = zod.object({
   "status": zod.string().nullish().describe('\'missed\' = past bill marked as not paid (excluded from running balance)'),
   "notes": zod.string().nullish(),
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
+  "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
+  "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
 })

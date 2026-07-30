@@ -34,6 +34,12 @@ export const forecastedTransactionsTable = pgTable("forecasted_transactions", {
   notes: text("notes"),
   // Original planned amount, kept when the user confirms a different actual amount.
   forecastedAmount: numeric("forecasted_amount", { precision: 12, scale: 2 }),
+  // P6 bank-paid bill reconciliation: when a posted bank transaction is
+  // confirmed as this bill's payment, the row moves to the actual date/amount,
+  // links the transaction here (one cash event, counted once), and keeps the
+  // original planned date so un-confirm can revert.
+  matchedPlaidTransactionId: integer("matched_plaid_transaction_id"),
+  forecastedDate: date("forecasted_date", { mode: "string" }),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

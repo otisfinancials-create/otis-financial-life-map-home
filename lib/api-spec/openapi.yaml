@@ -1194,6 +1194,96 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReorderForecastResult"
 
+  /forecast/reconcile-candidates:
+    get:
+      operationId: listReconcileCandidates
+      tags: [forecasts]
+      summary: List planned bank-paid bill rows with a matching posted transaction (P6 reconciliation candidates)
+      responses:
+        "200":
+          description: Reconciliation candidates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReconcileCandidate"
+
+  /forecast/{id}/reconcile:
+    post:
+      operationId: reconcileForecastedTransaction
+      tags: [forecasts]
+      summary: Confirm a matched posted transaction as this planned bill's payment (moves the row to the actual date/amount)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReconcileForecastInput"
+      responses:
+        "200":
+          description: Reconciled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForecastedTransaction"
+        "400":
+          description: Invalid input or row not reconcilable
+        "404":
+          description: Not found
+
+  /forecast/{id}/unreconcile:
+    post:
+      operationId: unreconcileForecastedTransaction
+      tags: [forecasts]
+      summary: Revert a confirmed reconciliation back to the planned date/amount
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reverted to planned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForecastedTransaction"
+        "400":
+          description: Row is not reconciled
+        "404":
+          description: Not found
+
+  /forecast/{id}/dismiss-match:
+    post:
+      operationId: dismissReconcileMatch
+      tags: [forecasts]
+      summary: Reject a suggested transaction match for this bill row (never re-suggested)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReconcileForecastInput"
+      responses:
+        "204":
+          description: Dismissed
+        "404":
+          description: Not found
+
   /forecast/{id}:
     patch:
       operationId: updateForecastedTransaction
@@ -2980,10 +3070,40 @@ components:
         forecastedAmount:
           type: ["number", "null"]
           description: Original planned amount, kept when the user confirms a different actual amount
+        matchedPlaidTransactionId:
+          type: ["integer", "null"]
+          description: Posted bank transaction confirmed as this bill's payment (P6 reconciliation)
+        forecastedDate:
+          type: ["string", "null"]
+          description: Original planned date, kept when the row moved to the actual posted date
         sortOrder:
           type: integer
         createdAt:
           type: string
+
+    ReconcileCandidate:
+      type: object
+      required: [forecastTransactionId, plaidTransactionId, billId, actualDate, actualAmount, postedName]
+      properties:
+        forecastTransactionId:
+          type: integer
+        plaidTransactionId:
+          type: integer
+        billId:
+          type: integer
+        actualDate:
+          type: string
+        actualAmount:
+          type: number
+        postedName:
+          type: string
+
+    ReconcileForecastInput:
+      type: object
+      required: [plaidTransactionId]
+      properties:
+        plaidTransactionId:
+          type: integer
 
     BalanceSync:
       type: object
