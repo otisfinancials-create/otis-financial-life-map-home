@@ -299,7 +299,14 @@ router.post("/plaid/items/:id/refresh-accounts", async (req, res): Promise<void>
     const remoteIds = new Set(remote.map((a) => a.account_id));
 
     const existingRows = await db
-      .select({ id: accountsTable.id, plaidAccountId: accountsTable.plaidAccountId })
+      .select({
+        id: accountsTable.id,
+        plaidAccountId: accountsTable.plaidAccountId,
+        accountName: accountsTable.accountName,
+        accountType: accountsTable.accountType,
+        accountNumberLast4: accountsTable.accountNumberLast4,
+        isForecastAccount: accountsTable.isForecastAccount,
+      })
       .from(accountsTable)
       .where(and(eq(accountsTable.userId, req.userId), eq(accountsTable.plaidItemId, item.id)));
     const byPlaidId = new Map(existingRows.map((r) => [r.plaidAccountId, r.id]));
@@ -341,16 +348,41 @@ router.post("/plaid/items/:id/refresh-accounts", async (req, res): Promise<void>
     // Accounts Plaid no longer returns: keep the row (bills/card cycles may
     // reference it), just unlink it so it becomes a manual account — same
     // mechanism as the explicit "Disconnect from Plaid" action.
-    let accountsUnlinked = 0;
+    // isForecastAccount is reset to false: an unlinked account contributes
+    // nothing to the forecast basis, and a stale true would silently rejoin
+    // the basis on a later relink. Re-selection must be an explicit choice.
+    // The response reports the PRE-unlink flag so the UI can warn about lost
+    // forecast basis.
+    const unlinkedAccounts: Array<{
+      id: number;
+      accountName: string;
+      accountType: string;
+      accountNumberLast4: string | null;
+      isForecastAccount: boolean;
+    }> = [];
     for (const row of existingRows) {
       if (row.plaidAccountId && !remoteIds.has(row.plaidAccountId)) {
         await db
           .update(accountsTable)
-          .set({ plaidAccountId: null, plaidItemId: null, availableBalance: null, lastSyncedAt: null, updatedAt: now })
+          .set({
+            plaidAccountId: null,
+            plaidItemId: null,
+            availableBalance: null,
+            lastSyncedAt: null,
+            isForecastAccount: false,
+            updatedAt: now,
+          })
           .where(eq(accountsTable.id, row.id));
-        accountsUnlinked++;
+        unlinkedAccounts.push({
+          id: row.id,
+          accountName: row.accountName,
+          accountType: row.accountType,
+          accountNumberLast4: row.accountNumberLast4,
+          isForecastAccount: row.isForecastAccount,
+        });
       }
     }
+    const accountsUnlinked = unlinkedAccounts.length;
 
     const newAccounts = newAccountIds.length
       ? await db
@@ -377,6 +409,7 @@ router.post("/plaid/items/:id/refresh-accounts", async (req, res): Promise<void>
         accountsAdded: newAccountIds.length,
         accountsUnlinked,
         newAccounts,
+        unlinkedAccounts,
       }),
     );
   } catch (err) {
@@ -484,7 +517,16 @@ router.post("/plaid/disconnect", async (req, res): Promise<void> => {
   }
   await db
     .update(accountsTable)
-    .set({ plaidAccountId: null, plaidItemId: null, availableBalance: null, lastSyncedAt: null, updatedAt: new Date() })
+    .set({
+      plaidAccountId: null,
+      plaidItemId: null,
+      availableBalance: null,
+      lastSyncedAt: null,
+      // Same rule as update-mode unlink: a manual account has no forecast
+      // basis, and a stale true would silently rejoin on a later relink.
+      isForecastAccount: false,
+      updatedAt: new Date(),
+    })
     .where(eq(accountsTable.id, account.id));
 
   await cleanupOrphanedItems(req.userId, req.log);

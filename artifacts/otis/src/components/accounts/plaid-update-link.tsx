@@ -12,6 +12,7 @@ import {
 
 import { useToast } from "@/hooks/use-toast";
 import { ForecastAccountsDialog, type LinkedAccountOption } from "@/components/accounts/forecast-accounts-dialog";
+import { UnlinkedAccountsNotice } from "@/components/accounts/unlinked-accounts-notice";
 
 interface Props {
   /** Internal plaid_items row id — the already-connected institution. */
@@ -35,6 +36,9 @@ interface Props {
 export function PlaidUpdateLink({ itemId, institutionName, onDone }: Props) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [selection, setSelection] = useState<LinkedAccountOption[] | null>(null);
+  const [unlinked, setUnlinked] = useState<LinkedAccountOption[] | null>(null);
+  // Queued while the unlink notice is showing; applied when it's dismissed.
+  const pendingSelection = useRef<LinkedAccountOption[] | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createLinkToken = useCreatePlaidLinkToken();
@@ -86,8 +90,14 @@ export function PlaidUpdateLink({ itemId, institutionName, onDone }: Props) {
                   : "Your accounts are up to date.",
             });
             const newCash = result.newAccounts.filter((a) => a.accountType !== "credit_card");
-            if (newCash.length > 0) {
-              setSelection(result.newAccounts);
+            const nextSelection = newCash.length > 0 ? result.newAccounts : null;
+            if (result.unlinkedAccounts.length > 0) {
+              // Show the unlink notice first; the forecast-accounts selection
+              // (if any) follows when the notice is dismissed.
+              pendingSelection.current = nextSelection;
+              setUnlinked(result.unlinkedAccounts);
+            } else if (nextSelection) {
+              setSelection(nextSelection);
             } else {
               onDone();
             }
@@ -120,6 +130,24 @@ export function PlaidUpdateLink({ itemId, institutionName, onDone }: Props) {
     if (linkToken && ready) open();
   }, [linkToken, ready, open]);
 
+  if (unlinked) {
+    return (
+      <UnlinkedAccountsNotice
+        institutionName={institutionName}
+        accounts={unlinked}
+        onClose={() => {
+          setUnlinked(null);
+          const next = pendingSelection.current;
+          pendingSelection.current = null;
+          if (next) {
+            setSelection(next);
+          } else {
+            onDone();
+          }
+        }}
+      />
+    );
+  }
   if (selection) {
     return (
       <ForecastAccountsDialog

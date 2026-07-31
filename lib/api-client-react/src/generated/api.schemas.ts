@@ -1375,6 +1375,8 @@ export interface PlaidRefreshAccountsResult {
   accountsUnlinked: number;
   /** Only the accounts added by this update-mode session, for the "which accounts do you pay bills from?" selection step */
   newAccounts: PlaidLinkedAccount[];
+  /** Accounts unlinked by this session (kept locally as manual accounts). isForecastAccount reflects the PRE-unlink value — unlinking always resets the stored flag to false, so a true here means the forecast just lost this account's basis. */
+  unlinkedAccounts: PlaidLinkedAccount[];
 }
 
 export interface PlaidDisconnectInput {

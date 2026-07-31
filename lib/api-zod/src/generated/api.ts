@@ -2405,7 +2405,14 @@ export const RefreshPlaidItemAccountsResponse = zod.object({
   "accountType": zod.string(),
   "accountNumberLast4": zod.string().nullable(),
   "isForecastAccount": zod.boolean()
-})).describe('Only the accounts added by this update-mode session, for the \"which accounts do you pay bills from?\" selection step')
+})).describe('Only the accounts added by this update-mode session, for the \"which accounts do you pay bills from?\" selection step'),
+  "unlinkedAccounts": zod.array(zod.object({
+  "id": zod.number(),
+  "accountName": zod.string(),
+  "accountType": zod.string(),
+  "accountNumberLast4": zod.string().nullable(),
+  "isForecastAccount": zod.boolean()
+})).describe('Accounts unlinked by this session (kept locally as manual accounts). isForecastAccount reflects the PRE-unlink value — unlinking always resets the stored flag to false, so a true here means the forecast just lost this account\'s basis.\n')
 })
 
 

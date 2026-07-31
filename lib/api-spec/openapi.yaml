@@ -3760,7 +3760,7 @@ components:
 
     PlaidRefreshAccountsResult:
       type: object
-      required: [success, itemId, institutionName, accountsAdded, accountsUnlinked, newAccounts]
+      required: [success, itemId, institutionName, accountsAdded, accountsUnlinked, newAccounts, unlinkedAccounts]
       properties:
         success:
           type: boolean
@@ -3777,6 +3777,15 @@ components:
         newAccounts:
           type: array
           description: Only the accounts added by this update-mode session, for the "which accounts do you pay bills from?" selection step
+          items:
+            $ref: "#/components/schemas/PlaidLinkedAccount"
+        unlinkedAccounts:
+          type: array
+          description: >
+            Accounts unlinked by this session (kept locally as manual accounts).
+            isForecastAccount reflects the PRE-unlink value — unlinking always resets
+            the stored flag to false, so a true here means the forecast just lost
+            this account's basis.
           items:
             $ref: "#/components/schemas/PlaidLinkedAccount"
 
