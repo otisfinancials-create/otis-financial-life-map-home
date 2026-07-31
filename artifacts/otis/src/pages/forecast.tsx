@@ -1897,7 +1897,15 @@ export default function Forecast() {
                                 >
                                   {isAdjustment ? "Balance updated" : tx.description}
                                 </span>
-                                {tx.isUnplanned && (
+                                {tx.isAssetMovement ? (
+                                  <span
+                                    data-testid={`badge-money-moved-${tx.id}`}
+                                    className="shrink-0 rounded-full border border-sky-300 bg-sky-50 px-1.5 py-[1px] text-[10px] font-medium text-sky-700 whitespace-nowrap"
+                                    title="Money moved between your own accounts — reduces your balance but isn't spending"
+                                  >
+                                    Money moved
+                                  </span>
+                                ) : tx.isUnplanned ? (
                                   <span
                                     data-testid={`badge-unplanned-${tx.id}`}
                                     className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-[1px] text-[10px] font-medium text-amber-700 whitespace-nowrap"
@@ -1905,7 +1913,7 @@ export default function Forecast() {
                                   >
                                     Unplanned
                                   </span>
-                                )}
+                                ) : null}
                                 {isAdjustment && (
                                   <span className="text-[12px] text-muted-foreground whitespace-nowrap shrink-0">
                                     · {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d")}

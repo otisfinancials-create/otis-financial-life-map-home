@@ -66,6 +66,22 @@ const ASSET_MOVEMENT_DETAILED = new Set([
   "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS",
 ]);
 
+/** Plain-language "money moved" label for an asset-movement transaction. */
+function assetMovementLabel(detailed: string | null): string {
+  switch (detailed) {
+    case "TRANSFER_OUT_SAVINGS":
+      return "Transfer to savings";
+    case "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS":
+      return "Transfer to investments";
+    case "TRANSFER_OUT_ACCOUNT_TRANSFER":
+      return "Transfer to another account";
+    case "TRANSFER_IN_ACCOUNT_TRANSFER":
+      return "Transfer from another account";
+    default:
+      return "Money moved";
+  }
+}
+
 function isAssetMovementTxn(t: { personalFinanceCategory: string | null; personalFinanceCategoryDetailed: string | null }): boolean {
   if (isCardPaymentTxn(t)) return false;
   return ASSET_MOVEMENT_DETAILED.has(t.personalFinanceCategoryDetailed ?? "");
@@ -362,10 +378,13 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
     if (isAssetMovementTxn(t)) {
       // 4b: crosses the pool boundary — steps the balance exactly as today,
       // same amount and sign, but classified as asset movement (not spend).
+      // Bucketed per day + detailed category so the ledger reads as "money
+      // moved" ("Transfer to savings"), never as generic unplanned spending.
       if (amt === 0) continue;
       const type = amt > 0 ? ("expense" as const) : ("income" as const);
-      const key = `${t.date}|asset-movement|${type}`;
-      const b = buckets.get(key) ?? { date: t.date, label: "Asset Movement", type, total: 0, assetMovement: true };
+      const label = assetMovementLabel(t.personalFinanceCategoryDetailed);
+      const key = `${t.date}|asset-movement|${label}|${type}`;
+      const b = buckets.get(key) ?? { date: t.date, label, type, total: 0, assetMovement: true };
       b.total += Math.abs(amt);
       buckets.set(key, b);
       continue;
