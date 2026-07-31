@@ -5,8 +5,11 @@ const basePath = PlaidEnvironments[env];
 if (!basePath) {
   throw new Error(`Invalid PLAID_ENV: ${env}`);
 }
-if (!process.env.PLAID_CLIENT_ID || !process.env.PLAID_SECRET) {
-  throw new Error("PLAID_CLIENT_ID and PLAID_SECRET must be set");
+// Plaid secrets are per-environment: when pointed at sandbox, use the
+// dedicated sandbox secret (never the live PLAID_SECRET).
+const plaidSecret = env === "sandbox" ? process.env.PLAID_SANDBOX_SECRET : process.env.PLAID_SECRET;
+if (!process.env.PLAID_CLIENT_ID || !plaidSecret) {
+  throw new Error(`PLAID_CLIENT_ID and ${env === "sandbox" ? "PLAID_SANDBOX_SECRET" : "PLAID_SECRET"} must be set`);
 }
 
 const configuration = new Configuration({
@@ -14,7 +17,7 @@ const configuration = new Configuration({
   baseOptions: {
     headers: {
       "PLAID-CLIENT-ID": process.env.PLAID_CLIENT_ID,
-      "PLAID-SECRET": process.env.PLAID_SECRET,
+      "PLAID-SECRET": plaidSecret,
     },
   },
 });
