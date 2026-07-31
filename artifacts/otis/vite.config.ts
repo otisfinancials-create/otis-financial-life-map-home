@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { VitePWA } from "vite-plugin-pwa";
 
 const rawPort = process.env.PORT;
 
@@ -32,6 +33,38 @@ export default defineConfig({
     react(),
     tailwindcss({ optimize: false }),
     runtimeErrorOverlay(),
+    VitePWA({
+      registerType: "autoUpdate",
+      // Finance app: the service worker precaches ONLY the built app shell
+      // (JS/CSS/HTML/icons). No runtime caching rules are defined, so API
+      // responses are never cached — financial data is always fetched fresh.
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,svg,png,ico,webmanifest}"],
+        // Never let the SPA fallback swallow API or auth routes.
+        navigateFallbackDenylist: [/\/api\//, /\/__clerk/],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
+      manifest: {
+        name: "Otis — Financial Life Map",
+        short_name: "Otis",
+        description: "See your money in time — forecast, bills, and accounts in one map.",
+        start_url: basePath,
+        scope: basePath,
+        display: "standalone",
+        background_color: "#0A1628",
+        theme_color: "#0A1628",
+        icons: [
+          { src: "pwa-192.png", sizes: "192x192", type: "image/png" },
+          { src: "pwa-512.png", sizes: "512x512", type: "image/png" },
+          { src: "pwa-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+        ],
+      },
+      devOptions: {
+        // Allow verifying manifest/SW in the Replit dev preview.
+        enabled: true,
+        suppressWarnings: true,
+      },
+    }),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [

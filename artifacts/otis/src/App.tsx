@@ -5,6 +5,7 @@ import { shadcn } from "@clerk/themes";
 import { Switch, Route, useLocation, Redirect, Router as WouterRouter } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryClient } from "@/lib/queryClient";
 
@@ -269,6 +270,7 @@ function ClerkProviderWithRoutes() {
             </Route>
           </Switch>
           <Toaster />
+          <PwaInstallPrompt />
         </TooltipProvider>
       </QueryClientProvider>
     </ClerkProvider>
