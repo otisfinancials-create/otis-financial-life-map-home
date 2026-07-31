@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, boolean, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, boolean, timestamp, integer, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -31,7 +31,12 @@ export const accountsTable = pgTable("accounts", {
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  // One local row per linked Plaid account per user: makes account
+  // reconciliation (link + update-mode refresh) race-safe. NULLs (manual
+  // accounts) are exempt per Postgres unique semantics.
+  unique("accounts_user_plaid_account_unique").on(t.userId, t.plaidAccountId),
+]);
 
 export const insertAccountSchema = createInsertSchema(accountsTable).omit({ id: true, userId: true, createdAt: true, updatedAt: true, plaidAccountId: true, plaidItemId: true, availableBalance: true, lastSyncedAt: true });
 export type InsertAccount = z.infer<typeof insertAccountSchema>;

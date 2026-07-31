@@ -1558,6 +1558,16 @@ paths:
       operationId: createPlaidLinkToken
       tags: [plaid]
       summary: Create a Plaid Link token for the authenticated user
+      description: >
+        Without a body (or with plaidItemId null), creates a token for linking a NEW bank.
+        With plaidItemId, creates an update-mode token with account selection enabled for
+        that existing item, so the user can add accounts without re-linking.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaidLinkTokenInput"
       responses:
         "200":
           description: Link token created
@@ -1565,6 +1575,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PlaidLinkToken"
+        "403":
+          description: plaidItemId does not belong to the authenticated user
         "502":
           description: Plaid error
 
@@ -1890,6 +1902,35 @@ paths:
                     type: boolean
         "502":
           description: Plaid rejected the removal; nothing was deleted locally
+
+  /plaid/items/{id}/refresh-accounts:
+    post:
+      operationId: refreshPlaidItemAccounts
+      tags: [plaid]
+      summary: Re-fetch an existing item's accounts after an update-mode Link session and reconcile them
+      description: >
+        Does NOT exchange a public token or create a plaid_items row — update mode keeps the
+        existing access token valid. Reconciles by plaid_account_id: known accounts are updated
+        in place (accounts.id unchanged), new ones are inserted with isForecastAccount=false,
+        and rows no longer returned by Plaid are unlinked (kept as manual accounts) because
+        bills and card cycles may reference them.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reconciliation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaidRefreshAccountsResult"
+        "404":
+          description: Item not found for this user
+        "502":
+          description: Plaid error
 
   /plaid/sync:
     post:
@@ -3707,6 +3748,35 @@ components:
           type: integer
         accounts:
           type: array
+          items:
+            $ref: "#/components/schemas/PlaidLinkedAccount"
+
+    PlaidLinkTokenInput:
+      type: object
+      properties:
+        plaidItemId:
+          type: ["integer", "null"]
+          description: Internal plaid_items row id. When set, the token is created in update mode with account selection for that item.
+
+    PlaidRefreshAccountsResult:
+      type: object
+      required: [success, itemId, institutionName, accountsAdded, accountsUnlinked, newAccounts]
+      properties:
+        success:
+          type: boolean
+        itemId:
+          type: integer
+          description: Internal plaid_items row id (unchanged — update mode never creates a new item)
+        institutionName:
+          type: string
+        accountsAdded:
+          type: integer
+        accountsUnlinked:
+          type: integer
+          description: Accounts no longer returned by Plaid, kept locally as manual accounts
+        newAccounts:
+          type: array
+          description: Only the accounts added by this update-mode session, for the "which accounts do you pay bills from?" selection step
           items:
             $ref: "#/components/schemas/PlaidLinkedAccount"
 

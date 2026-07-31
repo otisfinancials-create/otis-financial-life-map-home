@@ -1357,6 +1357,26 @@ export interface PlaidForecastAccountsResult {
   accounts: PlaidLinkedAccount[];
 }
 
+export interface PlaidLinkTokenInput {
+  /**
+     * Internal plaid_items row id. When set, the token is created in update mode with account selection for that item.
+     * @nullable
+     */
+  plaidItemId?: number | null;
+}
+
+export interface PlaidRefreshAccountsResult {
+  success: boolean;
+  /** Internal plaid_items row id (unchanged — update mode never creates a new item) */
+  itemId: number;
+  institutionName: string;
+  accountsAdded: number;
+  /** Accounts no longer returned by Plaid, kept locally as manual accounts */
+  accountsUnlinked: number;
+  /** Only the accounts added by this update-mode session, for the "which accounts do you pay bills from?" selection step */
+  newAccounts: PlaidLinkedAccount[];
+}
+
 export interface PlaidDisconnectInput {
   accountId: number;
 }

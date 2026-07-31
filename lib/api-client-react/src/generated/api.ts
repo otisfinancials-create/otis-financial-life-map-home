@@ -91,6 +91,8 @@ import type {
   PlaidForecastAccountsInput,
   PlaidForecastAccountsResult,
   PlaidLinkToken,
+  PlaidLinkTokenInput,
+  PlaidRefreshAccountsResult,
   PlaidSyncResult,
   PlaidTransaction,
   PlaidWebhookInput,
@@ -6090,16 +6092,17 @@ export const getCreatePlaidLinkTokenUrl = () => {
 }
 
 /**
+ * Without a body (or with plaidItemId null), creates a token for linking a NEW bank. With plaidItemId, creates an update-mode token with account selection enabled for that existing item, so the user can add accounts without re-linking.
  * @summary Create a Plaid Link token for the authenticated user
  */
-export const createPlaidLinkToken = async ( options?: RequestInit): Promise<PlaidLinkToken> => {
+export const createPlaidLinkToken = async (plaidLinkTokenInput?: PlaidLinkTokenInput, options?: RequestInit): Promise<PlaidLinkToken> => {
 
   return customFetch<PlaidLinkToken>(getCreatePlaidLinkTokenUrl(),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(plaidLinkTokenInput)
   }
 );}
 
@@ -6107,8 +6110,8 @@ export const createPlaidLinkToken = async ( options?: RequestInit): Promise<Plai
 
 
 export const getCreatePlaidLinkTokenMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlaidLinkToken>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createPlaidLinkToken>>, TError,void, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlaidLinkToken>>, TError,{data?: BodyType<PlaidLinkTokenInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPlaidLinkToken>>, TError,{data?: BodyType<PlaidLinkTokenInput>}, TContext> => {
 
 const mutationKey = ['createPlaidLinkToken'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -6120,10 +6123,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPlaidLinkToken>>, void> = () => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPlaidLinkToken>>, {data?: BodyType<PlaidLinkTokenInput>}> = (props) => {
+          const {data} = props ?? {};
 
-
-          return  createPlaidLinkToken(requestOptions)
+          return  createPlaidLinkToken(data,requestOptions)
         }
 
 
@@ -6134,18 +6137,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type CreatePlaidLinkTokenMutationResult = NonNullable<Awaited<ReturnType<typeof createPlaidLinkToken>>>
-
+    export type CreatePlaidLinkTokenMutationBody = BodyType<PlaidLinkTokenInput> | undefined
     export type CreatePlaidLinkTokenMutationError = ErrorType<void>
 
     /**
  * @summary Create a Plaid Link token for the authenticated user
  */
 export const useCreatePlaidLinkToken = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlaidLinkToken>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPlaidLinkToken>>, TError,{data?: BodyType<PlaidLinkTokenInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createPlaidLinkToken>>,
         TError,
-        void,
+        {data?: BodyType<PlaidLinkTokenInput>},
         TContext
       > => {
       return useMutation(getCreatePlaidLinkTokenMutationOptions(options));
@@ -7334,6 +7337,77 @@ export const useRemovePlaidItem = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRemovePlaidItemMutationOptions(options));
+    }
+
+export const getRefreshPlaidItemAccountsUrl = (id: number,) => {
+
+
+
+
+  return `/api/plaid/items/${id}/refresh-accounts`
+}
+
+/**
+ * Does NOT exchange a public token or create a plaid_items row — update mode keeps the existing access token valid. Reconciles by plaid_account_id: known accounts are updated in place (accounts.id unchanged), new ones are inserted with isForecastAccount=false, and rows no longer returned by Plaid are unlinked (kept as manual accounts) because bills and card cycles may reference them.
+ * @summary Re-fetch an existing item's accounts after an update-mode Link session and reconcile them
+ */
+export const refreshPlaidItemAccounts = async (id: number, options?: RequestInit): Promise<PlaidRefreshAccountsResult> => {
+
+  return customFetch<PlaidRefreshAccountsResult>(getRefreshPlaidItemAccountsUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRefreshPlaidItemAccountsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshPlaidItemAccounts>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof refreshPlaidItemAccounts>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['refreshPlaidItemAccounts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof refreshPlaidItemAccounts>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  refreshPlaidItemAccounts(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RefreshPlaidItemAccountsMutationResult = NonNullable<Awaited<ReturnType<typeof refreshPlaidItemAccounts>>>
+
+    export type RefreshPlaidItemAccountsMutationError = ErrorType<void>
+
+    /**
+ * @summary Re-fetch an existing item's accounts after an update-mode Link session and reconcile them
+ */
+export const useRefreshPlaidItemAccounts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshPlaidItemAccounts>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof refreshPlaidItemAccounts>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRefreshPlaidItemAccountsMutationOptions(options));
     }
 
 export const getSyncPlaidTransactionsUrl = () => {

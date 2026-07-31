@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AccountDialog } from "@/components/accounts/account-dialog";
 import { EnvelopesDialog } from "@/components/accounts/envelopes-dialog";
 import { PlaidConnectButton } from "@/components/accounts/plaid-connect-button";
+import { PlaidUpdateLink } from "@/components/accounts/plaid-update-link";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -154,6 +155,9 @@ export default function Accounts() {
   const assetAccounts = accounts?.filter((a) => a.isAsset) || [];
   const liabilityAccounts = accounts?.filter((a) => !a.isAsset) || [];
 
+  // Update-mode Link session: add an account under an already-connected bank.
+  const [updateItem, setUpdateItem] = useState<{ itemId: number; institutionName: string } | null>(null);
+
   const handleForecastToggle = (account: Account, checked: boolean) => {
     updateAccount.mutate(
       { id: account.id, data: { isForecastAccount: checked } },
@@ -250,6 +254,15 @@ export default function Accounts() {
                   Manage envelopes
                 </DropdownMenuItem>
               )}
+              {account.plaidAccountId && account.plaidItemId != null && (
+                <DropdownMenuItem
+                  onClick={() => setUpdateItem({ itemId: account.plaidItemId!, institutionName: account.institutionName })}
+                  data-testid={`menu-add-account-${account.id}`}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add an account at {account.institutionName}
+                </DropdownMenuItem>
+              )}
               {account.plaidAccountId && (
                 <DropdownMenuItem onClick={() => handleDisconnectPlaid(account)}>
                   <Link2 className="mr-2 h-4 w-4" />
@@ -280,6 +293,13 @@ export default function Accounts() {
             <p className="text-muted-foreground mt-1">Link your bank accounts or add them manually.</p>
           </div>
           <div className="flex items-center gap-2">
+            {updateItem && (
+              <PlaidUpdateLink
+                itemId={updateItem.itemId}
+                institutionName={updateItem.institutionName}
+                onDone={() => setUpdateItem(null)}
+              />
+            )}
             <PlaidConnectButton />
             <AccountDialog
               trigger={

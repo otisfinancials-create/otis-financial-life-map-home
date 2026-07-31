@@ -3,7 +3,10 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { CountryCode, Products, DepositoryAccountSubtype, CreditAccountSubtype, InvestmentAccountSubtype } from "plaid";
 import { db, accountsTable, plaidItemsTable, plaidTransactionsTable } from "@workspace/db";
 import {
+  CreatePlaidLinkTokenBody,
   CreatePlaidLinkTokenResponse,
+  RefreshPlaidItemAccountsParams,
+  RefreshPlaidItemAccountsResponse,
   ExchangePlaidTokenBody,
   ExchangePlaidTokenResponse,
   DisconnectPlaidAccountBody,
@@ -22,13 +25,37 @@ import { removePlaidItem, PlaidRemovalError } from "../services/plaid-item-remov
 const router: IRouter = Router();
 
 router.post("/plaid/create-link-token", async (req, res): Promise<void> => {
-  req.log.info("Creating Plaid link token");
+  const parsed = CreatePlaidLinkTokenBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const plaidItemId = parsed.data?.plaidItemId ?? null;
+
+  // Update mode: the item's access token puts Link in update mode; account
+  // selection lets the user add accounts under the already-connected bank.
+  let updateAccessToken: string | null = null;
+  if (plaidItemId != null) {
+    const [item] = await db
+      .select({ accessToken: plaidItemsTable.accessToken })
+      .from(plaidItemsTable)
+      .where(and(eq(plaidItemsTable.id, plaidItemId), eq(plaidItemsTable.userId, req.userId)));
+    if (!item) {
+      // Never trust a client-supplied item id: wrong owner (or nonexistent) → 403.
+      res.status(403).json({ error: "Item does not belong to this user" });
+      return;
+    }
+    updateAccessToken = item.accessToken;
+  }
+
+  req.log.info({ updateMode: updateAccessToken != null }, "Creating Plaid link token");
   try {
-    const response = await plaidClient.linkTokenCreate({
+    const shared = {
       user: { client_user_id: req.userId },
       client_name: "Otis Financial",
-      products: [Products.Transactions],
-      optional_products: [Products.Liabilities, Products.Investments, Products.Identity],
+      // Kept in update mode too: with account_selection_enabled, filters
+      // constrain the picker to the same subtypes we support at new-link
+      // time, so users can't add account types the app filters out.
       account_filters: {
         depository: {
           account_subtypes: [DepositoryAccountSubtype.Checking, DepositoryAccountSubtype.Savings],
@@ -42,13 +69,29 @@ router.post("/plaid/create-link-token", async (req, res): Promise<void> => {
       },
       country_codes: [CountryCode.Us],
       language: "en",
-      // Pull up to 2 years of history on new links (institutions may cap
-      // lower on their side, e.g. Capital One's 90-day limit).
-      transactions: { days_requested: 730 },
       ...(process.env["REPLIT_DOMAINS"]
         ? { webhook: `https://${process.env["REPLIT_DOMAINS"].split(",")[0]}/api/plaid/webhook` }
         : {}),
-    });
+    };
+    const response = await plaidClient.linkTokenCreate(
+      updateAccessToken != null
+        ? {
+            ...shared,
+            // Update mode: do NOT re-send products (Transactions is already
+            // enabled on the item; re-sending changes request semantics) and
+            // no transactions.days_requested (only meaningful at new-link).
+            access_token: updateAccessToken,
+            update: { account_selection_enabled: true },
+          }
+        : {
+            ...shared,
+            products: [Products.Transactions],
+            optional_products: [Products.Liabilities, Products.Investments, Products.Identity],
+            // Pull up to 2 years of history on new links (institutions may cap
+            // lower on their side, e.g. Capital One's 90-day limit).
+            transactions: { days_requested: 730 },
+          },
+    );
     res.json(CreatePlaidLinkTokenResponse.parse({ linkToken: response.data.link_token }));
   } catch (err) {
     req.log.error({ err: sanitizePlaidError(err) }, "Plaid link token creation failed");
@@ -137,13 +180,18 @@ router.post("/plaid/exchange-token", async (req, res): Promise<void> => {
       } else {
         // Connect-time default: checking accounts pay bills → in the forecast
         // pool; everything else (savings, money market, …) opt-in; credit
-        // cards are NEVER forecast accounts.
-        await db.insert(accountsTable).values({
-          ...values,
-          userId: req.userId,
-          isForecastAccount: accountType === "checking",
-        });
-        accountsAdded++;
+        // cards are NEVER forecast accounts. Conflict-safe under the
+        // (user_id, plaid_account_id) unique constraint.
+        const [inserted] = await db
+          .insert(accountsTable)
+          .values({
+            ...values,
+            userId: req.userId,
+            isForecastAccount: accountType === "checking",
+          })
+          .onConflictDoNothing({ target: [accountsTable.userId, accountsTable.plaidAccountId] })
+          .returning({ id: accountsTable.id });
+        if (inserted) accountsAdded++;
       }
     }
 
@@ -218,6 +266,123 @@ router.put("/plaid/forecast-accounts", async (req, res): Promise<void> => {
     .from(accountsTable)
     .where(and(eq(accountsTable.userId, req.userId), eq(accountsTable.plaidItemId, itemId)));
   res.json(SetPlaidForecastAccountsResponse.parse({ updated, accounts: after }));
+});
+
+/**
+ * Post-update-mode reconciliation. Update mode never issues a new access
+ * token, so we do NOT exchange the public token or touch plaid_items —
+ * we re-fetch the item's accounts and reconcile by plaid_account_id:
+ *   - known plaid_account_id  → update in place (accounts.id unchanged;
+ *     bills.payment_account_id and card-cycle FKs stay valid)
+ *   - new plaid_account_id    → insert with isForecastAccount=false
+ *     (credit cards can never be true anyway)
+ *   - row no longer returned  → unlink (plaid fields nulled, row kept as a
+ *     manual account) — never deleted, bills may reference it.
+ */
+router.post("/plaid/items/:id/refresh-accounts", async (req, res): Promise<void> => {
+  const parsed = RefreshPlaidItemAccountsParams.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [item] = await db
+    .select()
+    .from(plaidItemsTable)
+    .where(and(eq(plaidItemsTable.id, parsed.data.id), eq(plaidItemsTable.userId, req.userId)));
+  if (!item) {
+    res.status(404).json({ error: "Item not found" });
+    return;
+  }
+  try {
+    const accountsResponse = await plaidClient.accountsGet({ access_token: item.accessToken });
+    const remote = accountsResponse.data.accounts;
+    const remoteIds = new Set(remote.map((a) => a.account_id));
+
+    const existingRows = await db
+      .select({ id: accountsTable.id, plaidAccountId: accountsTable.plaidAccountId })
+      .from(accountsTable)
+      .where(and(eq(accountsTable.userId, req.userId), eq(accountsTable.plaidItemId, item.id)));
+    const byPlaidId = new Map(existingRows.map((r) => [r.plaidAccountId, r.id]));
+
+    const now = new Date();
+    const newAccountIds: number[] = [];
+    for (const acct of remote) {
+      const { accountType, isAsset } = mapPlaidAccountType(acct.type, acct.subtype);
+      const values = {
+        accountName: acct.name || acct.official_name || "Account",
+        accountType,
+        isAsset,
+        institutionName: item.institutionName ?? "Bank",
+        currentBalance: String(acct.balances.current ?? 0),
+        availableBalance: acct.balances.available != null ? String(acct.balances.available) : null,
+        accountNumberLast4: acct.mask ?? null,
+        plaidAccountId: acct.account_id,
+        plaidItemId: item.id,
+        lastSyncedAt: now,
+        updatedAt: now,
+      };
+      const existingId = byPlaidId.get(acct.account_id);
+      if (existingId != null) {
+        // In place — id must not change; forecast choice never clobbered.
+        await db.update(accountsTable).set(values).where(eq(accountsTable.id, existingId));
+      } else {
+        // Race-safe under concurrent refreshes: the (user_id, plaid_account_id)
+        // unique constraint + do-nothing means only one request inserts; the
+        // returning row is present only for the actual inserter.
+        const [inserted] = await db
+          .insert(accountsTable)
+          .values({ ...values, userId: req.userId, isForecastAccount: false })
+          .onConflictDoNothing({ target: [accountsTable.userId, accountsTable.plaidAccountId] })
+          .returning({ id: accountsTable.id });
+        if (inserted) newAccountIds.push(inserted.id);
+      }
+    }
+
+    // Accounts Plaid no longer returns: keep the row (bills/card cycles may
+    // reference it), just unlink it so it becomes a manual account — same
+    // mechanism as the explicit "Disconnect from Plaid" action.
+    let accountsUnlinked = 0;
+    for (const row of existingRows) {
+      if (row.plaidAccountId && !remoteIds.has(row.plaidAccountId)) {
+        await db
+          .update(accountsTable)
+          .set({ plaidAccountId: null, plaidItemId: null, availableBalance: null, lastSyncedAt: null, updatedAt: now })
+          .where(eq(accountsTable.id, row.id));
+        accountsUnlinked++;
+      }
+    }
+
+    const newAccounts = newAccountIds.length
+      ? await db
+          .select({
+            id: accountsTable.id,
+            accountName: accountsTable.accountName,
+            accountType: accountsTable.accountType,
+            accountNumberLast4: accountsTable.accountNumberLast4,
+            isForecastAccount: accountsTable.isForecastAccount,
+          })
+          .from(accountsTable)
+          .where(and(eq(accountsTable.userId, req.userId), inArray(accountsTable.id, newAccountIds)))
+      : [];
+
+    req.log.info(
+      { plaidItemRow: item.id, accountsAdded: newAccountIds.length, accountsUnlinked },
+      "Plaid update-mode account reconciliation complete",
+    );
+    res.json(
+      RefreshPlaidItemAccountsResponse.parse({
+        success: true,
+        itemId: item.id,
+        institutionName: item.institutionName ?? "your bank",
+        accountsAdded: newAccountIds.length,
+        accountsUnlinked,
+        newAccounts,
+      }),
+    );
+  } catch (err) {
+    req.log.error({ err: sanitizePlaidError(err) }, "Plaid update-mode account refresh failed");
+    res.status(502).json({ error: "Failed to refresh your bank's accounts" });
+  }
 });
 
 router.post("/plaid/sync", async (req, res): Promise<void> => {

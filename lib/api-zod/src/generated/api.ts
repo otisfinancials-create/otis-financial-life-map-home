@@ -1994,8 +1994,13 @@ export const DeleteScenarioResponse = zod.void()
 
 
 /**
+ * Without a body (or with plaidItemId null), creates a token for linking a NEW bank. With plaidItemId, creates an update-mode token with account selection enabled for that existing item, so the user can add accounts without re-linking.
  * @summary Create a Plaid Link token for the authenticated user
  */
+export const CreatePlaidLinkTokenBody = zod.object({
+  "plaidItemId": zod.number().nullish().describe('Internal plaid_items row id. When set, the token is created in update mode with account selection for that item.')
+})
+
 export const CreatePlaidLinkTokenResponse = zod.object({
   "linkToken": zod.string()
 })
@@ -2377,6 +2382,30 @@ export const RemovePlaidItemParams = zod.object({
 
 export const RemovePlaidItemResponse = zod.object({
   "removed": zod.boolean()
+})
+
+
+/**
+ * Does NOT exchange a public token or create a plaid_items row — update mode keeps the existing access token valid. Reconciles by plaid_account_id: known accounts are updated in place (accounts.id unchanged), new ones are inserted with isForecastAccount=false, and rows no longer returned by Plaid are unlinked (kept as manual accounts) because bills and card cycles may reference them.
+ * @summary Re-fetch an existing item's accounts after an update-mode Link session and reconcile them
+ */
+export const RefreshPlaidItemAccountsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RefreshPlaidItemAccountsResponse = zod.object({
+  "success": zod.boolean(),
+  "itemId": zod.number().describe('Internal plaid_items row id (unchanged — update mode never creates a new item)'),
+  "institutionName": zod.string(),
+  "accountsAdded": zod.number(),
+  "accountsUnlinked": zod.number().describe('Accounts no longer returned by Plaid, kept locally as manual accounts'),
+  "newAccounts": zod.array(zod.object({
+  "id": zod.number(),
+  "accountName": zod.string(),
+  "accountType": zod.string(),
+  "accountNumberLast4": zod.string().nullable(),
+  "isForecastAccount": zod.boolean()
+})).describe('Only the accounts added by this update-mode session, for the \"which accounts do you pay bills from?\" selection step')
 })
 
 

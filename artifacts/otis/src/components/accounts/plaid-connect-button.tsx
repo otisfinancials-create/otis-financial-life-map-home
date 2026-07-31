@@ -122,7 +122,7 @@ export function PlaidConnectButton() {
   }, [linkToken, ready, open]);
 
   const handleClick = () => {
-    createLinkToken.mutate(undefined, {
+    createLinkToken.mutate({ data: {} }, {
       onSuccess: (result) => setLinkToken(result.linkToken),
       onError: () =>
         toast({

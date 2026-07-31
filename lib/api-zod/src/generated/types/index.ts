@@ -114,6 +114,8 @@ export * from './plaidForecastAccountsInput';
 export * from './plaidForecastAccountsResult';
 export * from './plaidLinkedAccount';
 export * from './plaidLinkToken';
+export * from './plaidLinkTokenInput';
+export * from './plaidRefreshAccountsResult';
 export * from './plaidSyncResult';
 export * from './plaidTransaction';
 export * from './plaidWebhookInput';
