@@ -995,13 +995,23 @@ export interface ForecastedTransaction {
   createdAt: string;
 }
 
-export interface ReconcileCandidate {
-  forecastTransactionId: number;
+export interface ReconcileCandidateTxn {
   plaidTransactionId: number;
-  billId: number;
   actualDate: string;
   actualAmount: number;
   postedName: string;
+  /** Still pending at the bank; amount/date may settle differently */
+  pending: boolean;
+}
+
+export interface ReconcileSuggestion {
+  forecastTransactionId: number;
+  billId: number | null;
+  payScheduleId: number | null;
+  plannedAmount: number;
+  plannedDate: string;
+  /** Ranked best-first; more than one means ambiguous — the user chooses */
+  candidates: ReconcileCandidateTxn[];
 }
 
 export interface AnchorForecastInput {

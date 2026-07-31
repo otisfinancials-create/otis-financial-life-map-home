@@ -31,6 +31,7 @@ import {
   useReconcileForecastedTransaction,
   useUnreconcileForecastedTransaction,
   useDismissReconcileMatch,
+  useMarkForecastedTransactionDidntHappen,
   getGetUserSettingsQueryKey,
   getListBalanceSyncsQueryKey,
   useGetCycleBreakdown,
@@ -1037,29 +1038,40 @@ export default function Forecast() {
   const reconcileTx = useReconcileForecastedTransaction();
   const unreconcileTx = useUnreconcileForecastedTransaction();
   const dismissMatch = useDismissReconcileMatch();
+  const didntHappenTx = useMarkForecastedTransactionDidntHappen();
 
-  const handleReconcile = (tx: TxRow) => {
-    const cand = candidateByRowId.get(tx.id);
-    if (!cand) return;
+  const handleReconcile = (tx: TxRow, cand: { plaidTransactionId: number; actualDate: string; actualAmount: number }) => {
     reconcileTx.mutate({ id: tx.id, data: { plaidTransactionId: cand.plaidTransactionId } }, {
       onSuccess: () => {
         invalidate();
         flashSaved(tx.id);
-        toast({ title: "Payment confirmed", description: `Moved to ${fmtShortDate(cand.actualDate)} · $${cand.actualAmount.toFixed(2)}` });
+        toast({
+          title: tx.transactionType === "income" ? "Deposit confirmed" : "Payment confirmed",
+          description: `Updated to ${fmtShortDate(cand.actualDate)} · $${cand.actualAmount.toFixed(2)}`,
+        });
       },
       onError: () => toast({ title: "Failed to confirm", variant: "destructive" }),
     });
   };
 
-  const handleDismissMatch = (tx: TxRow) => {
-    const cand = candidateByRowId.get(tx.id);
-    if (!cand) return;
+  const handleDismissMatch = (tx: TxRow, cand: { plaidTransactionId: number }) => {
     dismissMatch.mutate({ id: tx.id, data: { plaidTransactionId: cand.plaidTransactionId } }, {
       onSuccess: () => {
         invalidate();
-        toast({ title: "Match dismissed", description: "That transaction won't be suggested for this bill again." });
+        toast({ title: "Match dismissed", description: "That transaction won't be suggested again for this row." });
       },
       onError: () => toast({ title: "Failed to dismiss", variant: "destructive" }),
+    });
+  };
+
+  const handleDidntHappen = (tx: TxRow) => {
+    didntHappenTx.mutate({ id: tx.id }, {
+      onSuccess: () => {
+        invalidate();
+        toast({ title: "Removed", description: "This planned item was removed and no longer affects the running balance." });
+        setSelectedTx(null);
+      },
+      onError: () => toast({ title: "Failed to remove", variant: "destructive" }),
     });
   };
 
@@ -2059,59 +2071,66 @@ export default function Forecast() {
                                 className="px-3 py-[11px] flex items-center justify-end gap-1"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && tx.transactionType === "expense" && candidateByRowId.has(tx.id) && (
+                                {/* Reconcile suggestion — a REAL posted actual exists. The user
+                                    sees the posted amount + date before committing. Multiple
+                                    candidates = ambiguous: the user picks one. */}
+                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && candidateByRowId.has(tx.id) && (
                                   <span
                                     data-testid={`reconcile-suggestion-${tx.id}`}
-                                    className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 pl-2 pr-1 py-[3px] text-[11px] whitespace-nowrap"
+                                    className="inline-flex flex-col items-end gap-1"
                                   >
-                                    <span className="text-gray-600">
-                                      Posted: <span className="font-semibold text-foreground">${candidateByRowId.get(tx.id)!.actualAmount.toFixed(2)}</span> on {fmtShortDate(candidateByRowId.get(tx.id)!.actualDate)}
-                                    </span>
-                                    <button
-                                      title="Confirm this posted transaction as this bill's payment"
-                                      data-testid={`button-reconcile-confirm-${tx.id}`}
-                                      onClick={() => handleReconcile(tx)}
-                                      disabled={reconcileTx.isPending}
-                                      className="inline-flex items-center gap-1 rounded border border-primary bg-white px-1.5 py-[1px] font-medium text-primary hover:bg-primary/10 transition-colors"
-                                    >
-                                      Confirm <Check className="h-3 w-3" />
-                                    </button>
-                                    <button
-                                      title="Not a match — don't suggest this transaction again"
-                                      data-testid={`button-reconcile-dismiss-${tx.id}`}
-                                      onClick={() => handleDismissMatch(tx)}
-                                      disabled={dismissMatch.isPending}
-                                      className="text-muted-foreground/60 hover:text-destructive transition-colors px-0.5"
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
+                                    {candidateByRowId.get(tx.id)!.candidates.map((cand) => (
+                                      <span
+                                        key={cand.plaidTransactionId}
+                                        className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 pl-2 pr-1 py-[3px] text-[11px] whitespace-nowrap"
+                                      >
+                                        <span className="text-gray-600">
+                                          Planned <span className="font-medium">${Math.abs(tx.amount).toFixed(2)}</span> · {cand.pending ? "Pending" : "Posted"} <span className="font-semibold text-foreground">${cand.actualAmount.toFixed(2)}</span> on {fmtShortDate(cand.actualDate)}
+                                        </span>
+                                        <button
+                                          title={`Reconcile: confirm "${cand.postedName}" as this ${tx.transactionType === "income" ? "deposit" : "payment"}`}
+                                          data-testid={`button-reconcile-confirm-${tx.id}-${cand.plaidTransactionId}`}
+                                          onClick={() => handleReconcile(tx, cand)}
+                                          disabled={reconcileTx.isPending}
+                                          className="inline-flex items-center gap-1 rounded border border-primary bg-white px-1.5 py-[1px] font-medium text-primary hover:bg-primary/10 transition-colors"
+                                        >
+                                          Reconcile <Check className="h-3 w-3" />
+                                        </button>
+                                        <button
+                                          title="Not a match — don't suggest this transaction again"
+                                          data-testid={`button-reconcile-dismiss-${tx.id}-${cand.plaidTransactionId}`}
+                                          onClick={() => handleDismissMatch(tx, cand)}
+                                          disabled={dismissMatch.isPending}
+                                          className="text-muted-foreground/60 hover:text-destructive transition-colors px-0.5"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </span>
+                                    ))}
                                   </span>
                                 )}
-                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && tx.transactionType === "expense" && !candidateByRowId.has(tx.id) && (
+                                {/* PAST planned row, no posted actual → resolve: mark paid
+                                    (user asserts it happened) or didn't happen (remove).
+                                    FUTURE rows are projections — no confirm/paid buttons. */}
+                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && !candidateByRowId.has(tx.id) && tx.transactionDate <= todayStr && (
                                   <button
-                                    title="Mark as paid"
+                                    title={tx.transactionType === "income" ? "Confirm received — I received this even though no matching deposit was found" : "Mark as paid — I paid this even though no matching transaction was found"}
+                                    data-testid={`button-mark-paid-${tx.id}`}
                                     onClick={() => handleMarkPaid(tx)}
                                     className="rounded-md border border-[#D6DBE3] bg-white px-2 py-[3px] text-[11px] font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors whitespace-nowrap"
                                   >
-                                    Mark paid
+                                    {tx.transactionType === "income" ? "Mark received" : "Mark paid"}
                                   </button>
                                 )}
-                                {!tx.isActual && !isMissed && !isAdjustment && tx.transactionType === "income" && (
+                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && !candidateByRowId.has(tx.id) && tx.transactionDate <= todayStr && (
                                   <button
-                                    title="Confirm received"
-                                    onClick={() => handleMarkPaid(tx)}
-                                    className="inline-flex items-center gap-1 rounded-md border bg-white px-2 py-[3px] text-[11px] font-medium transition-colors whitespace-nowrap hover:bg-primary/10 border-primary text-primary"
+                                    title="Didn't happen — remove this planned item from the ledger"
+                                    data-testid={`button-didnt-happen-${tx.id}`}
+                                    onClick={() => handleDidntHappen(tx)}
+                                    disabled={didntHappenTx.isPending}
+                                    className="rounded-md border border-[#D6DBE3] bg-white px-2 py-[3px] text-[11px] font-medium text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors whitespace-nowrap"
                                   >
-                                    Confirm <Check className="h-3 w-3" />
-                                  </button>
-                                )}
-                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && tx.transactionType === "expense" && tx.transactionDate <= todayStr && (
-                                  <button
-                                    title="Mark as missed"
-                                    onClick={() => handleMarkMissed(tx)}
-                                    className="text-muted-foreground/60 hover:text-orange-500 transition-colors"
-                                  >
-                                    <X className="h-3.5 w-3.5" />
+                                    Didn't happen
                                   </button>
                                 )}
                                 {isMissed && (

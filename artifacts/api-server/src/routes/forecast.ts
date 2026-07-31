@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, and, or, gte, lt, lte, gt, inArray, isNull, isNotNull, desc } from "drizzle-orm";
+import { eq, ne, and, or, gte, lt, lte, gt, inArray, isNull, isNotNull, desc } from "drizzle-orm";
 import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable, cardCyclesTable, billMatchDismissalsTable } from "@workspace/db";
-import { findReconcileCandidates } from "../services/bill-reconciliation";
+import { findReconcileSuggestions } from "../services/bill-reconciliation";
 import { rollActualsForUser } from "../services/actuals-roll";
 import {
   CreateForecastedTransactionBody,
@@ -35,7 +35,12 @@ router.get("/forecast", async (req, res): Promise<void> => {
     return;
   }
 
-  const conditions = [eq(forecastedTransactionsTable.userId, req.userId)];
+  const conditions = [
+    eq(forecastedTransactionsTable.userId, req.userId),
+    // "Didn't happen" rows are removed from the ledger entirely (kept in the
+    // DB only so regeneration doesn't re-emit the occurrence).
+    or(isNull(forecastedTransactionsTable.status), ne(forecastedTransactionsTable.status, "removed"))!,
+  ];
 
   if (queryParams.data.startDate) {
     conditions.push(gte(forecastedTransactionsTable.transactionDate, queryParams.data.startDate));
@@ -98,7 +103,7 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
   for (const row of rows) {
     // Balance-update override rows are balance values, not cash flows; missed
     // rows never happened — both are excluded from monthly totals.
-    if (row.sourceBalanceSyncId != null || row.status === "missed") continue;
+    if (row.sourceBalanceSyncId != null || row.status === "missed" || row.status === "removed") continue;
     // Legacy CC parent rows are payment aggregators — their children already
     // carry the expense amounts, so counting the parent would double-count.
     // Cycle-based payments (sourceCardCycleId) have NO children: the parent
@@ -198,7 +203,7 @@ router.get("/forecast/calendar", async (req, res): Promise<void> => {
   type FRow = (typeof fRows)[number];
   const isOverride = (r: FRow) => r.sourceBalanceSyncId != null;
   const isCcChild = (r: FRow) => r.ccAccountId != null && !r.isCcParent;
-  const countsForBalance = (r: FRow) => !isOverride(r) && !isCcChild(r) && r.status !== "missed";
+  const countsForBalance = (r: FRow) => !isOverride(r) && !isCcChild(r) && r.status !== "missed" && r.status !== "removed";
   const signedF = (r: FRow) => {
     const amt = parseFloat(String(r.amount));
     return r.transactionType === "income" ? amt : -amt;
@@ -256,7 +261,7 @@ router.get("/forecast/calendar", async (req, res): Promise<void> => {
         });
       continue;
     }
-    if (isCcChild(r) || r.status === "missed") continue;
+    if (isCcChild(r) || r.status === "missed" || r.status === "removed") continue;
     if (isOverride(r)) {
       push(r.transactionDate, {
         kind: "balance-update",
@@ -930,7 +935,7 @@ router.post("/forecast/sync-balance", async (req, res): Promise<void> => {
   const overrides = rows
     .filter((r) => r.sourceBalanceSyncId != null && r.transactionDate !== syncDate)
     .sort((a, b) => a.transactionDate.localeCompare(b.transactionDate));
-  const flows = rows.filter((r) => r.sourceBalanceSyncId == null && r.status !== "missed");
+  const flows = rows.filter((r) => r.sourceBalanceSyncId == null && r.status !== "missed" && r.status !== "removed");
 
   const before = overrides.filter((o) => o.transactionDate < syncDate).at(-1);
   const after = overrides.find((o) => o.transactionDate >= syncDate);
@@ -1120,8 +1125,8 @@ router.post("/forecast/reorder", async (req, res): Promise<void> => {
 // ── P6: planned-vs-actual reconciliation for bank-paid bills ────────────────
 
 router.get("/forecast/reconcile-candidates", async (req, res): Promise<void> => {
-  const candidates = await findReconcileCandidates(req.userId);
-  res.json(candidates);
+  const suggestions = await findReconcileSuggestions(req.userId);
+  res.json(suggestions);
 });
 
 /** Load a user's forecast row + validate it's a bank-paid bill row. */
@@ -1145,8 +1150,8 @@ router.post("/forecast/:id/reconcile", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Forecasted transaction not found" });
     return;
   }
-  if (row.sourceBillId == null || row.sourceCardCycleId != null || row.ccAccountId != null) {
-    res.status(400).json({ error: "Only standalone bank-paid bill rows can be reconciled" });
+  if ((row.sourceBillId == null && row.sourcePayId == null) || row.sourceCardCycleId != null || row.ccAccountId != null) {
+    res.status(400).json({ error: "Only standalone bank-paid bill or paycheck rows can be reconciled" });
     return;
   }
   if (row.isActual || row.matchedPlaidTransactionId != null) {
@@ -1154,13 +1159,14 @@ router.post("/forecast/:id/reconcile", async (req, res): Promise<void> => {
     return;
   }
   // Re-derive candidates server-side so a stale client can't link an
-  // arbitrary transaction: the pair must still be a valid match.
-  const candidates = await findReconcileCandidates(req.userId);
-  const match = candidates.find(
-    (c) => c.forecastTransactionId === row.id && c.plaidTransactionId === body.data.plaidTransactionId,
-  );
+  // arbitrary transaction: the pair must still be a valid match. Any listed
+  // candidate is acceptable — when several qualify, the user's choice wins.
+  const suggestions = await findReconcileSuggestions(req.userId);
+  const match = suggestions
+    .find((s) => s.forecastTransactionId === row.id)
+    ?.candidates.find((c) => c.plaidTransactionId === body.data.plaidTransactionId);
   if (!match) {
-    res.status(400).json({ error: "That transaction is no longer a valid match for this bill" });
+    res.status(400).json({ error: "That transaction is no longer a valid match for this row" });
     return;
   }
   const [updated] = await db
@@ -1224,7 +1230,7 @@ router.post("/forecast/:id/dismiss-match", async (req, res): Promise<void> => {
     return;
   }
   const row = await ownedRow(params.data.id, req.userId);
-  if (!row || row.sourceBillId == null) {
+  if (!row || (row.sourceBillId == null && row.sourcePayId == null)) {
     res.status(404).json({ error: "Forecasted transaction not found" });
     return;
   }
@@ -1243,9 +1249,51 @@ router.post("/forecast/:id/dismiss-match", async (req, res): Promise<void> => {
   }
   await db
     .insert(billMatchDismissalsTable)
-    .values({ userId: req.userId, billId: row.sourceBillId, plaidTransactionId: body.data.plaidTransactionId })
+    .values({
+      userId: req.userId,
+      billId: row.sourceBillId,
+      payScheduleId: row.sourceBillId == null ? row.sourcePayId : null,
+      plaidTransactionId: body.data.plaidTransactionId,
+    })
     .onConflictDoNothing();
   await rollActualsForUser(req.userId); // a dismissed txn becomes unplanned spend
+  res.sendStatus(204);
+});
+
+// "Didn't happen" — the user asserts a past planned row never occurred.
+// The row is removed from the ledger (list responses filter it out) and stops
+// stepping the running balance. It is kept in the DB as committed so forecast
+// regeneration doesn't re-emit the same occurrence.
+router.post("/forecast/:id/didnt-happen", async (req, res): Promise<void> => {
+  const params = UpdateForecastedTransactionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const row = await ownedRow(params.data.id, req.userId);
+  if (!row) {
+    res.status(404).json({ error: "Forecasted transaction not found" });
+    return;
+  }
+  if (row.isActual || row.matchedPlaidTransactionId != null) {
+    res.status(400).json({ error: "This row is confirmed against real activity — un-confirm it first" });
+    return;
+  }
+  if (row.sourceBalanceSyncId != null || row.sourceCardCycleId != null || row.isUnplanned) {
+    res.status(400).json({ error: "Only planned rows can be removed as didn't-happen" });
+    return;
+  }
+  // Only PAST rows can be resolved as didn't-happen — future rows are
+  // projections; removing one would permanently suppress the occurrence.
+  if (row.transactionDate > toLocalIso(new Date())) {
+    res.status(400).json({ error: "Future planned rows can't be resolved yet — edit or delete the plan instead" });
+    return;
+  }
+  await db
+    .update(forecastedTransactionsTable)
+    .set({ status: "removed", isActual: false, isCommitted: true })
+    .where(eq(forecastedTransactionsTable.id, row.id));
+  await rollActualsForUser(req.userId);
   res.sendStatus(204);
 });
 

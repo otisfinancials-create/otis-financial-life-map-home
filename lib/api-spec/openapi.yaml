@@ -1219,16 +1219,16 @@ paths:
     get:
       operationId: listReconcileCandidates
       tags: [forecasts]
-      summary: List planned bank-paid bill rows with a matching posted transaction (P6 reconciliation candidates)
+      summary: List planned bank-paid bill/paycheck rows with matching posted transactions (reconciliation suggestions; multiple candidates = user chooses)
       responses:
         "200":
-          description: Reconciliation candidates
+          description: Reconciliation suggestions
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ReconcileCandidate"
+                  $ref: "#/components/schemas/ReconcileSuggestion"
 
   /forecast/{id}/reconcile:
     post:
@@ -1279,6 +1279,25 @@ paths:
                 $ref: "#/components/schemas/ForecastedTransaction"
         "400":
           description: Row is not reconciled
+        "404":
+          description: Not found
+
+  /forecast/{id}/didnt-happen:
+    post:
+      operationId: markForecastedTransactionDidntHappen
+      tags: [forecasts]
+      summary: Remove a past planned row the user asserts never occurred (stops stepping the balance; survives regeneration)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Removed from the ledger
+        "400":
+          description: Row is confirmed or not a planned row
         "404":
           description: Not found
 
@@ -3105,15 +3124,11 @@ components:
         createdAt:
           type: string
 
-    ReconcileCandidate:
+    ReconcileCandidateTxn:
       type: object
-      required: [forecastTransactionId, plaidTransactionId, billId, actualDate, actualAmount, postedName]
+      required: [plaidTransactionId, actualDate, actualAmount, postedName, pending]
       properties:
-        forecastTransactionId:
-          type: integer
         plaidTransactionId:
-          type: integer
-        billId:
           type: integer
         actualDate:
           type: string
@@ -3121,6 +3136,31 @@ components:
           type: number
         postedName:
           type: string
+        pending:
+          type: boolean
+          description: Still pending at the bank; amount/date may settle differently
+
+    ReconcileSuggestion:
+      type: object
+      required: [forecastTransactionId, billId, payScheduleId, plannedAmount, plannedDate, candidates]
+      properties:
+        forecastTransactionId:
+          type: integer
+        billId:
+          type: integer
+          nullable: true
+        payScheduleId:
+          type: integer
+          nullable: true
+        plannedAmount:
+          type: number
+        plannedDate:
+          type: string
+        candidates:
+          type: array
+          description: Ranked best-first; more than one means ambiguous — the user chooses
+          items:
+            $ref: "#/components/schemas/ReconcileCandidateTxn"
 
     AnchorForecastInput:
       type: object

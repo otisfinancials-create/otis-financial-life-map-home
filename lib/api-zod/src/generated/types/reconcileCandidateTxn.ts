@@ -6,11 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ReconcileCandidate {
-  forecastTransactionId: number;
+export interface ReconcileCandidateTxn {
   plaidTransactionId: number;
-  billId: number;
   actualDate: string;
   actualAmount: number;
   postedName: string;
+  /** Still pending at the bank; amount/date may settle differently */
+  pending: boolean;
 }

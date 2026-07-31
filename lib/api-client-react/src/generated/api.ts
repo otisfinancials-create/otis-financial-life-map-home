@@ -93,8 +93,8 @@ import type {
   PlaidTransaction,
   PlaidWebhookInput,
   ProcessCycleSummary,
-  ReconcileCandidate,
   ReconcileForecastInput,
+  ReconcileSuggestion,
   RegenerateForecastResult,
   RemovePlaidItem200,
   ReorderForecastInput,
@@ -4705,11 +4705,11 @@ export const getListReconcileCandidatesUrl = () => {
 }
 
 /**
- * @summary List planned bank-paid bill rows with a matching posted transaction (P6 reconciliation candidates)
+ * @summary List planned bank-paid bill/paycheck rows with matching posted transactions (reconciliation suggestions; multiple candidates = user chooses)
  */
-export const listReconcileCandidates = async ( options?: RequestInit): Promise<ReconcileCandidate[]> => {
+export const listReconcileCandidates = async ( options?: RequestInit): Promise<ReconcileSuggestion[]> => {
 
-  return customFetch<ReconcileCandidate[]>(getListReconcileCandidatesUrl(),
+  return customFetch<ReconcileSuggestion[]>(getListReconcileCandidatesUrl(),
   {
     ...options,
     method: 'GET'
@@ -4752,7 +4752,7 @@ export type ListReconcileCandidatesQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List planned bank-paid bill rows with a matching posted transaction (P6 reconciliation candidates)
+ * @summary List planned bank-paid bill/paycheck rows with matching posted transactions (reconciliation suggestions; multiple candidates = user chooses)
  */
 
 export function useListReconcileCandidates<TData = Awaited<ReturnType<typeof listReconcileCandidates>>, TError = ErrorType<unknown>>(
@@ -4912,6 +4912,76 @@ export const useUnreconcileForecastedTransaction = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUnreconcileForecastedTransactionMutationOptions(options));
+    }
+
+export const getMarkForecastedTransactionDidntHappenUrl = (id: number,) => {
+
+
+
+
+  return `/api/forecast/${id}/didnt-happen`
+}
+
+/**
+ * @summary Remove a past planned row the user asserts never occurred (stops stepping the balance; survives regeneration)
+ */
+export const markForecastedTransactionDidntHappen = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getMarkForecastedTransactionDidntHappenUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getMarkForecastedTransactionDidntHappenMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markForecastedTransactionDidntHappen>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markForecastedTransactionDidntHappen>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['markForecastedTransactionDidntHappen'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markForecastedTransactionDidntHappen>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  markForecastedTransactionDidntHappen(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkForecastedTransactionDidntHappenMutationResult = NonNullable<Awaited<ReturnType<typeof markForecastedTransactionDidntHappen>>>
+
+    export type MarkForecastedTransactionDidntHappenMutationError = ErrorType<void>
+
+    /**
+ * @summary Remove a past planned row the user asserts never occurred (stops stepping the balance; survives regeneration)
+ */
+export const useMarkForecastedTransactionDidntHappen = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markForecastedTransactionDidntHappen>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markForecastedTransactionDidntHappen>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getMarkForecastedTransactionDidntHappenMutationOptions(options));
     }
 
 export const getDismissReconcileMatchUrl = (id: number,) => {

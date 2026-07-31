@@ -1,5 +1,5 @@
-import { eq, sql } from "drizzle-orm";
-import { db, plaidItemsTable, plaidTransactionsTable, balanceSnapshotsTable, type PlaidItem } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
+import { db, plaidItemsTable, plaidTransactionsTable, balanceSnapshotsTable, forecastedTransactionsTable, type PlaidItem } from "@workspace/db";
 import type { Transaction, AccountBase } from "plaid";
 import { plaidClient } from "../lib/plaid";
 import { detectBills } from "./bill-detection";
@@ -37,12 +37,25 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
 
     for (const txn of [...data.added, ...data.modified]) {
       await upsertTransaction(item.userId, item.id, txn);
+      // A pending transaction the user reconciled a planned row against may
+      // settle under a NEW Plaid id (pending_transaction_id points back at
+      // it). Remap the reconciliation link to the settled transaction and
+      // update the row to the settled amount/date, so the link survives the
+      // pending row's removal and the cash event still counts exactly once.
+      if (txn.pending_transaction_id) {
+        await remapReconciledLink(item.userId, txn.pending_transaction_id, txn);
+      }
     }
     counts.added += data.added.length;
     counts.modified += data.modified.length;
 
     for (const removed of data.removed) {
       if (removed.transaction_id) {
+        // If a reconciled forecast row still links to this transaction (a
+        // pending charge that was cancelled rather than settled), revert the
+        // row to planned before deleting — otherwise it would keep stepping
+        // the balance for money that never moved.
+        await revertOrphanedLinks(item.userId, removed.transaction_id);
         await db
           .delete(plaidTransactionsTable)
           .where(eq(plaidTransactionsTable.plaidTransactionId, removed.transaction_id));
@@ -190,6 +203,73 @@ async function captureBalanceSnapshots(item: PlaidItem, accounts: AccountBase[] 
     captured++;
   }
   return captured;
+}
+
+/** Move a reconciliation link from a settled-away pending transaction to its
+ * settled replacement, updating the row to the settled amount/date. */
+async function remapReconciledLink(userId: string, pendingPlaidTxnId: string, settled: Transaction): Promise<void> {
+  const [pendingRow] = await db
+    .select({ id: plaidTransactionsTable.id })
+    .from(plaidTransactionsTable)
+    .where(eq(plaidTransactionsTable.plaidTransactionId, pendingPlaidTxnId));
+  if (!pendingRow) return;
+  const [settledRow] = await db
+    .select({ id: plaidTransactionsTable.id })
+    .from(plaidTransactionsTable)
+    .where(eq(plaidTransactionsTable.plaidTransactionId, settled.transaction_id));
+  if (!settledRow) return;
+  const updated = await db
+    .update(forecastedTransactionsTable)
+    .set({
+      matchedPlaidTransactionId: settledRow.id,
+      transactionDate: settled.date,
+      amount: String(Math.abs(settled.amount)),
+    })
+    .where(and(
+      eq(forecastedTransactionsTable.userId, userId),
+      eq(forecastedTransactionsTable.matchedPlaidTransactionId, pendingRow.id),
+    ))
+    .returning({ id: forecastedTransactionsTable.id });
+  if (updated.length > 0) {
+    logger.info({ userId, pendingPlaidTxnId, settledId: settledRow.id, rows: updated.map((r) => r.id) }, "Remapped reconciled link from pending to settled transaction");
+  }
+}
+
+/** A linked transaction is being deleted (cancelled pending): revert any
+ * reconciled forecast rows to their planned state. */
+async function revertOrphanedLinks(userId: string, plaidTxnId: string): Promise<void> {
+  const [txnRow] = await db
+    .select({ id: plaidTransactionsTable.id })
+    .from(plaidTransactionsTable)
+    .where(eq(plaidTransactionsTable.plaidTransactionId, plaidTxnId));
+  if (!txnRow) return;
+  const linked = await db
+    .select()
+    .from(forecastedTransactionsTable)
+    .where(and(
+      eq(forecastedTransactionsTable.userId, userId),
+      eq(forecastedTransactionsTable.matchedPlaidTransactionId, txnRow.id),
+    ));
+  for (const row of linked) {
+    if (row.isUnplanned) {
+      // Derived rows are rebuilt by the roll; just delete.
+      await db.delete(forecastedTransactionsTable).where(eq(forecastedTransactionsTable.id, row.id));
+      continue;
+    }
+    await db
+      .update(forecastedTransactionsTable)
+      .set({
+        transactionDate: row.forecastedDate ?? row.transactionDate,
+        ...(row.forecastedAmount != null && { amount: String(row.forecastedAmount), forecastedAmount: null }),
+        forecastedDate: null,
+        isActual: false,
+        isCommitted: false,
+        status: null,
+        matchedPlaidTransactionId: null,
+      })
+      .where(eq(forecastedTransactionsTable.id, row.id));
+    logger.info({ userId, plaidTxnId, forecastRowId: row.id }, "Reverted reconciled row: linked pending transaction was removed");
+  }
 }
 
 async function upsertTransaction(userId: string, plaidItemId: number, txn: Transaction): Promise<void> {

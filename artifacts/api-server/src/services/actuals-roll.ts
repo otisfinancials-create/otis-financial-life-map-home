@@ -7,7 +7,7 @@ import {
   forecastedTransactionsTable,
 } from "@workspace/db";
 import { and, eq, gte, lt, inArray, isNull, isNotNull, or } from "drizzle-orm";
-import { findReconcileCandidates } from "./bill-reconciliation";
+import { findReconcileSuggestions } from "./bill-reconciliation";
 import { logger } from "../lib/logger";
 
 /**
@@ -34,8 +34,6 @@ import { logger } from "../lib/logger";
  */
 
 const GRACE_DAYS = 3; // planned rows stay "pending" this long past their date
-const PAY_DATE_WINDOW = 7; // days, paycheck deposit matching
-const PAY_AMOUNT_TOLERANCE = 0.25; // paycheck amounts vary more than bills
 
 function localIso(d = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -90,15 +88,21 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
   const todayStr = localIso();
   const graceCutoff = addDaysIso(todayStr, -GRACE_DAYS);
 
-  // ── 1a. Auto-reconcile stale BANK-PAID BILL rows that have a valid match ──
-  // (uses the same candidate criteria as the manual Confirm chip)
-  let candidates = await findReconcileCandidates(userId);
-  for (const cand of candidates) {
+  // ── 1a. Auto-reconcile stale BANK-PAID BILL and PAYCHECK rows ──
+  // (same candidate criteria as the manual Reconcile chip). Only rows with
+  // exactly ONE candidate auto-confirm — an ambiguous match (several
+  // qualifying transactions, common for variable bills/income where amount
+  // carries no signal) is always left for the user to choose.
+  let suggestions = await findReconcileSuggestions(userId);
+  for (const sug of suggestions) {
+    if (sug.candidates.length !== 1) continue;
+    const cand = sug.candidates[0];
+    if (cand.pending) continue; // pending amounts/dates can settle differently — user-confirm only
     const [row] = await db
       .select()
       .from(forecastedTransactionsTable)
       .where(and(
-        eq(forecastedTransactionsTable.id, cand.forecastTransactionId),
+        eq(forecastedTransactionsTable.id, sug.forecastTransactionId),
         eq(forecastedTransactionsTable.userId, userId),
       ));
     if (!row || row.isActual || row.transactionDate >= graceCutoff) continue; // only stale rows auto-confirm
@@ -115,7 +119,8 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
         matchedPlaidTransactionId: cand.plaidTransactionId,
       })
       .where(eq(forecastedTransactionsTable.id, row.id));
-    result.autoReconciled++;
+    if (row.sourcePayId != null) result.paychecksConfirmed++;
+    else result.autoReconciled++;
   }
 
   // ── Load bank accounts + posted window transactions ──
@@ -150,23 +155,9 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
         ))
     : [];
 
-  // ── 1b. Confirm stale PAYCHECK rows against posted deposits ──
-  const paySchedules = await db
-    .select({ id: paySchedulesTable.id, employerName: paySchedulesTable.employerName })
-    .from(paySchedulesTable)
-    .where(eq(paySchedulesTable.userId, userId));
-  const employerByPayId = new Map(paySchedules.map((p) => [p.id, p.employerName.toLowerCase()]));
-
-  const plannedPayRows = await db
-    .select()
-    .from(forecastedTransactionsTable)
-    .where(and(
-      eq(forecastedTransactionsTable.userId, userId),
-      isNotNull(forecastedTransactionsTable.sourcePayId),
-      eq(forecastedTransactionsTable.isActual, false),
-      isNull(forecastedTransactionsTable.status),
-      lt(forecastedTransactionsTable.transactionDate, todayStr),
-    ));
+  // (Paycheck deposits are handled by the unified suggestion service above —
+  // stale single-candidate pay rows auto-confirm in 1a, and every live
+  // candidate deposit is excluded from the unplanned buckets in phase 2.)
 
   // Unplanned rows are excluded: they are rebuilt from scratch below, so
   // their links must not mask the very transactions they were derived from.
@@ -179,49 +170,6 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
       eq(forecastedTransactionsTable.isUnplanned, false),
     ));
   const claimedTxnIds = new Set(linkedRows.map((r) => r.matchedId!));
-
-  const depositMatches = (row: typeof plannedPayRows[number], t: typeof txns[number]): boolean => {
-    const employer = row.sourcePayId != null ? employerByPayId.get(row.sourcePayId) : undefined;
-    if (!employer) return false;
-    const label = `${t.merchantName ?? ""} ${t.name ?? ""}`.toLowerCase();
-    if (!label.includes(employer) && !employer.includes((t.merchantName ?? t.name ?? "").toLowerCase() || "\u0000")) return false;
-    const deposit = -parseFloat(String(t.amount)); // Plaid: negative = inflow
-    if (!(deposit > 0)) return false;
-    const planned = Math.abs(parseFloat(String(row.amount)));
-    if (Math.abs(deposit - planned) > planned * PAY_AMOUNT_TOLERANCE) return false;
-    return dayDiff(t.date, row.transactionDate) <= PAY_DATE_WINDOW;
-  };
-
-  // Deposits that match ANY planned pay row (stale or not) belong to the
-  // paycheck path and never roll as unplanned income.
-  const payCandidateTxnIds = new Set<number>();
-  for (const row of plannedPayRows) {
-    for (const t of txns) {
-      if (claimedTxnIds.has(t.id) || payCandidateTxnIds.has(t.id)) continue;
-      if (!depositMatches(row, t)) continue;
-      payCandidateTxnIds.add(t.id);
-      // Stale rows auto-confirm onto the posted deposit.
-      if (row.transactionDate < graceCutoff) {
-        const deposit = -parseFloat(String(t.amount));
-        await db
-          .update(forecastedTransactionsTable)
-          .set({
-            transactionDate: t.date,
-            amount: String(Math.round(deposit * 100) / 100),
-            forecastedDate: row.transactionDate,
-            forecastedAmount: row.amount,
-            isActual: true,
-            isCommitted: true,
-            status: null,
-            matchedPlaidTransactionId: t.id,
-          })
-          .where(eq(forecastedTransactionsTable.id, row.id));
-        claimedTxnIds.add(t.id);
-        result.paychecksConfirmed++;
-      }
-      break; // one deposit per pay row
-    }
-  }
 
   // ── 1c. Reconcile posted bank-side card payments with planned CC parents ──
   // A payment FROM the bank TO a card is a real cash outflow. When a planned
@@ -323,9 +271,9 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
   // Re-derive candidates AFTER resolution: any transaction that is still a
   // live Confirm suggestion is excluded (its planned row steps the balance
   // until the user decides), keeping every posted transaction counted once.
-  candidates = await findReconcileCandidates(userId);
-  const excluded = new Set<number>([...claimedTxnIds, ...payCandidateTxnIds]);
-  for (const c of candidates) excluded.add(c.plaidTransactionId);
+  suggestions = await findReconcileSuggestions(userId);
+  const excluded = new Set<number>(claimedTxnIds);
+  for (const s of suggestions) for (const c of s.candidates) excluded.add(c.plaidTransactionId);
   // Refresh linked ids (auto-reconciles above added links). Unplanned rows'
   // links are ignored — those rows are deleted and rebuilt just below.
   const linkedNow = await db

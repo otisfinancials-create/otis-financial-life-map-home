@@ -1587,15 +1587,21 @@ export const AnchorForecastResponse = zod.object({
 
 
 /**
- * @summary List planned bank-paid bill rows with a matching posted transaction (P6 reconciliation candidates)
+ * @summary List planned bank-paid bill/paycheck rows with matching posted transactions (reconciliation suggestions; multiple candidates = user chooses)
  */
 export const ListReconcileCandidatesResponseItem = zod.object({
   "forecastTransactionId": zod.number(),
+  "billId": zod.number().nullable(),
+  "payScheduleId": zod.number().nullable(),
+  "plannedAmount": zod.number(),
+  "plannedDate": zod.string(),
+  "candidates": zod.array(zod.object({
   "plaidTransactionId": zod.number(),
-  "billId": zod.number(),
   "actualDate": zod.string(),
   "actualAmount": zod.number(),
-  "postedName": zod.string()
+  "postedName": zod.string(),
+  "pending": zod.boolean().describe('Still pending at the bank; amount\/date may settle differently')
+})).describe('Ranked best-first; more than one means ambiguous — the user chooses')
 })
 export const ListReconcileCandidatesResponse = zod.array(ListReconcileCandidatesResponseItem)
 
@@ -1672,6 +1678,16 @@ export const UnreconcileForecastedTransactionResponse = zod.object({
   "sortOrder": zod.number(),
   "createdAt": zod.string()
 })
+
+
+/**
+ * @summary Remove a past planned row the user asserts never occurred (stops stepping the balance; survives regeneration)
+ */
+export const MarkForecastedTransactionDidntHappenParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const MarkForecastedTransactionDidntHappenResponse = zod.void()
 
 
 /**
