@@ -572,6 +572,7 @@ type TxRow = {
   matchedPlaidTransactionId?: number | null;
   forecastedDate?: string | null;
   isUnplanned?: boolean;
+  isAssetMovement?: boolean;
   sortOrder: number;
   createdAt: string;
   runningBalance: number;
@@ -888,8 +889,10 @@ export default function Forecast() {
       map[key].rows.push(t);
       // Balance updates are balance values (not cash flows), missed rows never
       // happened, and CC child rows are aggregated into their parent — none of
-      // them count toward monthly income/expense totals.
-      if (t.sourceBalanceSyncId == null && t.status !== "missed" && !isCcChild(t)) {
+      // them count toward monthly income/expense totals. Asset movement rows
+      // (transfers to the user's own savings/investment accounts) still step
+      // the running balance but are NOT spending, so they stay out of totals.
+      if (t.sourceBalanceSyncId == null && t.status !== "missed" && !isCcChild(t) && !t.isAssetMovement) {
         if (t.transactionType === "income") map[key].income += t.amount;
         else map[key].expenses += t.amount;
       }

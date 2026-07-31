@@ -3,6 +3,16 @@ import { eq, ne, and, or, gte, lt, lte, gt, inArray, isNull, isNotNull, desc } f
 import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable, cardCyclesTable, billMatchDismissalsTable } from "@workspace/db";
 import { findReconcileSuggestions } from "../services/bill-reconciliation";
 import { rollActualsForUser } from "../services/actuals-roll";
+import { getForecastAccounts } from "../services/forecast-accounts";
+
+// Detailed Plaid categories treated as asset movement (kept in sync with
+// services/actuals-roll.ts — the ledger classification source of truth).
+const ASSET_MOVEMENT_DETAILED_CATEGORIES = new Set([
+  "TRANSFER_OUT_ACCOUNT_TRANSFER",
+  "TRANSFER_IN_ACCOUNT_TRANSFER",
+  "TRANSFER_OUT_SAVINGS",
+  "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS",
+]);
 import {
   CreateForecastedTransactionBody,
   UpdateForecastedTransactionBody,
@@ -287,9 +297,12 @@ router.get("/forecast/calendar", async (req, res): Promise<void> => {
     });
   }
 
-  // ACTUALS — past days, from posted Plaid transactions on cash accounts.
+  // ACTUALS — past days, from posted Plaid transactions on forecast accounts
+  // (same single-source-of-truth set the actuals roll ingests from).
   if (monthStart < todayStr) {
     const pastEnd = monthEnd < todayStr ? monthEnd : addDaysIso(todayStr, -1);
+    const { accounts: calForecastAccounts } = await getForecastAccounts(req.userId);
+    const calForecastIds = calForecastAccounts.map((a) => a.plaidAccountId!);
     const txns = await db
       .select({
         id: plaidTransactionsTable.id,
@@ -306,6 +319,9 @@ router.get("/forecast/calendar", async (req, res): Promise<void> => {
       .where(
         and(
           eq(plaidTransactionsTable.userId, req.userId),
+          calForecastIds.length > 0
+            ? inArray(plaidTransactionsTable.accountId, calForecastIds)
+            : eq(plaidTransactionsTable.id, -1), // no forecast accounts → no cash-view actuals
           eq(plaidTransactionsTable.pending, false),
           gte(plaidTransactionsTable.date, monthStart),
           lte(plaidTransactionsTable.date, pastEnd),
@@ -347,6 +363,13 @@ router.get("/forecast/calendar", async (req, res): Promise<void> => {
       if (t.accountType === "credit_card") continue; // card charges live inside cycles, not the cash view
       const amt = parseFloat(String(t.amount)); // Plaid: positive = outflow
       const label = t.merchantName ?? t.name ?? "Transaction";
+      // Asset movement (transfers between the user's own accounts) must be
+      // classified BEFORE generic income/spend handling: it still steps the
+      // day's net — the cash genuinely moved — but is never income or spend.
+      if (ASSET_MOVEMENT_DETAILED_CATEGORIES.has(t.detailed ?? "")) {
+        push(t.date, { kind: "other", label: `Asset movement — ${label}`, amount: cents(-amt), category: "Asset Movement" });
+        continue;
+      }
       if (amt < 0) {
         push(t.date, { kind: "income", label, amount: cents(-amt) });
         continue;
@@ -816,14 +839,16 @@ router.post("/forecast/anchor", async (req, res): Promise<void> => {
     return;
   }
 
-  const bankAccounts = await db
-    .select()
-    .from(accountsTable)
-    .where(and(
-      eq(accountsTable.userId, req.userId),
-      isNotNull(accountsTable.plaidAccountId),
-    ));
-  const cashAccounts = bankAccounts.filter((a) => a.accountType !== "credit_card");
+  // SINGLE SOURCE OF TRUTH: same account set the actuals roll ingests from
+  // (services/forecast-accounts.ts) — anchor and ingestion must never drift.
+  const { accounts: cashAccounts, noneSelected } = await getForecastAccounts(req.userId);
+  if (noneSelected) {
+    res.status(409).json({
+      error: "No accounts are selected for your forecast. Choose at least one account you pay bills from.",
+      code: "NO_FORECAST_ACCOUNTS",
+    });
+    return;
+  }
 
   const breakdown: Array<{ accountId: number; accountName: string; currentBalance: number; netSinceStart: number; startBalance: number }> = [];
   for (const acct of cashAccounts) {

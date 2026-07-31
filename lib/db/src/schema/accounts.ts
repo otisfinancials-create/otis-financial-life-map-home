@@ -13,6 +13,10 @@ export const accountsTable = pgTable("accounts", {
   savingsGoal: numeric("savings_goal", { precision: 15, scale: 2 }),
   retirementSubtype: text("retirement_subtype"),
   isAsset: boolean("is_asset").notNull().default(true),
+  // Forecast account boundary: only accounts the user explicitly opted in
+  // contribute to the forecast's running balance / actuals ingestion.
+  // Credit cards are NEVER forecast accounts (enforced in routes).
+  isForecastAccount: boolean("is_forecast_account").notNull().default(false),
   accountNumberLast4: text("account_number_last4"),
   ccCycleStartDate: integer("cc_cycle_start_date"),
   ccCycleEndDate: integer("cc_cycle_end_date"),

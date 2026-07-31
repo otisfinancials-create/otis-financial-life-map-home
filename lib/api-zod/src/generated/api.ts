@@ -444,6 +444,7 @@ export const ListAccountsResponseItem = zod.object({
   "savingsGoal": zod.number().nullish(),
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
+  "isForecastAccount": zod.boolean().describe('Account contributes to the forecast\'s running balance (\"pay bills from\"); always false for credit cards'),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "ccCycleStartDate": zod.number().min(1).max(listAccountsResponseCcCycleStartDateMax).nullish(),
@@ -512,6 +513,7 @@ export const CreateAccountResponse = zod.object({
   "savingsGoal": zod.number().nullish(),
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
+  "isForecastAccount": zod.boolean().describe('Account contributes to the forecast\'s running balance (\"pay bills from\"); always false for credit cards'),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "ccCycleStartDate": zod.number().min(1).max(createAccountResponseCcCycleStartDateMax).nullish(),
@@ -631,6 +633,7 @@ export const GetAccountResponse = zod.object({
   "savingsGoal": zod.number().nullish(),
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
+  "isForecastAccount": zod.boolean().describe('Account contributes to the forecast\'s running balance (\"pay bills from\"); always false for credit cards'),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "ccCycleStartDate": zod.number().min(1).max(getAccountResponseCcCycleStartDateMax).nullish(),
@@ -673,6 +676,7 @@ export const UpdateAccountBody = zod.object({
   "savingsGoal": zod.number().nullish(),
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean().optional(),
+  "isForecastAccount": zod.boolean().optional().describe('Whether this account pays bills \/ feeds the forecast (ignored for credit cards — always false)'),
   "accountNumberLast4": zod.string().regex(updateAccountBodyAccountNumberLast4RegExp).nullish(),
   "notes": zod.string().nullish(),
   "ccCycleStartDate": zod.number().min(1).max(updateAccountBodyCcCycleStartDateMax).nullish(),
@@ -702,6 +706,7 @@ export const UpdateAccountResponse = zod.object({
   "savingsGoal": zod.number().nullish(),
   "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
   "isAsset": zod.boolean(),
+  "isForecastAccount": zod.boolean().describe('Account contributes to the forecast\'s running balance (\"pay bills from\"); always false for credit cards'),
   "accountNumberLast4": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "ccCycleStartDate": zod.number().min(1).max(updateAccountResponseCcCycleStartDateMax).nullish(),
@@ -1446,6 +1451,7 @@ export const ListForecastResponseItem = zod.object({
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
   "isUnplanned": zod.boolean().optional().describe('Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable'),
+  "isAssetMovement": zod.boolean().optional().describe('Money moving between the user\'s own accounts (savings\/investment\/account transfers) — steps the balance but is excluded from spending totals'),
   "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
@@ -1490,6 +1496,7 @@ export const CreateForecastedTransactionResponse = zod.object({
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
   "isUnplanned": zod.boolean().optional().describe('Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable'),
+  "isAssetMovement": zod.boolean().optional().describe('Money moving between the user\'s own accounts (savings\/investment\/account transfers) — steps the balance but is excluded from spending totals'),
   "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
@@ -1565,6 +1572,7 @@ export const ReorderForecastResponse = zod.object({
 
 
 /**
+ * Returns 409 with code NO_FORECAST_ACCOUNTS when the user has linked cash accounts but none selected for the forecast.
  * @summary Set the forecast start date and reconstruct the anchor balance as of that date (preview or save)
  */
 export const AnchorForecastBody = zod.object({
@@ -1639,6 +1647,7 @@ export const ReconcileForecastedTransactionResponse = zod.object({
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
   "isUnplanned": zod.boolean().optional().describe('Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable'),
+  "isAssetMovement": zod.boolean().optional().describe('Money moving between the user\'s own accounts (savings\/investment\/account transfers) — steps the balance but is excluded from spending totals'),
   "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
@@ -1674,6 +1683,7 @@ export const UnreconcileForecastedTransactionResponse = zod.object({
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
   "isUnplanned": zod.boolean().optional().describe('Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable'),
+  "isAssetMovement": zod.boolean().optional().describe('Money moving between the user\'s own accounts (savings\/investment\/account transfers) — steps the balance but is excluded from spending totals'),
   "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
@@ -1747,6 +1757,7 @@ export const UpdateForecastedTransactionResponse = zod.object({
   "forecastedAmount": zod.number().nullish().describe('Original planned amount, kept when the user confirms a different actual amount'),
   "matchedPlaidTransactionId": zod.number().nullish().describe('Posted bank transaction confirmed as this bill\'s payment (P6 reconciliation)'),
   "isUnplanned": zod.boolean().optional().describe('Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable'),
+  "isAssetMovement": zod.boolean().optional().describe('Money moving between the user\'s own accounts (savings\/investment\/account transfers) — steps the balance but is excluded from spending totals'),
   "forecastedDate": zod.string().nullish().describe('Original planned date, kept when the row moved to the actual posted date'),
   "sortOrder": zod.number(),
   "createdAt": zod.string()
@@ -2003,7 +2014,34 @@ export const ExchangePlaidTokenResponse = zod.object({
   "success": zod.boolean(),
   "itemId": zod.number().describe('Internal plaid_items row id (never the Plaid access token)'),
   "institutionName": zod.string(),
-  "accountsAdded": zod.number()
+  "accountsAdded": zod.number(),
+  "accounts": zod.array(zod.object({
+  "id": zod.number(),
+  "accountName": zod.string(),
+  "accountType": zod.string(),
+  "accountNumberLast4": zod.string().nullable(),
+  "isForecastAccount": zod.boolean()
+})).describe('This item\'s imported accounts, for the connect-time \"which accounts do you pay bills from?\" selection step')
+})
+
+
+/**
+ * @summary Set which of a linked item's accounts pay bills (feed the forecast)
+ */
+export const SetPlaidForecastAccountsBody = zod.object({
+  "itemId": zod.number().describe('Internal plaid_items row id whose accounts are being configured'),
+  "selectedAccountIds": zod.array(zod.number()).describe('Account ids (from this item) the user pays bills from; other non-credit-card accounts of the item are set to false')
+})
+
+export const SetPlaidForecastAccountsResponse = zod.object({
+  "updated": zod.number(),
+  "accounts": zod.array(zod.object({
+  "id": zod.number(),
+  "accountName": zod.string(),
+  "accountType": zod.string(),
+  "accountNumberLast4": zod.string().nullable(),
+  "isForecastAccount": zod.boolean()
+}))
 })
 
 

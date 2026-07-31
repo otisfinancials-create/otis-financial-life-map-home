@@ -1197,6 +1197,7 @@ paths:
   /forecast/anchor:
     post:
       operationId: anchorForecast
+      description: Returns 409 with code NO_FORECAST_ACCOUNTS when the user has linked cash accounts but none selected for the forecast.
       tags: [forecasts]
       summary: Set the forecast start date and reconstruct the anchor balance as of that date (preview or save)
       requestBody:
@@ -1587,6 +1588,27 @@ paths:
                 $ref: "#/components/schemas/PlaidExchangeResult"
         "502":
           description: Plaid error
+
+  /plaid/forecast-accounts:
+    put:
+      operationId: setPlaidForecastAccounts
+      tags: [plaid]
+      summary: Set which of a linked item's accounts pay bills (feed the forecast)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaidForecastAccountsInput"
+      responses:
+        "200":
+          description: Selection saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaidForecastAccountsResult"
+        "404":
+          description: Item not found
 
   /bills/link-review:
     get:
@@ -2349,7 +2371,7 @@ components:
     # ── Accounts ─────────────────────────────────────────────────────────────
     Account:
       type: object
-      required: [id, accountName, accountType, institutionName, currentBalance, monthlyContribution, isAsset, createdAt, updatedAt]
+      required: [id, accountName, accountType, institutionName, currentBalance, monthlyContribution, isAsset, isForecastAccount, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -2370,6 +2392,9 @@ components:
           enum: ["401k", "ira", "roth_ira", "pension", "other", null]
         isAsset:
           type: boolean
+        isForecastAccount:
+          type: boolean
+          description: Account contributes to the forecast's running balance ("pay bills from"); always false for credit cards
         accountNumberLast4:
           type: ["string", "null"]
         notes:
@@ -2742,6 +2767,9 @@ components:
           enum: ["401k", "ira", "roth_ira", "pension", "other", null]
         isAsset:
           type: boolean
+        isForecastAccount:
+          type: boolean
+          description: Whether this account pays bills / feeds the forecast (ignored for credit cards — always false)
         accountNumberLast4:
           type: ["string", "null"]
           pattern: "^\\d{4}$"
@@ -3116,6 +3144,9 @@ components:
         isUnplanned:
           type: boolean
           description: Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable
+        isAssetMovement:
+          type: boolean
+          description: Money moving between the user's own accounts (savings/investment/account transfers) — steps the balance but is excluded from spending totals
         forecastedDate:
           type: ["string", "null"]
           description: Original planned date, kept when the row moved to the actual posted date
@@ -3623,7 +3654,7 @@ components:
 
     PlaidExchangeResult:
       type: object
-      required: [success, itemId, institutionName, accountsAdded]
+      required: [success, itemId, institutionName, accountsAdded, accounts]
       properties:
         success:
           type: boolean
@@ -3634,6 +3665,50 @@ components:
           type: string
         accountsAdded:
           type: integer
+        accounts:
+          type: array
+          description: This item's imported accounts, for the connect-time "which accounts do you pay bills from?" selection step
+          items:
+            $ref: "#/components/schemas/PlaidLinkedAccount"
+
+    PlaidLinkedAccount:
+      type: object
+      required: [id, accountName, accountType, accountNumberLast4, isForecastAccount]
+      properties:
+        id:
+          type: integer
+        accountName:
+          type: string
+        accountType:
+          type: string
+        accountNumberLast4:
+          type: ["string", "null"]
+        isForecastAccount:
+          type: boolean
+
+    PlaidForecastAccountsInput:
+      type: object
+      required: [itemId, selectedAccountIds]
+      properties:
+        itemId:
+          type: integer
+          description: Internal plaid_items row id whose accounts are being configured
+        selectedAccountIds:
+          type: array
+          items:
+            type: integer
+          description: Account ids (from this item) the user pays bills from; other non-credit-card accounts of the item are set to false
+
+    PlaidForecastAccountsResult:
+      type: object
+      required: [updated, accounts]
+      properties:
+        updated:
+          type: integer
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaidLinkedAccount"
 
     PlaidDisconnectInput:
       type: object

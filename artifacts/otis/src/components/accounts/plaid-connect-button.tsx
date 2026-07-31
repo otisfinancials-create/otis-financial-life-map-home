@@ -17,9 +17,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
+import { ForecastAccountsDialog, type LinkedAccountOption } from "@/components/accounts/forecast-accounts-dialog";
 
 export function PlaidConnectButton() {
   const [linkToken, setLinkToken] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{ itemId: number; accounts: LinkedAccountOption[] } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -83,6 +85,12 @@ export function PlaidConnectButton() {
                   ? `${result.accountsAdded} account${result.accountsAdded === 1 ? "" : "s"} imported.`
                   : "Your accounts are up to date.",
             });
+            // Selection step: which accounts do you pay bills from? Credit
+            // cards are excluded inside the dialog; if the bank returned only
+            // cards there is nothing to ask.
+            if (result.accounts.some((a) => a.accountType !== "credit_card")) {
+              setSelection({ itemId: result.itemId, accounts: result.accounts });
+            }
             runDetection();
           },
           onError: () => {
@@ -128,9 +136,18 @@ export function PlaidConnectButton() {
   const busy = createLinkToken.isPending || exchangeToken.isPending || (linkToken != null && !ready);
 
   return (
-    <Button variant="outline" onClick={handleClick} disabled={busy}>
-      {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}
-      {exchangeToken.isPending ? "Importing accounts..." : busy ? "Connecting..." : "Connect Bank Account"}
-    </Button>
+    <>
+      <Button variant="outline" onClick={handleClick} disabled={busy}>
+        {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}
+        {exchangeToken.isPending ? "Importing accounts..." : busy ? "Connecting..." : "Connect Bank Account"}
+      </Button>
+      {selection && (
+        <ForecastAccountsDialog
+          itemId={selection.itemId}
+          accounts={selection.accounts}
+          onClose={() => setSelection(null)}
+        />
+      )}
+    </>
   );
 }

@@ -88,6 +88,8 @@ import type {
   PlaidDisconnectResult,
   PlaidExchangeInput,
   PlaidExchangeResult,
+  PlaidForecastAccountsInput,
+  PlaidForecastAccountsResult,
   PlaidLinkToken,
   PlaidSyncResult,
   PlaidTransaction,
@@ -4635,6 +4637,7 @@ export const getAnchorForecastUrl = () => {
 }
 
 /**
+ * Returns 409 with code NO_FORECAST_ACCOUNTS when the user has linked cash accounts but none selected for the forecast.
  * @summary Set the forecast start date and reconstruct the anchor balance as of that date (preview or save)
  */
 export const anchorForecast = async (anchorForecastInput: AnchorForecastInput, options?: RequestInit): Promise<AnchorForecastResult> => {
@@ -6216,6 +6219,76 @@ export const useExchangePlaidToken = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getExchangePlaidTokenMutationOptions(options));
+    }
+
+export const getSetPlaidForecastAccountsUrl = () => {
+
+
+
+
+  return `/api/plaid/forecast-accounts`
+}
+
+/**
+ * @summary Set which of a linked item's accounts pay bills (feed the forecast)
+ */
+export const setPlaidForecastAccounts = async (plaidForecastAccountsInput: PlaidForecastAccountsInput, options?: RequestInit): Promise<PlaidForecastAccountsResult> => {
+
+  return customFetch<PlaidForecastAccountsResult>(getSetPlaidForecastAccountsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(plaidForecastAccountsInput)
+  }
+);}
+
+
+
+
+export const getSetPlaidForecastAccountsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPlaidForecastAccounts>>, TError,{data: BodyType<PlaidForecastAccountsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setPlaidForecastAccounts>>, TError,{data: BodyType<PlaidForecastAccountsInput>}, TContext> => {
+
+const mutationKey = ['setPlaidForecastAccounts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setPlaidForecastAccounts>>, {data: BodyType<PlaidForecastAccountsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  setPlaidForecastAccounts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetPlaidForecastAccountsMutationResult = NonNullable<Awaited<ReturnType<typeof setPlaidForecastAccounts>>>
+    export type SetPlaidForecastAccountsMutationBody = BodyType<PlaidForecastAccountsInput>
+    export type SetPlaidForecastAccountsMutationError = ErrorType<void>
+
+    /**
+ * @summary Set which of a linked item's accounts pay bills (feed the forecast)
+ */
+export const useSetPlaidForecastAccounts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPlaidForecastAccounts>>, TError,{data: BodyType<PlaidForecastAccountsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setPlaidForecastAccounts>>,
+        TError,
+        {data: BodyType<PlaidForecastAccountsInput>},
+        TContext
+      > => {
+      return useMutation(getSetPlaidForecastAccountsMutationOptions(options));
     }
 
 export const getGetBillLinkReviewUrl = () => {

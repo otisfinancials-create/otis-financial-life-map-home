@@ -44,6 +44,11 @@ export const forecastedTransactionsTable = pgTable("forecasted_transactions", {
   // (start date → today) not matched to any planned bill/paycheck, bucketed
   // by day+category. Rebuilt idempotently by rollActualsForUser; not editable.
   isUnplanned: boolean("is_unplanned").notNull().default(false),
+  // Transfer classification: true when this row is money moving between the
+  // user's own accounts (savings/investment/account transfers) rather than
+  // spending. It still steps the running balance (the cash genuinely left the
+  // forecast pool) but must be excluded from expense/spending totals.
+  isAssetMovement: boolean("is_asset_movement").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

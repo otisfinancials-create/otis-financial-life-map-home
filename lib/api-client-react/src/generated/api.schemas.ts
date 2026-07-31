@@ -335,6 +335,8 @@ export interface Account {
   /** @nullable */
   retirementSubtype?: AccountRetirementSubtype;
   isAsset: boolean;
+  /** Account contributes to the forecast's running balance ("pay bills from"); always false for credit cards */
+  isForecastAccount: boolean;
   /** @nullable */
   accountNumberLast4?: string | null;
   /** @nullable */
@@ -717,6 +719,8 @@ export interface AccountUpdate {
   /** @nullable */
   retirementSubtype?: AccountUpdateRetirementSubtype;
   isAsset?: boolean;
+  /** Whether this account pays bills / feeds the forecast (ignored for credit cards — always false) */
+  isForecastAccount?: boolean;
   /**
      * @nullable
      * @pattern ^\d{4}$
@@ -986,6 +990,8 @@ export interface ForecastedTransaction {
   matchedPlaidTransactionId?: number | null;
   /** Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable */
   isUnplanned?: boolean;
+  /** Money moving between the user's own accounts (savings/investment/account transfers) — steps the balance but is excluded from spending totals */
+  isAssetMovement?: boolean;
   /**
      * Original planned date, kept when the row moved to the actual posted date
      * @nullable
@@ -1320,12 +1326,35 @@ export interface PlaidExchangeInput {
   institutionName?: string | null;
 }
 
+export interface PlaidLinkedAccount {
+  id: number;
+  accountName: string;
+  accountType: string;
+  /** @nullable */
+  accountNumberLast4: string | null;
+  isForecastAccount: boolean;
+}
+
 export interface PlaidExchangeResult {
   success: boolean;
   /** Internal plaid_items row id (never the Plaid access token) */
   itemId: number;
   institutionName: string;
   accountsAdded: number;
+  /** This item's imported accounts, for the connect-time "which accounts do you pay bills from?" selection step */
+  accounts: PlaidLinkedAccount[];
+}
+
+export interface PlaidForecastAccountsInput {
+  /** Internal plaid_items row id whose accounts are being configured */
+  itemId: number;
+  /** Account ids (from this item) the user pays bills from; other non-credit-card accounts of the item are set to false */
+  selectedAccountIds: number[];
+}
+
+export interface PlaidForecastAccountsResult {
+  updated: number;
+  accounts: PlaidLinkedAccount[];
 }
 
 export interface PlaidDisconnectInput {

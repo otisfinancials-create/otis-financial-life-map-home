@@ -18,6 +18,8 @@ export interface AccountUpdate {
   /** @nullable */
   retirementSubtype?: AccountUpdateRetirementSubtype;
   isAsset?: boolean;
+  /** Whether this account pays bills / feeds the forecast (ignored for credit cards — always false) */
+  isForecastAccount?: boolean;
   /**
      * @nullable
      * @pattern ^\d{4}$

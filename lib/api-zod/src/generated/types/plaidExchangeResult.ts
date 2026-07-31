@@ -5,6 +5,7 @@
  * Otis Financial Life Map API
  * OpenAPI spec version: 0.1.0
  */
+import type { PlaidLinkedAccount } from './plaidLinkedAccount';
 
 export interface PlaidExchangeResult {
   success: boolean;
@@ -12,4 +13,6 @@ export interface PlaidExchangeResult {
   itemId: number;
   institutionName: string;
   accountsAdded: number;
+  /** This item's imported accounts, for the connect-time "which accounts do you pay bills from?" selection step */
+  accounts: PlaidLinkedAccount[];
 }

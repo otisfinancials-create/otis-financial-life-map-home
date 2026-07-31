@@ -276,6 +276,13 @@ router.patch("/accounts/:id", async (req, res): Promise<void> => {
     return;
   }
   const { currentBalance: rawBalance, monthlyContribution: rawContribution, savingsGoal: rawGoal, ...restAccountData } = parsed.data;
+  // Credit cards can NEVER be forecast accounts, regardless of input.
+  const [existingAccount] = await db
+    .select({ accountType: accountsTable.accountType })
+    .from(accountsTable)
+    .where(and(eq(accountsTable.id, params.data.id), eq(accountsTable.userId, req.userId)));
+  const targetType = restAccountData.accountType ?? existingAccount?.accountType;
+  if (targetType === "credit_card") restAccountData.isForecastAccount = false;
   const [account] = await db
     .update(accountsTable)
     .set({

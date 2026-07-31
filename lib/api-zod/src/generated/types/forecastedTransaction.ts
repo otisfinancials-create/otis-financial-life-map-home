@@ -60,6 +60,8 @@ export interface ForecastedTransaction {
   matchedPlaidTransactionId?: number | null;
   /** Derived actual row from unmatched posted bank activity (day+category bucket); rebuilt on sync, not editable */
   isUnplanned?: boolean;
+  /** Money moving between the user's own accounts (savings/investment/account transfers) — steps the balance but is excluded from spending totals */
+  isAssetMovement?: boolean;
   /**
      * Original planned date, kept when the row moved to the actual posted date
      * @nullable

@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { and, eq, gte, lt, inArray, isNull, isNotNull, or } from "drizzle-orm";
 import { findReconcileSuggestions } from "./bill-reconciliation";
+import { getForecastAccounts } from "./forecast-accounts";
 import { logger } from "../lib/logger";
 
 /**
@@ -51,6 +52,23 @@ const titleCase = (s: string) =>
 function isCardPaymentTxn(t: { personalFinanceCategory: string | null; personalFinanceCategoryDetailed: string | null }): boolean {
   const detailed = t.personalFinanceCategoryDetailed ?? "";
   return detailed.includes("CREDIT_CARD_PAYMENT") || (t.personalFinanceCategory === "LOAN_PAYMENTS" && detailed.includes("CREDIT_CARD"));
+}
+
+// Transfer classification: these detailed categories are ASSET MOVEMENT —
+// money moving between the user's own accounts, not spending. Everything
+// else under TRANSFER_* (Zelle/Venmo app transfers, withdrawals, deposits,
+// other inflows) is real money movement and keeps its current treatment.
+// Card payments are already special-cased above and are checked FIRST.
+const ASSET_MOVEMENT_DETAILED = new Set([
+  "TRANSFER_OUT_ACCOUNT_TRANSFER",
+  "TRANSFER_IN_ACCOUNT_TRANSFER",
+  "TRANSFER_OUT_SAVINGS",
+  "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS",
+]);
+
+function isAssetMovementTxn(t: { personalFinanceCategory: string | null; personalFinanceCategoryDetailed: string | null }): boolean {
+  if (isCardPaymentTxn(t)) return false;
+  return ASSET_MOVEMENT_DETAILED.has(t.personalFinanceCategoryDetailed ?? "");
 }
 
 export interface RollResult {
@@ -123,24 +141,17 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
     else result.autoReconciled++;
   }
 
-  // ── Load bank accounts + posted window transactions ──
-  const bankAccounts = await db
-    .select({ plaidAccountId: accountsTable.plaidAccountId })
-    .from(accountsTable)
-    .where(and(
-      eq(accountsTable.userId, userId),
-      isNotNull(accountsTable.plaidAccountId),
-    ));
-  const cardAccounts = await db
-    .select({ plaidAccountId: accountsTable.plaidAccountId })
-    .from(accountsTable)
-    .where(and(
-      eq(accountsTable.userId, userId),
-      eq(accountsTable.accountType, "credit_card"),
-      isNotNull(accountsTable.plaidAccountId),
-    ));
-  const cardIds = new Set(cardAccounts.map((a) => a.plaidAccountId!));
-  const bankIds = bankAccounts.map((a) => a.plaidAccountId!).filter((id) => !cardIds.has(id));
+  // ── Load forecast accounts + posted window transactions ──
+  // SINGLE SOURCE OF TRUTH: the account set that gets ingested here MUST be
+  // the same set the anchor/balance uses — see services/forecast-accounts.ts.
+  const forecastAccounts = await getForecastAccounts(userId);
+  if (forecastAccounts.noneSelected) {
+    // No balance basis: linked cash accounts exist but none are selected for
+    // the forecast. The user-facing guard lives in the anchor route; here we
+    // must not ingest from an undefined pool — log loudly and skip ingestion.
+    logger.warn({ userId }, "Actuals roll skipped ingestion: user has linked cash accounts but none selected for forecast");
+  }
+  const bankIds = forecastAccounts.accounts.map((a) => a.plaidAccountId!);
 
   const txns = bankIds.length
     ? await db
@@ -286,12 +297,44 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
     ));
   for (const r of linkedNow) excluded.add(r.matchedId!);
 
-  type Bucket = { date: string; label: string; type: "expense" | "income"; total: number };
+  // ── Transfer classification (asset movement) ──
+  // 4a. INTERNAL PAIR: an asset-movement row with a counterpart on a
+  // DIFFERENT forecast account, opposite sign, matching amount (±$0.01),
+  // within ±3 days → both legs are internal to the forecast pool and are
+  // excluded from the ledger entirely (net effect on balance: zero — the
+  // money never left the pool).
+  // 4b. Everything else stays in the ledger with today's amount and sign
+  // (the cash genuinely left/entered the pool) but is labeled asset
+  // movement, not spending.
+  const INTERNAL_PAIR_DAYS = 3;
+  const INTERNAL_PAIR_TOLERANCE = 0.01;
+  const assetMoves = txns.filter((t) => !excluded.has(t.id) && isAssetMovementTxn(t));
+  const internalPairIds = new Set<number>();
+  for (let i = 0; i < assetMoves.length; i++) {
+    const a = assetMoves[i];
+    if (internalPairIds.has(a.id)) continue;
+    for (let j = i + 1; j < assetMoves.length; j++) {
+      const b = assetMoves[j];
+      if (internalPairIds.has(b.id)) continue;
+      if (a.accountId === b.accountId) continue; // must be two different forecast accounts
+      const amtA = parseFloat(String(a.amount));
+      const amtB = parseFloat(String(b.amount));
+      if (Math.sign(amtA) === Math.sign(amtB)) continue; // opposite legs only
+      if (Math.abs(Math.abs(amtA) - Math.abs(amtB)) > INTERNAL_PAIR_TOLERANCE) continue;
+      if (dayDiff(a.date, b.date) > INTERNAL_PAIR_DAYS) continue;
+      internalPairIds.add(a.id);
+      internalPairIds.add(b.id);
+      break;
+    }
+  }
+
+  type Bucket = { date: string; label: string; type: "expense" | "income"; total: number; assetMovement?: boolean };
   const buckets = new Map<string, Bucket>();
   type UnplannedInsert = typeof forecastedTransactionsTable.$inferInsert;
   const cardPayRows: UnplannedInsert[] = [];
   for (const t of txns) {
     if (excluded.has(t.id)) continue;
+    if (internalPairIds.has(t.id)) continue; // both legs inside the pool — not a cash event
     // Bank-side card payments not reconciled to a planned parent above are
     // real cash outflows with no other representation (e.g. they posted
     // before the card's cycles existed) — materialize each as its own
@@ -316,6 +359,17 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
       continue;
     }
     const amt = parseFloat(String(t.amount)); // positive = outflow
+    if (isAssetMovementTxn(t)) {
+      // 4b: crosses the pool boundary — steps the balance exactly as today,
+      // same amount and sign, but classified as asset movement (not spend).
+      if (amt === 0) continue;
+      const type = amt > 0 ? ("expense" as const) : ("income" as const);
+      const key = `${t.date}|asset-movement|${type}`;
+      const b = buckets.get(key) ?? { date: t.date, label: "Asset Movement", type, total: 0, assetMovement: true };
+      b.total += Math.abs(amt);
+      buckets.set(key, b);
+      continue;
+    }
     if (amt > 0) {
       const label = titleCase(t.personalFinanceCategory ?? "OTHER");
       const key = `${t.date}|expense|${label}`;
@@ -341,10 +395,11 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
       description: b.label,
       amount: String(Math.round(b.total * 100) / 100),
       transactionType: b.type,
-      category: b.type === "income" ? "Income" : "Other",
+      category: b.assetMovement ? "Asset Movement" : b.type === "income" ? "Income" : "Other",
       isActual: true,
       isCommitted: false,
       isUnplanned: true,
+      isAssetMovement: b.assetMovement === true,
       sortOrder: 0,
     }));
     const allRows = [...rows, ...cardPayRows];

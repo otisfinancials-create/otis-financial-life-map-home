@@ -12,6 +12,8 @@ import {
   ListPlaidTransactionsResponse,
   RemovePlaidItemParams,
   RemovePlaidItemResponse,
+  SetPlaidForecastAccountsBody,
+  SetPlaidForecastAccountsResponse,
 } from "@workspace/api-zod";
 import { plaidClient, mapPlaidAccountType } from "../lib/plaid";
 import { syncAllItemsForUser } from "../services/plaid-sync";
@@ -130,12 +132,33 @@ router.post("/plaid/exchange-token", async (req, res): Promise<void> => {
         .from(accountsTable)
         .where(and(eq(accountsTable.userId, req.userId), eq(accountsTable.plaidAccountId, acct.account_id)));
       if (existing) {
+        // Never clobber the user's forecast-account choice on relink.
         await db.update(accountsTable).set(values).where(eq(accountsTable.id, existing.id));
       } else {
-        await db.insert(accountsTable).values({ ...values, userId: req.userId });
+        // Connect-time default: checking accounts pay bills → in the forecast
+        // pool; everything else (savings, money market, …) opt-in; credit
+        // cards are NEVER forecast accounts.
+        await db.insert(accountsTable).values({
+          ...values,
+          userId: req.userId,
+          isForecastAccount: accountType === "checking",
+        });
         accountsAdded++;
       }
     }
+
+    // Return this item's accounts so the client can show the connect-time
+    // "Which accounts do you pay bills from?" selection step.
+    const itemAccounts = await db
+      .select({
+        id: accountsTable.id,
+        accountName: accountsTable.accountName,
+        accountType: accountsTable.accountType,
+        accountNumberLast4: accountsTable.accountNumberLast4,
+        isForecastAccount: accountsTable.isForecastAccount,
+      })
+      .from(accountsTable)
+      .where(and(eq(accountsTable.userId, req.userId), eq(accountsTable.plaidItemId, item.id)));
 
     req.log.info({ plaidItemRow: item.id, accountsAdded }, "Plaid item linked");
     res.json(
@@ -144,12 +167,57 @@ router.post("/plaid/exchange-token", async (req, res): Promise<void> => {
         itemId: item.id,
         institutionName: institutionName ?? "your bank",
         accountsAdded,
+        accounts: itemAccounts,
       }),
     );
   } catch (err) {
     req.log.error({ err: sanitizePlaidError(err) }, "Plaid token exchange failed");
     res.status(502).json({ error: "Failed to connect your bank" });
   }
+});
+
+// Connect-time (and later) selection of which of an item's accounts pay
+// bills — i.e. feed the forecast. Credit cards are NEVER forecast accounts:
+// they are ignored regardless of the ids submitted.
+router.put("/plaid/forecast-accounts", async (req, res): Promise<void> => {
+  const parsed = SetPlaidForecastAccountsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { itemId, selectedAccountIds } = parsed.data;
+  const [item] = await db
+    .select({ id: plaidItemsTable.id })
+    .from(plaidItemsTable)
+    .where(and(eq(plaidItemsTable.id, itemId), eq(plaidItemsTable.userId, req.userId)));
+  if (!item) {
+    res.status(404).json({ error: "Item not found" });
+    return;
+  }
+  const itemAccounts = await db
+    .select()
+    .from(accountsTable)
+    .where(and(eq(accountsTable.userId, req.userId), eq(accountsTable.plaidItemId, itemId)));
+  const selected = new Set(selectedAccountIds);
+  let updated = 0;
+  for (const a of itemAccounts) {
+    const desired = a.accountType !== "credit_card" && selected.has(a.id);
+    if (a.isForecastAccount !== desired) {
+      await db.update(accountsTable).set({ isForecastAccount: desired, updatedAt: new Date() }).where(eq(accountsTable.id, a.id));
+      updated++;
+    }
+  }
+  const after = await db
+    .select({
+      id: accountsTable.id,
+      accountName: accountsTable.accountName,
+      accountType: accountsTable.accountType,
+      accountNumberLast4: accountsTable.accountNumberLast4,
+      isForecastAccount: accountsTable.isForecastAccount,
+    })
+    .from(accountsTable)
+    .where(and(eq(accountsTable.userId, req.userId), eq(accountsTable.plaidItemId, itemId)));
+  res.json(SetPlaidForecastAccountsResponse.parse({ updated, accounts: after }));
 });
 
 router.post("/plaid/sync", async (req, res): Promise<void> => {

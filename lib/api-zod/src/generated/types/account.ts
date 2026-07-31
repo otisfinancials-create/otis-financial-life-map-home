@@ -19,6 +19,8 @@ export interface Account {
   /** @nullable */
   retirementSubtype?: AccountRetirementSubtype;
   isAsset: boolean;
+  /** Account contributes to the forecast's running balance ("pay bills from"); always false for credit cards */
+  isForecastAccount: boolean;
   /** @nullable */
   accountNumberLast4?: string | null;
   /** @nullable */

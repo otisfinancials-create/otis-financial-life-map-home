@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Plus, MoreHorizontal, Landmark, CreditCard, PiggyBank, Briefcase, TrendingUp, Home, Banknote, Trash2, Pencil, Link2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useListAccounts, useListAccountBalances, useDeleteAccount, useDisconnectPlaidAccount, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { useListAccounts, useListAccountBalances, useDeleteAccount, useDisconnectPlaidAccount, useUpdateAccount, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import type { Account } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -96,6 +97,7 @@ export default function Accounts() {
   const { data: accounts, isLoading: isLoadingAccounts } = useListAccounts();
   const { data: balanceSnapshots } = useListAccountBalances();
   const deleteAccount = useDeleteAccount();
+  const updateAccount = useUpdateAccount();
   const disconnectPlaid = useDisconnectPlaidAccount();
 
   const handleDisconnectPlaid = (account: Account) => {
@@ -152,6 +154,25 @@ export default function Accounts() {
   const assetAccounts = accounts?.filter((a) => a.isAsset) || [];
   const liabilityAccounts = accounts?.filter((a) => !a.isAsset) || [];
 
+  const handleForecastToggle = (account: Account, checked: boolean) => {
+    updateAccount.mutate(
+      { id: account.id, data: { isForecastAccount: checked } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          toast({
+            title: checked ? "Added to your forecast" : "Removed from your forecast",
+            description: checked
+              ? `We'll track money coming in and going out of ${account.accountName}.`
+              : `${account.accountName} is now tracked separately from your bills and spending.`,
+          });
+        },
+        onError: () => toast({ title: "Couldn't update the account", variant: "destructive" }),
+      },
+    );
+  };
+
   // Totals must match the per-row balances (snapshot-adjusted), so compute them
   // from the same displayBalance source rather than the stale summary fields.
   const totalAssets = assetAccounts.reduce((sum, a) => sum + displayBalance(a), 0);
@@ -187,6 +208,18 @@ export default function Accounts() {
               <p className="text-xs text-muted-foreground/80 mt-1 whitespace-pre-wrap break-words">
                 {account.notes}
               </p>
+            )}
+            {account.plaidAccountId && account.accountType !== "credit_card" && (
+              <label className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-fit">
+                <Switch
+                  checked={account.isForecastAccount}
+                  onCheckedChange={(checked) => handleForecastToggle(account, checked)}
+                  disabled={updateAccount.isPending}
+                  className="scale-75 origin-left"
+                  data-testid={`switch-forecast-account-${account.id}`}
+                />
+                I pay bills from this account
+              </label>
             )}
           </div>
         </div>
