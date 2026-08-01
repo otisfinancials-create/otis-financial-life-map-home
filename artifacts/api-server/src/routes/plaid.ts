@@ -18,7 +18,7 @@ import {
   SetPlaidForecastAccountsBody,
   SetPlaidForecastAccountsResponse,
 } from "@workspace/api-zod";
-import { plaidClient, mapPlaidAccountType } from "../lib/plaid";
+import { plaidClient, mapPlaidAccountType, cleanPlaidName } from "../lib/plaid";
 import { syncAllItemsForUser } from "../services/plaid-sync";
 import { removePlaidItem, PlaidRemovalError } from "../services/plaid-item-removal";
 
@@ -158,7 +158,7 @@ router.post("/plaid/exchange-token", async (req, res): Promise<void> => {
     for (const acct of accountsResponse.data.accounts) {
       const { accountType, isAsset } = mapPlaidAccountType(acct.type, acct.subtype);
       const values = {
-        accountName: acct.name || acct.official_name || "Account",
+        accountName: cleanPlaidName(acct.name) ?? cleanPlaidName(acct.official_name) ?? "Account",
         accountType,
         isAsset,
         institutionName: institutionName ?? "Bank",
@@ -332,7 +332,7 @@ router.post("/plaid/items/:id/refresh-accounts", async (req, res): Promise<void>
     for (const acct of remote) {
       const { accountType, isAsset } = mapPlaidAccountType(acct.type, acct.subtype);
       const values = {
-        accountName: acct.name || acct.official_name || "Account",
+        accountName: cleanPlaidName(acct.name) ?? cleanPlaidName(acct.official_name) ?? "Account",
         accountType,
         isAsset,
         institutionName: item.institutionName ?? "Bank",

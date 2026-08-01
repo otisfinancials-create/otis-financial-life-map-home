@@ -24,6 +24,22 @@ const configuration = new Configuration({
 
 export const plaidClient = new PlaidApi(configuration);
 
+/**
+ * Sanitize a Plaid-provided display name before persisting it.
+ *
+ * Plaid sometimes transmits U+FFFD replacement characters where the source
+ * institution's encoding was mangled upstream (verified on the wire: e.g.
+ * Wells Fargo "WAY2SAVE® SAVINGS" arrives as "WAY2SAVE\uFFFD\uFFFD SAVINGS").
+ * The original bytes are unrecoverable by the time they reach us, and U+FFFD
+ * carries no information — strip it at ingest and collapse the leftover
+ * whitespace rather than storing garbage.
+ */
+export function cleanPlaidName(name: string | null | undefined): string | null {
+  if (name == null) return null;
+  const cleaned = name.replace(/\uFFFD+/g, "").replace(/\s{2,}/g, " ").trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 /** Map a Plaid account (type, subtype) to an Otis account type. */
 export function mapPlaidAccountType(type: string, subtype: string | null): { accountType: string; isAsset: boolean } {
   const t = type.toLowerCase();
