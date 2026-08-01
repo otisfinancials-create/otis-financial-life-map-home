@@ -187,10 +187,21 @@ export function BudgetTab() {
     [paySchedules],
   );
 
+  // Goal contributions are SAVINGS, not miscellaneous spending — they get
+  // their own section below instead of landing in an "Other" category.
+  const goalBills = useMemo(
+    () => (bills ?? []).filter((b) => b.isActive && b.billKind === "goal_contribution"),
+    [bills],
+  );
+  const totalGoalSavings = useMemo(
+    () => goalBills.reduce((s, b) => s + b.amount * monthlyFactor(b.frequency), 0),
+    [goalBills],
+  );
+
   const groups = useMemo(() => {
     const byCategory: Record<string, Bill[]> = {};
     for (const bill of bills ?? []) {
-      if (!bill.isActive || bill.amountType === "positive") continue;
+      if (!bill.isActive || bill.amountType === "positive" || bill.billKind === "goal_contribution") continue;
       (byCategory[bill.category] ??= []).push(bill);
     }
     return Object.entries(byCategory)
@@ -221,7 +232,8 @@ export function BudgetTab() {
   }, [compositions]);
 
   const totalEnvelopes = useMemo(() => envelopeGroups.reduce((s, g) => s + g.monthlyTotal, 0), [envelopeGroups]);
-  const totalBills = useMemo(() => groups.reduce((s, g) => s + g.monthlyTotal, 0), [groups]) + totalEnvelopes;
+  const totalBills =
+    useMemo(() => groups.reduce((s, g) => s + g.monthlyTotal, 0), [groups]) + totalEnvelopes + totalGoalSavings;
   const netCashFlow = monthlyIncome - totalBills;
   const pctOfIncome = (v: number) => (monthlyIncome > 0 ? `${((v / monthlyIncome) * 100).toFixed(1)}%` : "—");
 
@@ -415,6 +427,31 @@ export function BudgetTab() {
                   </Fragment>
                 );
               })}
+              {/* Goal savings — money leaving for committed goals; savings, not spending */}
+              {goalBills.length > 0 && (
+                <TableRow className="border-border bg-muted/30 hover:bg-muted/30">
+                  <TableCell colSpan={4} className="py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Goal Savings
+                  </TableCell>
+                </TableRow>
+              )}
+              {goalBills.map((bill) => (
+                <TableRow key={`goal-${bill.id}`} className="border-border" data-testid={`row-budget-goal-${bill.id}`}>
+                  <TableCell className="font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span style={{ fontSize: 16, lineHeight: 1 }}>🎯</span>
+                      {bill.billName}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">goal contribution</TableCell>
+                  <TableCell className={moneyCell}>
+                    <FormatCurrency amount={bill.amount * monthlyFactor(bill.frequency)} />
+                  </TableCell>
+                  <TableCell className={`${moneyCell} text-sm text-muted-foreground`}>
+                    {pctOfIncome(bill.amount * monthlyFactor(bill.frequency))}
+                  </TableCell>
+                </TableRow>
+              ))}
               <TableRow className="border-border bg-muted/40 hover:bg-muted/40 font-semibold">
                 <TableCell>Total Bills</TableCell>
                 <TableCell />

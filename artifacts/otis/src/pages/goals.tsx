@@ -10,12 +10,15 @@ import {
   useUncommitGoal,
   useRemoveGoalPurchase,
   useListAccounts,
+  useGetGoalSurplus,
+  getGetGoalSurplusQueryKey,
   getListGoalsQueryKey,
   getListBillsQueryKey,
   type Goal,
   type GoalInput,
 } from "@workspace/api-client-react";
 import { useSyncForecast } from "@/hooks/use-sync-forecast";
+import { GoalImpactPanel, MultipleGoalsCard } from "@/components/goals/goal-impact";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -107,6 +110,7 @@ export default function Goals() {
   const { sync: syncForecast } = useSyncForecast();
   const { data: goals, isLoading } = useListGoals();
   const { data: accounts } = useListAccounts();
+  const { data: surplus } = useGetGoalSurplus();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
@@ -116,6 +120,7 @@ export default function Goals() {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListGoalsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetGoalSurplusQueryKey() });
     syncForecast();
   };
 
@@ -277,6 +282,8 @@ export default function Goals() {
           <Plus className="h-4 w-4 mr-1" /> New goal
         </Button>
       </div>
+
+      <MultipleGoalsCard surplus={surplus} goals={goals} />
 
       {isLoading ? (
         <Card className="p-6 space-y-3">
@@ -502,6 +509,21 @@ export default function Goals() {
                 </span>{" "}
                 <span className="text-muted-foreground">(rounded up to the nearest $5 so you arrive a little early)</span>
               </p>
+            )}
+            {preview != null && (
+              <GoalImpactPanel
+                surplus={surplus}
+                monthly={preview}
+                startDate={form.startDate}
+                targetDate={form.targetDate}
+                contributionDay={parseInt(form.contributionDay || "1", 10)}
+                targetAmount={parseFloat(form.targetAmount) || 0}
+                alreadySaved={parseFloat(form.alreadySaved || "0") || 0}
+                editingCommittedContribution={
+                  editing && editing.status === "committed" ? editing.monthlyContribution : undefined
+                }
+                onApplyTargetDate={(iso) => setForm((f) => ({ ...f, targetDate: iso }))}
+              />
             )}
             {formError && (
               <p className="text-sm text-destructive" data-testid="text-goal-error">

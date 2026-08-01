@@ -64,6 +64,7 @@ import type {
   GetForecastCalendarParams,
   Goal,
   GoalInput,
+  GoalSurplus,
   GoalUpdate,
   HealthStatus,
   LifeEvent,
@@ -1180,6 +1181,83 @@ export const useCreateGoal = <TError = ErrorType<void>,
       > => {
       return useMutation(getCreateGoalMutationOptions(options));
     }
+
+export const getGetGoalSurplusUrl = () => {
+
+
+
+
+  return `/api/goals/surplus`
+}
+
+/**
+ * @summary Monthly surplus derived from the forecast ledger — available (after committed goal contributions) and gross (before them)
+ */
+export const getGoalSurplus = async ( options?: RequestInit): Promise<GoalSurplus> => {
+
+  return customFetch<GoalSurplus>(getGetGoalSurplusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGoalSurplusQueryKey = () => {
+    return [
+    `/api/goals/surplus`
+    ] as const;
+    }
+
+
+export const getGetGoalSurplusQueryOptions = <TData = Awaited<ReturnType<typeof getGoalSurplus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGoalSurplus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGoalSurplusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGoalSurplus>>> = ({ signal }) => getGoalSurplus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGoalSurplus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGoalSurplusQueryResult = NonNullable<Awaited<ReturnType<typeof getGoalSurplus>>>
+export type GetGoalSurplusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Monthly surplus derived from the forecast ledger — available (after committed goal contributions) and gross (before them)
+ */
+
+export function useGetGoalSurplus<TData = Awaited<ReturnType<typeof getGoalSurplus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGoalSurplus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGoalSurplusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getUpdateGoalUrl = (id: number,) => {
 

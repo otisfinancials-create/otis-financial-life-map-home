@@ -408,6 +408,29 @@ export const CreateGoalResponse = zod.object({
 
 
 /**
+ * @summary Monthly surplus derived from the forecast ledger — available (after committed goal contributions) and gross (before them)
+ */
+export const GetGoalSurplusResponse = zod.object({
+  "windowStart": zod.string(),
+  "windowEnd": zod.string(),
+  "availableMonthly": zod.number().describe('Mean monthly net over the window, AFTER committed goal contributions.'),
+  "grossMonthly": zod.number().describe('availableMonthly + mean monthly committed goal contributions in the window.'),
+  "committedMonthlyTotal": zod.number().describe('Sum of committed goals\' current monthly contributions.'),
+  "leakageMonthly": zod.number().describe('Trailing-6-complete-month average of non-card, non-bill, non-transfer checking outflows. Diagnostic only.'),
+  "months": zod.array(zod.object({
+  "month": zod.string(),
+  "available": zod.number(),
+  "gross": zod.number()
+})),
+  "committedGoals": zod.array(zod.object({
+  "goalId": zod.number(),
+  "name": zod.string(),
+  "monthlyContribution": zod.number()
+}))
+}).describe('One computation, two presentations. availableMonthly answers \"can I afford one more goal?\" (committed goal contributions already subtracted). grossMonthly answers \"do my goals fit my income?\" (contributions added back). Derived from the forecast ledger with the signedF convention — parent card rows only, goal purchase\/funding legs and asset movements excluded. leakageMonthly is a diagnostic only and is never folded into surplus.\n')
+
+
+/**
  * @summary Update a goal (recomputes contribution; forward-only if committed)
  */
 export const UpdateGoalParams = zod.object({

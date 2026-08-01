@@ -329,6 +329,36 @@ export interface GoalInput {
   contributionDay: number;
 }
 
+export type GoalSurplusMonthsItem = {
+  month: string;
+  available: number;
+  gross: number;
+};
+
+export type GoalSurplusCommittedGoalsItem = {
+  goalId: number;
+  name: string;
+  monthlyContribution: number;
+};
+
+/**
+ * One computation, two presentations. availableMonthly answers "can I afford one more goal?" (committed goal contributions already subtracted). grossMonthly answers "do my goals fit my income?" (contributions added back). Derived from the forecast ledger with the signedF convention — parent card rows only, goal purchase/funding legs and asset movements excluded. leakageMonthly is a diagnostic only and is never folded into surplus.
+ */
+export interface GoalSurplus {
+  windowStart: string;
+  windowEnd: string;
+  /** Mean monthly net over the window, AFTER committed goal contributions. */
+  availableMonthly: number;
+  /** availableMonthly + mean monthly committed goal contributions in the window. */
+  grossMonthly: number;
+  /** Sum of committed goals' current monthly contributions. */
+  committedMonthlyTotal: number;
+  /** Trailing-6-complete-month average of non-card, non-bill, non-transfer checking outflows. Diagnostic only. */
+  leakageMonthly: number;
+  months: GoalSurplusMonthsItem[];
+  committedGoals: GoalSurplusCommittedGoalsItem[];
+}
+
 export type GoalUpdateGoalType = typeof GoalUpdateGoalType[keyof typeof GoalUpdateGoalType];
 
 
@@ -656,6 +686,31 @@ export interface CycleBreakdown {
   plannedTotal: number;
   envelopes: Envelope[];
   bills: CycleBreakdownBillsItem[];
+}
+
+export type CardCompositionBillsItem = {
+  id: number;
+  billName: string;
+  /** @nullable */
+  billId?: number | null;
+  expectedAmount: number;
+  /** @nullable */
+  actualAmount?: number | null;
+  status: string;
+};
+
+export interface CardComposition {
+  accountId: number;
+  accountName: string;
+  cycleId: number;
+  cycleStart: string;
+  cycleEnd: string;
+  dueDate: string;
+  status: string;
+  accumulatedTotal: number;
+  plannedTotal: number;
+  envelopes: Envelope[];
+  bills: CardCompositionBillsItem[];
 }
 
 export interface CycleConfigInput {
@@ -1743,6 +1798,17 @@ export interface PlaidTransaction {
   accountName?: string | null;
   accountType?: string | null;
 }
+
+export type ListCardCompositionsParams = {
+/**
+ * Include only cycles with dueDate >= this YYYY-MM-DD
+ */
+dueStart?: string;
+/**
+ * Include only cycles with dueDate <= this YYYY-MM-DD
+ */
+dueEnd?: string;
+};
 
 export type ListForecastParams = {
 startDate?: string;

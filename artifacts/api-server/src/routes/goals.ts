@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, isNotNull, inArray } from "drizzle-orm";
+import { eq, and, or, isNull, isNotNull, inArray, gte, lt, sql } from "drizzle-orm";
 import { db, goalsTable, billsTable, accountsTable, forecastedTransactionsTable, type Goal } from "@workspace/db";
 import {
   RemoveGoalPurchaseParams,
@@ -17,6 +17,7 @@ import {
   UpdateGoalResponse,
   CommitGoalResponse,
   UncommitGoalResponse,
+  GetGoalSurplusResponse,
 } from "@workspace/api-zod";
 import { regenerateForecastForUser, generateBillOccurrences } from "./forecast";
 
@@ -217,6 +218,142 @@ function serializeGoal(goal: Goal, buckets?: BucketInfo) {
 async function serializeGoalFull(userId: string, goal: Goal) {
   return serializeGoal(goal, await computeBuckets(userId, goal));
 }
+
+/**
+ * Surplus — design §4/§5. ONE computation, TWO presentations:
+ *   availableMonthly — mean monthly net AFTER committed goal contributions
+ *     ("can I afford one more goal?"). Committing a goal reduces it — that
+ *     money is committed and must not look available.
+ *   grossMonthly — contributions added back ("do my goals fit my income?").
+ *
+ * Derivation (read-only, straight from the ledger the forecast emits):
+ *   Σ signedF over forecasted_transactions in each of the next 12 full
+ *   months, parent-card-row convention (cc_account_id IS NULL OR is_cc_parent)
+ *   so bills that flow into a card payment row are never double-counted,
+ *   status ≠ 'removed', asset movements excluded (they are allocations of
+ *   surplus, not consumption — same circularity argument as goal rows), and
+ *   goal purchase/funding legs excluded (lump events, not monthly capacity).
+ *
+ * leakageMonthly is a DIAGNOSTIC — trailing-6-complete-month average of
+ * checking outflows that match no bill, card payment, or transfer. It is
+ * reported alongside surplus, never subtracted: envelopes already cover
+ * discretionary spend, subtracting on top would double-count.
+ */
+router.get("/goals/surplus", async (req, res): Promise<void> => {
+  const now = new Date();
+  const startDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const endDate = new Date(now.getFullYear(), now.getMonth() + 13, 1);
+  const windowStart = toLocalIsoDate(startDate);
+  const windowEnd = toLocalIsoDate(endDate);
+
+  const goalBills = await db
+    .select({ id: billsTable.id })
+    .from(billsTable)
+    .where(and(eq(billsTable.userId, req.userId), eq(billsTable.billKind, "goal_contribution")));
+  const goalBillIds = new Set(goalBills.map((b) => b.id));
+
+  const committed = await db
+    .select()
+    .from(goalsTable)
+    .where(and(eq(goalsTable.userId, req.userId), eq(goalsTable.status, "committed")));
+
+  const rows = await db
+    .select({
+      date: forecastedTransactionsTable.transactionDate,
+      amount: forecastedTransactionsTable.amount,
+      type: forecastedTransactionsTable.transactionType,
+      sourceBillId: forecastedTransactionsTable.sourceBillId,
+    })
+    .from(forecastedTransactionsTable)
+    .where(and(
+      eq(forecastedTransactionsTable.userId, req.userId),
+      gte(forecastedTransactionsTable.transactionDate, windowStart),
+      lt(forecastedTransactionsTable.transactionDate, windowEnd),
+      or(isNull(forecastedTransactionsTable.ccAccountId), eq(forecastedTransactionsTable.isCcParent, true)),
+      sql`${forecastedTransactionsTable.status} IS DISTINCT FROM 'removed'`,
+      eq(forecastedTransactionsTable.isAssetMovement, false),
+      isNull(forecastedTransactionsTable.sourceGoalId),
+    ));
+
+  const monthKeys: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
+    monthKeys.push(toLocalIsoDate(d).slice(0, 7));
+  }
+  const available = new Map<string, number>(monthKeys.map((k) => [k, 0]));
+  const contribAddback = new Map<string, number>(monthKeys.map((k) => [k, 0]));
+  for (const r of rows) {
+    const key = String(r.date).slice(0, 7);
+    if (!available.has(key)) continue;
+    const amt = parseFloat(String(r.amount));
+    const signed = r.type === "income" ? amt : -amt;
+    available.set(key, available.get(key)! + signed);
+    if (r.sourceBillId != null && goalBillIds.has(r.sourceBillId)) {
+      // Contribution rows are expenses; adding the amount back yields gross.
+      contribAddback.set(key, contribAddback.get(key)! + amt);
+    }
+  }
+  // The forecast horizon may end before the 12-month window does; a month
+  // with no ledger rows at all is "beyond the forecast", not "$0 surplus" —
+  // drop trailing empty months so they can't dilute the average.
+  const monthsWithRows = new Set(rows.map((r) => String(r.date).slice(0, 7)));
+  while (monthKeys.length > 1 && !monthsWithRows.has(monthKeys[monthKeys.length - 1])) {
+    monthKeys.pop();
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const months = monthKeys.map((k) => ({
+    month: k,
+    available: round2(available.get(k)!),
+    gross: round2(available.get(k)! + contribAddback.get(k)!),
+  }));
+  const availableMonthly = round2(months.reduce((s, m) => s + m.available, 0) / months.length);
+  const grossMonthly = round2(months.reduce((s, m) => s + m.gross, 0) / months.length);
+
+  const committedGoals = committed.map((g) => ({
+    goalId: g.id,
+    name: g.name,
+    monthlyContribution: parseFloat(String(g.monthlyContribution)),
+  }));
+  const committedMonthlyTotal = round2(committedGoals.reduce((s, g) => s + g.monthlyContribution, 0));
+
+  // Diagnostic leakage: trailing 6 complete months of checking outflows that
+  // are not reconciled to a forecast row, not card payments, not transfers,
+  // and match no active bill's merchant matcher.
+  const leakage = await db.execute(sql`
+    with matchers as (
+      select lower(match_merchant) as m from bills
+      where user_id = ${req.userId} and match_merchant is not null and match_merchant <> '' and is_active
+    )
+    select coalesce(sum(p.amount), 0)::numeric as total
+    from plaid_transactions p
+    join accounts a on a.plaid_account_id = p.account_id and a.user_id = p.user_id
+    where p.user_id = ${req.userId}
+      and a.account_type <> 'credit_card' and a.is_forecast_account
+      and not p.pending and p.amount > 0
+      and p.date >= (date_trunc('month', now()) - interval '6 months')::date
+      and p.date < date_trunc('month', now())::date
+      and coalesce(p.personal_finance_category_detailed, '') not like '%CREDIT_CARD%'
+      and coalesce(p.personal_finance_category, '') not in ('TRANSFER_OUT', 'TRANSFER_IN')
+      and not exists (select 1 from forecasted_transactions f where f.matched_plaid_transaction_id = p.id)
+      and not exists (
+        select 1 from matchers mm
+        where lower(coalesce(p.merchant_name, p.name, '')) like '%' || mm.m || '%'
+      )
+  `);
+  const leakageMonthly = round2(parseFloat(String((leakage.rows[0] as { total?: unknown })?.total ?? 0)) / 6);
+
+  res.json(GetGoalSurplusResponse.parse({
+    windowStart,
+    windowEnd,
+    availableMonthly,
+    grossMonthly,
+    committedMonthlyTotal,
+    leakageMonthly,
+    months,
+    committedGoals,
+  }));
+});
 
 router.get("/goals", async (req, res): Promise<void> => {
   const goals = await db.select().from(goalsTable).where(eq(goalsTable.userId, req.userId)).orderBy(goalsTable.createdAt);

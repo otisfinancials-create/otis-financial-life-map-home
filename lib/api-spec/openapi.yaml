@@ -280,6 +280,19 @@ paths:
         "400":
           description: Validation failed (e.g. destination inside the forecast pool)
 
+  /goals/surplus:
+    get:
+      operationId: getGoalSurplus
+      tags: [goals]
+      summary: Monthly surplus derived from the forecast ledger — available (after committed goal contributions) and gross (before them)
+      responses:
+        "200":
+          description: Surplus summary over the next 12 full forecast months
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoalSurplus"
+
   /goals/{id}:
     patch:
       operationId: updateGoal
@@ -2551,6 +2564,60 @@ components:
           type: integer
           minimum: 1
           maximum: 31
+
+    GoalSurplus:
+      type: object
+      description: >
+        One computation, two presentations. availableMonthly answers "can I
+        afford one more goal?" (committed goal contributions already
+        subtracted). grossMonthly answers "do my goals fit my income?"
+        (contributions added back). Derived from the forecast ledger with the
+        signedF convention — parent card rows only, goal purchase/funding legs
+        and asset movements excluded. leakageMonthly is a diagnostic only and
+        is never folded into surplus.
+      required:
+        [windowStart, windowEnd, availableMonthly, grossMonthly, committedMonthlyTotal, leakageMonthly, months, committedGoals]
+      properties:
+        windowStart:
+          type: string
+        windowEnd:
+          type: string
+        availableMonthly:
+          type: number
+          description: Mean monthly net over the window, AFTER committed goal contributions.
+        grossMonthly:
+          type: number
+          description: availableMonthly + mean monthly committed goal contributions in the window.
+        committedMonthlyTotal:
+          type: number
+          description: Sum of committed goals' current monthly contributions.
+        leakageMonthly:
+          type: number
+          description: Trailing-6-complete-month average of non-card, non-bill, non-transfer checking outflows. Diagnostic only.
+        months:
+          type: array
+          items:
+            type: object
+            required: [month, available, gross]
+            properties:
+              month:
+                type: string
+              available:
+                type: number
+              gross:
+                type: number
+        committedGoals:
+          type: array
+          items:
+            type: object
+            required: [goalId, name, monthlyContribution]
+            properties:
+              goalId:
+                type: integer
+              name:
+                type: string
+              monthlyContribution:
+                type: number
 
     GoalUpdate:
       type: object
