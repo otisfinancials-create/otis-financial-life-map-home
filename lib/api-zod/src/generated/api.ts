@@ -53,6 +53,7 @@ export const ListBillsResponseItem = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
+  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -99,6 +100,7 @@ export const CreateBillResponse = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
+  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -144,6 +146,7 @@ export const GetBillResponse = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
+  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -193,6 +196,7 @@ export const UpdateBillResponse = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
+  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -322,6 +326,177 @@ export const DeleteLifeEventParams = zod.object({
 })
 
 export const DeleteLifeEventResponse = zod.void()
+
+
+/**
+ * @summary List all goals
+ */
+export const ListGoalsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "goalType": zod.enum(['spend', 'accumulation']),
+  "targetAmount": zod.number(),
+  "alreadySaved": zod.number(),
+  "startDate": zod.string(),
+  "targetDate": zod.string(),
+  "sourceAccountId": zod.number(),
+  "destinationAccountId": zod.number(),
+  "contributionDay": zod.number(),
+  "monthlyContribution": zod.number(),
+  "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
+  "billId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListGoalsResponse = zod.array(ListGoalsResponseItem)
+
+
+/**
+ * @summary Create a goal (draft — zero forecast impact)
+ */
+export const createGoalBodyContributionDayMax = 31;
+
+
+
+export const CreateGoalBody = zod.object({
+  "name": zod.string(),
+  "goalType": zod.enum(['spend', 'accumulation']),
+  "targetAmount": zod.number(),
+  "alreadySaved": zod.number().optional(),
+  "startDate": zod.string(),
+  "targetDate": zod.string(),
+  "sourceAccountId": zod.number(),
+  "destinationAccountId": zod.number(),
+  "contributionDay": zod.number().min(1).max(createGoalBodyContributionDayMax)
+})
+
+export const CreateGoalResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "goalType": zod.enum(['spend', 'accumulation']),
+  "targetAmount": zod.number(),
+  "alreadySaved": zod.number(),
+  "startDate": zod.string(),
+  "targetDate": zod.string(),
+  "sourceAccountId": zod.number(),
+  "destinationAccountId": zod.number(),
+  "contributionDay": zod.number(),
+  "monthlyContribution": zod.number(),
+  "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
+  "billId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update a goal (recomputes contribution; forward-only if committed)
+ */
+export const UpdateGoalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateGoalBodyContributionDayMax = 31;
+
+
+
+export const UpdateGoalBody = zod.object({
+  "name": zod.string().optional(),
+  "goalType": zod.enum(['spend', 'accumulation']).optional(),
+  "targetAmount": zod.number().optional(),
+  "alreadySaved": zod.number().optional(),
+  "startDate": zod.string().optional(),
+  "targetDate": zod.string().optional(),
+  "sourceAccountId": zod.number().optional(),
+  "destinationAccountId": zod.number().optional(),
+  "contributionDay": zod.number().min(1).max(updateGoalBodyContributionDayMax).optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateGoalResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "goalType": zod.enum(['spend', 'accumulation']),
+  "targetAmount": zod.number(),
+  "alreadySaved": zod.number(),
+  "startDate": zod.string(),
+  "targetDate": zod.string(),
+  "sourceAccountId": zod.number(),
+  "destinationAccountId": zod.number(),
+  "contributionDay": zod.number(),
+  "monthlyContribution": zod.number(),
+  "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
+  "billId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a draft goal (committed goals must be uncommitted first)
+ */
+export const DeleteGoalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteGoalResponse = zod.void()
+
+
+/**
+ * @summary Commit a goal — creates its monthly contribution bill
+ */
+export const CommitGoalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CommitGoalResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "goalType": zod.enum(['spend', 'accumulation']),
+  "targetAmount": zod.number(),
+  "alreadySaved": zod.number(),
+  "startDate": zod.string(),
+  "targetDate": zod.string(),
+  "sourceAccountId": zod.number(),
+  "destinationAccountId": zod.number(),
+  "contributionDay": zod.number(),
+  "monthlyContribution": zod.number(),
+  "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
+  "billId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Uncommit a goal — removes or end-dates its contribution bill
+ */
+export const UncommitGoalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UncommitGoalResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "goalType": zod.enum(['spend', 'accumulation']),
+  "targetAmount": zod.number(),
+  "alreadySaved": zod.number(),
+  "startDate": zod.string(),
+  "targetDate": zod.string(),
+  "sourceAccountId": zod.number(),
+  "destinationAccountId": zod.number(),
+  "contributionDay": zod.number(),
+  "monthlyContribution": zod.number(),
+  "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
+  "billId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
 
 
 /**
@@ -2073,6 +2248,7 @@ export const GetBillLinkReviewResponseItem = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
+  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 }),
@@ -2123,6 +2299,7 @@ export const LinkBillMerchantResponse = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
+  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -2309,6 +2486,7 @@ export const ConfirmDetectedBillResponse = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
+  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })

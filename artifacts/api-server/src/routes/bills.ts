@@ -308,9 +308,16 @@ router.patch("/bills/:id", async (req, res): Promise<void> => {
   // Capture the pre-update paying account so a moved bill leaves the old
   // card's cycles as part of the sync.
   const [before] = await db
-    .select({ paymentAccountId: billsTable.paymentAccountId })
+    .select({ paymentAccountId: billsTable.paymentAccountId, billKind: billsTable.billKind })
     .from(billsTable)
     .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)));
+  // Goal contribution bills are managed exclusively by the goal lifecycle
+  // (commit/uncommit/edit-goal) — generic bill edits could make them
+  // card-paid or break the goal↔bill linkage.
+  if (before?.billKind === "goal_contribution") {
+    res.status(400).json({ error: "This is a goal contribution — edit it from the Goals page instead." });
+    return;
+  }
   const [bill] = await db
     .update(billsTable)
     .set({
@@ -357,6 +364,12 @@ router.delete("/bills/:id", async (req, res): Promise<void> => {
     .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)));
   if (!existing) {
     res.status(404).json({ error: "Bill not found" });
+    return;
+  }
+  // Never hard-delete a goal contribution through the generic path — the
+  // goal lifecycle (uncommit) owns removal and preserves reconciled history.
+  if (existing.billKind === "goal_contribution") {
+    res.status(400).json({ error: "This is a goal contribution — uncommit the goal from the Goals page instead." });
     return;
   }
 

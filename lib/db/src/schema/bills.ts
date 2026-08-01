@@ -27,6 +27,10 @@ export const billsTable = pgTable("bills", {
   companyUrl: text("company_url"),
   isVariable: boolean("is_variable").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
+  // Kind discriminator: 'regular' | 'goal_contribution'. category is
+  // free-text/user-facing and cannot serve as a kind. Goal contribution
+  // bills are excluded from bill detection and card cycle population.
+  billKind: text("bill_kind").notNull().default("regular"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

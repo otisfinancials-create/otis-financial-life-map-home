@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon, ArrowUp, ArrowDown, ChevronsUpDown, X, Link2, Sparkles } from "lucide-react";
+import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon, ArrowUp, ArrowDown, ChevronsUpDown, X, Link2, Sparkles, Target } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link as WouterLink } from "wouter";
 
@@ -143,6 +143,13 @@ export default function Bills() {
   }, [searchedBills, showInactive, sortKey, sortDir]);
 
   const handleEdit = (bill: Bill) => {
+    if (bill.billKind === "goal_contribution") {
+      toast({
+        title: "This is a goal contribution",
+        description: "Edit or remove it from the Goals page — its terms come from the goal.",
+      });
+      return;
+    }
     setBillToEdit((current) => (current?.id === bill.id ? undefined : bill));
   };
 
@@ -344,6 +351,12 @@ export default function Bills() {
                           <span className="truncate max-w-[200px]" title={bill.billName}>
                             {bill.billName}
                           </span>
+                        )}
+                        {bill.billKind === "goal_contribution" && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary shrink-0 flex items-center gap-0.5">
+                            <Target className="h-2.5 w-2.5" />
+                            Goal
+                          </Badge>
                         )}
                         {bill.isVariable && (
                           <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground shrink-0">

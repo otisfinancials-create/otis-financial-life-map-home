@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BillAmountType } from './billAmountType';
+import type { BillBillKind } from './billBillKind';
 import type { BillPaymentMethod } from './billPaymentMethod';
 
 export interface Bill {
@@ -33,6 +34,7 @@ export interface Bill {
   notes?: string | null;
   /** @nullable */
   matchMerchant?: string | null;
+  billKind?: BillBillKind;
   createdAt: string;
   updatedAt: string;
 }

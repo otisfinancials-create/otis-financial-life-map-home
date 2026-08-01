@@ -38,7 +38,15 @@ export async function populateCycleBills(cardCycleId: number): Promise<CardCycle
   const bills = await db
     .select()
     .from(billsTable)
-    .where(and(eq(billsTable.paymentAccountId, cycle.accountId), eq(billsTable.isActive, true)));
+    .where(
+      and(
+        eq(billsTable.paymentAccountId, cycle.accountId),
+        eq(billsTable.isActive, true),
+        // Goal contribution bills are savings transfers — never card-paid,
+        // never part of a card cycle (Goals addendum §3b).
+        eq(billsTable.billKind, "regular"),
+      ),
+    );
 
   for (const bill of bills) {
     await db

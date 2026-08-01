@@ -245,6 +245,125 @@ paths:
         "404":
           description: Not found
 
+  # ── Goals ─────────────────────────────────────────────────────────────────
+  /goals:
+    get:
+      operationId: listGoals
+      tags: [goals]
+      summary: List all goals
+      responses:
+        "200":
+          description: List of goals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Goal"
+    post:
+      operationId: createGoal
+      tags: [goals]
+      summary: Create a goal (draft — zero forecast impact)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoalInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+        "400":
+          description: Validation failed (e.g. destination inside the forecast pool)
+
+  /goals/{id}:
+    patch:
+      operationId: updateGoal
+      tags: [goals]
+      summary: Update a goal (recomputes contribution; forward-only if committed)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoalUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteGoal
+      tags: [goals]
+      summary: Delete a draft goal (committed goals must be uncommitted first)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /goals/{id}/commit:
+    post:
+      operationId: commitGoal
+      tags: [goals]
+      summary: Commit a goal — creates its monthly contribution bill
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Committed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+        "404":
+          description: Not found
+
+  /goals/{id}/uncommit:
+    post:
+      operationId: uncommitGoal
+      tags: [goals]
+      summary: Uncommit a goal — removes or end-dates its contribution bill
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Uncommitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+        "404":
+          description: Not found
+
   # ── Pay Schedules ─────────────────────────────────────────────────────────
   /pay-schedules:
     get:
@@ -2078,6 +2197,9 @@ components:
           type: ["string", "null"]
         matchMerchant:
           type: ["string", "null"]
+        billKind:
+          type: string
+          enum: [regular, goal_contribution]
         createdAt:
           type: string
         updatedAt:
@@ -2277,6 +2399,116 @@ components:
           type: string
         updatedAt:
           type: string
+
+    Goal:
+      type: object
+      required:
+        [
+          id,
+          name,
+          goalType,
+          targetAmount,
+          alreadySaved,
+          startDate,
+          targetDate,
+          sourceAccountId,
+          destinationAccountId,
+          contributionDay,
+          monthlyContribution,
+          status,
+          isActive,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        goalType:
+          type: string
+          enum: [spend, accumulation]
+        targetAmount:
+          type: number
+        alreadySaved:
+          type: number
+        startDate:
+          type: string
+        targetDate:
+          type: string
+        sourceAccountId:
+          type: integer
+        destinationAccountId:
+          type: integer
+        contributionDay:
+          type: integer
+        monthlyContribution:
+          type: number
+        status:
+          type: string
+          enum: [draft, committed, completed, cancelled]
+        billId:
+          type: ["integer", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    GoalInput:
+      type: object
+      required:
+        [name, goalType, targetAmount, startDate, targetDate, sourceAccountId, destinationAccountId, contributionDay]
+      properties:
+        name:
+          type: string
+        goalType:
+          type: string
+          enum: [spend, accumulation]
+        targetAmount:
+          type: number
+        alreadySaved:
+          type: number
+        startDate:
+          type: string
+        targetDate:
+          type: string
+        sourceAccountId:
+          type: integer
+        destinationAccountId:
+          type: integer
+        contributionDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+
+    GoalUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        goalType:
+          type: string
+          enum: [spend, accumulation]
+        targetAmount:
+          type: number
+        alreadySaved:
+          type: number
+        startDate:
+          type: string
+        targetDate:
+          type: string
+        sourceAccountId:
+          type: integer
+        destinationAccountId:
+          type: integer
+        contributionDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+        isActive:
+          type: boolean
 
     LifeEventInput:
       type: object

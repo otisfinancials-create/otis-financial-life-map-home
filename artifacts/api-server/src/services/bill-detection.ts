@@ -651,7 +651,13 @@ async function reconcileAgainstBills(userId: string): Promise<number> {
     .select()
     .from(detectedBillsTable)
     .where(and(eq(detectedBillsTable.userId, userId), eq(detectedBillsTable.status, "pending")));
-  const bills = await db.select().from(billsTable).where(eq(billsTable.userId, userId));
+  // Only compare against regular bills: goal contribution bills are savings
+  // transfers, and detection must never treat a detected pattern as a
+  // duplicate of one (or otherwise reason about them).
+  const bills = await db
+    .select()
+    .from(billsTable)
+    .where(and(eq(billsTable.userId, userId), eq(billsTable.billKind, "regular")));
   let duplicates = 0;
   for (const det of pendingRows) {
     for (const bill of bills) {

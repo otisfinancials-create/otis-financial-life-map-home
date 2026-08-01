@@ -43,6 +43,14 @@ export const BillPaymentMethod = {
   cash: 'cash',
 } as const;
 
+export type BillBillKind = typeof BillBillKind[keyof typeof BillBillKind];
+
+
+export const BillBillKind = {
+  regular: 'regular',
+  goal_contribution: 'goal_contribution',
+} as const;
+
 export interface Bill {
   id: number;
   billName: string;
@@ -68,6 +76,7 @@ export interface Bill {
   notes?: string | null;
   /** @nullable */
   matchMerchant?: string | null;
+  billKind?: BillBillKind;
   createdAt: string;
   updatedAt: string;
 }
@@ -229,6 +238,93 @@ export interface LifeEvent {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export type GoalGoalType = typeof GoalGoalType[keyof typeof GoalGoalType];
+
+
+export const GoalGoalType = {
+  spend: 'spend',
+  accumulation: 'accumulation',
+} as const;
+
+export type GoalStatus = typeof GoalStatus[keyof typeof GoalStatus];
+
+
+export const GoalStatus = {
+  draft: 'draft',
+  committed: 'committed',
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface Goal {
+  id: number;
+  name: string;
+  goalType: GoalGoalType;
+  targetAmount: number;
+  alreadySaved: number;
+  startDate: string;
+  targetDate: string;
+  sourceAccountId: number;
+  destinationAccountId: number;
+  contributionDay: number;
+  monthlyContribution: number;
+  status: GoalStatus;
+  /** @nullable */
+  billId?: number | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type GoalInputGoalType = typeof GoalInputGoalType[keyof typeof GoalInputGoalType];
+
+
+export const GoalInputGoalType = {
+  spend: 'spend',
+  accumulation: 'accumulation',
+} as const;
+
+export interface GoalInput {
+  name: string;
+  goalType: GoalInputGoalType;
+  targetAmount: number;
+  alreadySaved?: number;
+  startDate: string;
+  targetDate: string;
+  sourceAccountId: number;
+  destinationAccountId: number;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  contributionDay: number;
+}
+
+export type GoalUpdateGoalType = typeof GoalUpdateGoalType[keyof typeof GoalUpdateGoalType];
+
+
+export const GoalUpdateGoalType = {
+  spend: 'spend',
+  accumulation: 'accumulation',
+} as const;
+
+export interface GoalUpdate {
+  name?: string;
+  goalType?: GoalUpdateGoalType;
+  targetAmount?: number;
+  alreadySaved?: number;
+  startDate?: string;
+  targetDate?: string;
+  sourceAccountId?: number;
+  destinationAccountId?: number;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  contributionDay?: number;
+  isActive?: boolean;
 }
 
 export interface LifeEventInput {
