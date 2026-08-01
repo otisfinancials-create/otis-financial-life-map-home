@@ -349,6 +349,7 @@ export const ListGoalsResponseItem = zod.object({
   "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
   "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
   "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "targetReachedEarly": zod.boolean().optional().describe('§7.7 — actual bucket reached the target before the target date while future contributions are still scheduled. UI should prompt to stop contributing.'),
   "bucketInvariant": zod.object({
   "stored": zod.number(),
   "derived": zod.number(),
@@ -397,6 +398,7 @@ export const CreateGoalResponse = zod.object({
   "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
   "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
   "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "targetReachedEarly": zod.boolean().optional().describe('§7.7 — actual bucket reached the target before the target date while future contributions are still scheduled. UI should prompt to stop contributing.'),
   "bucketInvariant": zod.object({
   "stored": zod.number(),
   "derived": zod.number(),
@@ -472,6 +474,7 @@ export const UpdateGoalResponse = zod.object({
   "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
   "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
   "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "targetReachedEarly": zod.boolean().optional().describe('§7.7 — actual bucket reached the target before the target date while future contributions are still scheduled. UI should prompt to stop contributing.'),
   "bucketInvariant": zod.object({
   "stored": zod.number(),
   "derived": zod.number(),
@@ -517,6 +520,7 @@ export const CommitGoalResponse = zod.object({
   "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
   "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
   "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "targetReachedEarly": zod.boolean().optional().describe('§7.7 — actual bucket reached the target before the target date while future contributions are still scheduled. UI should prompt to stop contributing.'),
   "bucketInvariant": zod.object({
   "stored": zod.number(),
   "derived": zod.number(),
@@ -552,6 +556,43 @@ export const UncommitGoalResponse = zod.object({
   "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
   "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
   "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "targetReachedEarly": zod.boolean().optional().describe('§7.7 — actual bucket reached the target before the target date while future contributions are still scheduled. UI should prompt to stop contributing.'),
+  "bucketInvariant": zod.object({
+  "stored": zod.number(),
+  "derived": zod.number(),
+  "ok": zod.boolean()
+}).nullish().describe('Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Stop contributing — end-dates the contribution bill at today; reconciled history survives (§7.7 target-reached-early)
+ */
+export const StopGoalContributionsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const StopGoalContributionsResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "goalType": zod.enum(['spend', 'accumulation']),
+  "targetAmount": zod.number(),
+  "alreadySaved": zod.number(),
+  "startDate": zod.string(),
+  "targetDate": zod.string(),
+  "sourceAccountId": zod.number(),
+  "destinationAccountId": zod.number(),
+  "contributionDay": zod.number(),
+  "monthlyContribution": zod.number(),
+  "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
+  "billId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
+  "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
+  "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "targetReachedEarly": zod.boolean().optional().describe('§7.7 — actual bucket reached the target before the target date while future contributions are still scheduled. UI should prompt to stop contributing.'),
   "bucketInvariant": zod.object({
   "stored": zod.number(),
   "derived": zod.number(),
@@ -587,6 +628,7 @@ export const RemoveGoalPurchaseResponse = zod.object({
   "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
   "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
   "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "targetReachedEarly": zod.boolean().optional().describe('§7.7 — actual bucket reached the target before the target date while future contributions are still scheduled. UI should prompt to stop contributing.'),
   "bucketInvariant": zod.object({
   "stored": zod.number(),
   "derived": zod.number(),

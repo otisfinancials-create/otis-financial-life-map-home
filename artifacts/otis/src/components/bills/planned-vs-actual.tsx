@@ -23,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { monthlyFactor } from "@/lib/bill-math";
+import { isGoalContribution, GOAL_SAVINGS_LABEL } from "@/lib/bill-groups";
 import { getCategoryEmoji } from "@/utils/categoryIcons";
 
 function boundsFor(year: number, month: number): { start: string; end: string; label: string } {
@@ -125,6 +126,10 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
       planned: number;
       paid: number;
     }
+    // Goal contributions group under their own "Goal Savings" heading —
+    // kind-based (billKind), never by their free-text category. Same shared
+    // concept as the Budget page (see lib/bill-groups.ts).
+    const goalRows: BillRow[] = [];
     const byCategory = new Map<string, BillRow[]>();
     for (const b of activeBills) {
       const row: BillRow = {
@@ -132,10 +137,20 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
         planned: b.amount * monthlyFactor(b.frequency),
         paid: paidByBill.get(b.id) ?? 0,
       };
+      if (isGoalContribution(b)) {
+        goalRows.push(row);
+        continue;
+      }
       const list = byCategory.get(b.category) ?? [];
       list.push(row);
       byCategory.set(b.category, list);
     }
+    goalRows.sort((a, b) => b.planned - a.planned);
+    const goalGroup = {
+      rows: goalRows,
+      planned: goalRows.reduce((s, r) => s + r.planned, 0),
+      paid: goalRows.reduce((s, r) => s + r.paid, 0),
+    };
 
     const categories = Array.from(byCategory.entries())
       .map(([category, rows]) => ({
@@ -164,10 +179,10 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
 
     const envPlanned = cardGroups.reduce((s, g) => s + g.planned, 0);
     const envPaid = cardGroups.reduce((s, g) => s + g.paid, 0);
-    const totalPlanned = categories.reduce((s, c) => s + c.planned, 0) + envPlanned;
-    const totalPaid = categories.reduce((s, c) => s + c.paid, 0) + envPaid;
+    const totalPlanned = categories.reduce((s, c) => s + c.planned, 0) + envPlanned + goalGroup.planned;
+    const totalPaid = categories.reduce((s, c) => s + c.paid, 0) + envPaid + goalGroup.paid;
 
-    return { incomePlanned, incomePaid, categories, cardGroups, totalPlanned, totalPaid };
+    return { incomePlanned, incomePaid, categories, goalGroup, cardGroups, totalPlanned, totalPaid };
   }, [bills, txs, paySchedules, compositions]);
 
   return (
@@ -205,7 +220,7 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
           <div className="p-5 space-y-3">
             {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
           </div>
-        ) : data.categories.length === 0 && paySchedules.length === 0 ? (
+        ) : data.categories.length === 0 && data.goalGroup.rows.length === 0 && data.cardGroups.length === 0 && paySchedules.length === 0 ? (
           <p className="px-5 py-6 text-sm text-muted-foreground">No active bills or pay schedules yet.</p>
         ) : (
           <Table>
@@ -295,6 +310,55 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
                   </Fragment>
                 );
               })}
+              {/* Goal Savings section — savings toward goals, never "Other" spend */}
+              {data.goalGroup.rows.length > 0 && (
+                <Fragment>
+                  <TableRow className="border-border bg-muted/30 hover:bg-muted/30">
+                    <TableCell colSpan={5} className="py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {GOAL_SAVINGS_LABEL}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow className="border-border cursor-pointer" onClick={() => toggle("goal-savings")} data-testid="row-pva-goal-savings">
+                    <TableCell className="font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        {expanded.has("goal-savings") ? (
+                          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                        ) : (
+                          <ChevronRightSmall className="h-3.5 w-3.5 text-muted-foreground" />
+                        )}
+                        <span style={{ fontSize: 16, lineHeight: 1 }}>🎯</span>
+                        {GOAL_SAVINGS_LABEL}
+                      </span>
+                    </TableCell>
+                    <TableCell className={moneyCell}><FormatCurrency amount={data.goalGroup.planned} /></TableCell>
+                    <TableCell className={moneyCell}><FormatCurrency amount={data.goalGroup.paid} /></TableCell>
+                    <TableCell className={`${moneyCell} ${data.goalGroup.planned - data.goalGroup.paid < -0.005 ? "text-red-600" : ""}`}>
+                      <FormatCurrency amount={data.goalGroup.planned - data.goalGroup.paid} />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <StatusIcon planned={data.goalGroup.planned} paid={data.goalGroup.paid} />
+                    </TableCell>
+                  </TableRow>
+                  {expanded.has("goal-savings") &&
+                    data.goalGroup.rows.map((r) => (
+                      <TableRow key={`goal-savings-${r.bill.id}`} className="border-border bg-muted/20 hover:bg-muted/20">
+                        <TableCell className="pl-12 text-sm text-muted-foreground">{r.bill.billName}</TableCell>
+                        <TableCell className={`${moneyCell} text-sm text-muted-foreground`}>
+                          <FormatCurrency amount={r.planned} />
+                        </TableCell>
+                        <TableCell className={`${moneyCell} text-sm text-muted-foreground`}>
+                          <FormatCurrency amount={r.paid} />
+                        </TableCell>
+                        <TableCell className={`${moneyCell} text-sm ${r.planned - r.paid < -0.005 ? "text-red-600" : "text-muted-foreground"}`}>
+                          <FormatCurrency amount={r.planned - r.paid} />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <StatusIcon planned={r.planned} paid={r.paid} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </Fragment>
+              )}
               {/* Card envelopes section */}
               {data.cardGroups.length > 0 && (
                 <TableRow className="border-border bg-muted/30 hover:bg-muted/30">

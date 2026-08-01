@@ -5,6 +5,7 @@ import type { Bill } from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { categoryMeta } from "@/utils/categoryIcons";
+import { isGoalContribution, GOAL_SAVINGS_LABEL } from "@/lib/bill-groups";
 import { monthlyFactor } from "@/lib/bill-math";
 
 type Slice = {
@@ -44,7 +45,10 @@ export function BillsAnalytics({ bills, selectedCategory = null, onSelectCategor
     for (const bill of bills) {
       if (!bill.isActive) continue;
       const monthly = bill.amount * monthlyFactor(bill.frequency);
-      byCategory[bill.category] = (byCategory[bill.category] ?? 0) + monthly;
+      // Kind-based grouping (shared concept, lib/bill-groups.ts): goal
+      // contributions form their own slice, never their free-text category.
+      const key = isGoalContribution(bill) ? GOAL_SAVINGS_LABEL : bill.category;
+      byCategory[key] = (byCategory[key] ?? 0) + monthly;
     }
     // Category % = (category monthly total ÷ sum of ALL category monthly totals) × 100.
     const total = Object.values(byCategory).reduce((s, v) => s + v, 0);
@@ -54,7 +58,7 @@ export function BillsAnalytics({ bills, selectedCategory = null, onSelectCategor
         name,
         value,
         pct: total > 0 ? (value / total) * 100 : 0,
-        color: categoryMeta(name).color,
+        color: name === GOAL_SAVINGS_LABEL ? "#0f766e" : categoryMeta(name).color,
       }));
     // Largest-remainder rounding so the displayed 1-decimal percentages sum to exactly 100.0.
     if (total > 0 && result.length > 0) {

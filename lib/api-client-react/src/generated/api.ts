@@ -1540,6 +1540,76 @@ export const useUncommitGoal = <TError = ErrorType<void>,
       return useMutation(getUncommitGoalMutationOptions(options));
     }
 
+export const getStopGoalContributionsUrl = (id: number,) => {
+
+
+
+
+  return `/api/goals/${id}/stop-contributions`
+}
+
+/**
+ * @summary Stop contributing — end-dates the contribution bill at today; reconciled history survives (§7.7 target-reached-early)
+ */
+export const stopGoalContributions = async (id: number, options?: RequestInit): Promise<Goal> => {
+
+  return customFetch<Goal>(getStopGoalContributionsUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getStopGoalContributionsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopGoalContributions>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof stopGoalContributions>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['stopGoalContributions'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof stopGoalContributions>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  stopGoalContributions(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StopGoalContributionsMutationResult = NonNullable<Awaited<ReturnType<typeof stopGoalContributions>>>
+
+    export type StopGoalContributionsMutationError = ErrorType<void>
+
+    /**
+ * @summary Stop contributing — end-dates the contribution bill at today; reconciled history survives (§7.7 target-reached-early)
+ */
+export const useStopGoalContributions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopGoalContributions>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof stopGoalContributions>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getStopGoalContributionsMutationOptions(options));
+    }
+
 export const getRemoveGoalPurchaseUrl = (id: number,) => {
 
 

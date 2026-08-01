@@ -37,6 +37,8 @@ export interface Goal {
      * @nullable
      */
   shortfall?: number | null;
+  /** §7.7 — actual bucket reached the target before the target date while future contributions are still scheduled. UI should prompt to stop contributing. */
+  targetReachedEarly?: boolean;
   /**
      * Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.
      * @nullable

@@ -4,6 +4,8 @@ import { db, goalsTable, billsTable, accountsTable, forecastedTransactionsTable,
 import {
   RemoveGoalPurchaseParams,
   RemoveGoalPurchaseResponse,
+  StopGoalContributionsParams,
+  StopGoalContributionsResponse,
 } from "@workspace/api-zod";
 import {
   CreateGoalBody,
@@ -132,6 +134,7 @@ function scheduledContributionDates(startIso: string, endIso: string, day: numbe
 type BucketInfo = {
   projectedBucketAtSpendDate: number | null;
   shortfall: number | null;
+  targetReachedEarly: boolean;
   bucketInvariant: { stored: number; derived: number; ok: boolean };
 };
 
@@ -152,8 +155,27 @@ async function computeBuckets(userId: string, goal: Goal): Promise<BucketInfo> {
   const stored = parseFloat(String(goal.actualBucket));
   const invariant = { stored, derived, ok: Math.abs(stored - derived) < 0.005 };
 
+  const todayStr = toLocalIsoDate(new Date());
+  const bill = goal.billId != null
+    ? (await db.select().from(billsTable).where(and(eq(billsTable.id, goal.billId), eq(billsTable.userId, userId))))[0]
+    : undefined;
+  // §7.7 — the actual bucket hit the target BEFORE the target date while
+  // future contributions are still scheduled. "Still scheduled" is decided by
+  // the exact generator the forecast uses — an occurrence strictly after
+  // today must actually exist, not just an open endDate window. Once the
+  // bill is end-dated or inactive, the prompt goes away even though the goal
+  // stays committed.
+  const hasFutureContribution =
+    bill != null &&
+    bill.isActive &&
+    generateBillOccurrences(bill, todayStr, bill.endDate ?? goal.targetDate).some((d) => d > todayStr);
+  const targetReachedEarly =
+    hasFutureContribution &&
+    derived >= target - 0.005 &&
+    todayStr < goal.targetDate;
+
   if (goal.goalType !== "spend") {
-    return { projectedBucketAtSpendDate: null, shortfall: null, bucketInvariant: invariant };
+    return { projectedBucketAtSpendDate: null, shortfall: null, targetReachedEarly, bucketInvariant: invariant };
   }
   // Scheduled contributions ≤ spend date. Use the committed bill's terms when
   // one exists; otherwise the draft goal's own schedule.
@@ -161,14 +183,11 @@ async function computeBuckets(userId: string, goal: Goal): Promise<BucketInfo> {
   let schedStart = goal.startDate;
   let schedEnd = goal.targetDate;
   let schedDay = goal.contributionDay;
-  if (goal.billId != null) {
-    const [bill] = await db.select().from(billsTable).where(and(eq(billsTable.id, goal.billId), eq(billsTable.userId, userId)));
-    if (bill) {
-      contribution = parseFloat(String(bill.amount));
-      schedStart = bill.startDate ?? schedStart;
-      schedEnd = bill.endDate && bill.endDate < goal.targetDate ? bill.endDate : goal.targetDate;
-      schedDay = bill.dueDay;
-    }
+  if (bill) {
+    contribution = parseFloat(String(bill.amount));
+    schedStart = bill.startDate ?? schedStart;
+    schedEnd = bill.endDate && bill.endDate < goal.targetDate ? bill.endDate : goal.targetDate;
+    schedDay = bill.dueDay;
   }
   const dates = scheduledContributionDates(schedStart, schedEnd, schedDay);
   // §3c: committed goals project from REALITY — actual bucket + contributions
@@ -179,7 +198,7 @@ async function computeBuckets(userId: string, goal: Goal): Promise<BucketInfo> {
     ? projectedAtSpendDate(derived, contribution, dates, toLocalIsoDate(new Date()), goal.targetDate)
     : Math.round((parseFloat(String(goal.alreadySaved)) + contribution * dates.filter((d) => d <= goal.targetDate).length) * 100) / 100;
   const shortfall = Math.max(0, Math.round((target - Math.min(projected, target)) * 100) / 100);
-  return { projectedBucketAtSpendDate: projected, shortfall, bucketInvariant: invariant };
+  return { projectedBucketAtSpendDate: projected, shortfall, targetReachedEarly, bucketInvariant: invariant };
 }
 
 function serializeGoal(goal: Goal, buckets?: BucketInfo) {
@@ -672,6 +691,57 @@ router.post("/goals/:id/uncommit", async (req, res): Promise<void> => {
   const [updated] = await db.select().from(goalsTable).where(eq(goalsTable.id, goal.id));
   req.log.info({ goalId: goal.id, billId: goal.billId, hadReconciled: reconciled.length > 0 }, "Uncommitted goal");
   res.json(UncommitGoalResponse.parse(await serializeGoalFull(req.userId, updated)));
+});
+
+/**
+ * STOP CONTRIBUTING (§7.7) — the actual bucket reached the target early and
+ * the user accepted the prompt. Uses the EXISTING end-date path, never
+ * deletion: bill.endDate = today, reconciled history intact, bill stays
+ * active (it simply has no future occurrences). Regeneration then drops the
+ * future planned contribution rows.
+ */
+router.post("/goals/:id/stop-contributions", async (req, res): Promise<void> => {
+  const params = StopGoalContributionsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [goal] = await db
+    .select()
+    .from(goalsTable)
+    .where(and(eq(goalsTable.id, params.data.id), eq(goalsTable.userId, req.userId)));
+  if (!goal) {
+    res.status(404).json({ error: "Goal not found" });
+    return;
+  }
+  if (goal.billId == null) {
+    res.status(400).json({ error: "Goal has no contribution bill." });
+    return;
+  }
+  const todayStr = toLocalIsoDate(new Date());
+  const [bill] = await db
+    .select()
+    .from(billsTable)
+    .where(and(eq(billsTable.id, goal.billId), eq(billsTable.userId, req.userId)));
+  if (!bill || !bill.isActive || (bill.endDate != null && bill.endDate <= todayStr)) {
+    res.status(400).json({ error: "Goal has no active contribution bill." });
+    return;
+  }
+  // §7.7 contract: stopping is the acceptance path for the target-reached-
+  // early prompt — the server enforces the precondition, not just the UI.
+  const { targetReachedEarly } = await computeBuckets(req.userId, goal);
+  if (!targetReachedEarly) {
+    res.status(400).json({ error: "The goal hasn't reached its target early — there is nothing to stop." });
+    return;
+  }
+  await db
+    .update(billsTable)
+    .set({ endDate: todayStr })
+    .where(and(eq(billsTable.id, goal.billId), eq(billsTable.userId, req.userId)));
+  await regenerateForecastForUser(req.userId);
+  const [updated] = await db.select().from(goalsTable).where(eq(goalsTable.id, goal.id));
+  req.log.info({ goalId: goal.id, billId: goal.billId, endDate: todayStr }, "Stopped goal contributions (target reached early)");
+  res.json(StopGoalContributionsResponse.parse(await serializeGoalFull(req.userId, updated)));
 });
 
 /**

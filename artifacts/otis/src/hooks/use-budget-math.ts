@@ -6,6 +6,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Bill } from "@workspace/api-client-react";
 import { monthlyFactor } from "@/lib/bill-math";
+import { isGoalContribution } from "@/lib/bill-groups";
 import { foldCarryover, nearestCyclePerCard, todayIso } from "@/components/bills/card-composition";
 
 /**
@@ -35,7 +36,7 @@ export function useBudgetMath() {
   );
 
   const goalBills = useMemo(
-    () => (bills ?? []).filter((b) => b.isActive && b.billKind === "goal_contribution"),
+    () => (bills ?? []).filter((b) => b.isActive && isGoalContribution(b)),
     [bills],
   );
   const totalGoalSavings = useMemo(
@@ -46,7 +47,7 @@ export function useBudgetMath() {
   const groups = useMemo(() => {
     const byCategory: Record<string, Bill[]> = {};
     for (const bill of bills ?? []) {
-      if (!bill.isActive || bill.amountType === "positive" || bill.billKind === "goal_contribution") continue;
+      if (!bill.isActive || bill.amountType === "positive" || isGoalContribution(bill)) continue;
       (byCategory[bill.category] ??= []).push(bill);
     }
     return Object.entries(byCategory)

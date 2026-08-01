@@ -8,6 +8,7 @@ import {
   useDeleteGoal,
   useCommitGoal,
   useUncommitGoal,
+  useStopGoalContributions,
   useRemoveGoalPurchase,
   useListAccounts,
   useGetGoalSurplus,
@@ -112,26 +113,37 @@ function previewContribution(f: FormState): number | null {
  * bucket against what the schedule says should have been saved BY TODAY
  * (alreadySaved + contribution × occurrences ≤ today).
  */
-function GoalProgress({ goal }: { goal: Goal }) {
+function GoalProgress({ goal, onStopContributions, stopping }: { goal: Goal; onStopContributions: (goal: Goal) => void; stopping: boolean }) {
   const actual = goal.actualBucket ?? goal.alreadySaved;
   const target = goal.targetAmount;
   const pct = target > 0 ? Math.min(100, Math.max(0, (actual / target) * 100)) : 0;
   const today = todayIso();
   const dueByNow = contributionCount(goal.startDate, today < goal.targetDate ? today : goal.targetDate, goal.contributionDay);
   const expectedByNow = Math.min(target, goal.alreadySaved + goal.monthlyContribution * dueByNow);
-  const behind = actual < expectedByNow - 0.005;
+  // §7.7/3c — status must reflect reality. At or past target it reads as
+  // reached/exceeded, never "on track", regardless of schedule arithmetic.
+  const overfunded = actual > target + 0.005;
+  const reached = !overfunded && actual >= target - 0.005;
+  const behind = !reached && !overfunded && actual < expectedByNow - 0.005;
+  const badge = overfunded
+    ? { label: "Target exceeded", cls: "bg-amber-100 text-amber-700 border-transparent" }
+    : reached
+      ? { label: "Target reached", cls: "bg-emerald-100 text-emerald-700 border-transparent" }
+      : behind
+        ? { label: "Behind", cls: "bg-destructive/10 text-destructive border-transparent" }
+        : { label: "On track", cls: "bg-emerald-100 text-emerald-700 border-transparent" };
   return (
     <div className="space-y-1 pt-1" data-testid={`progress-goal-${goal.id}`}>
       <div className="flex items-center justify-between text-sm">
         <span>
           <span className="font-mono font-medium"><FormatCurrency amount={actual} /></span>{" "}
           <span className="text-muted-foreground">of <FormatCurrency amount={target} /> saved</span>
+          {overfunded && (
+            <span className="text-amber-700"> — {Math.round((actual / target) * 100)}% of target</span>
+          )}
         </span>
-        <Badge
-          variant="secondary"
-          className={behind ? "bg-destructive/10 text-destructive border-transparent" : "bg-emerald-100 text-emerald-700 border-transparent"}
-        >
-          {behind ? "Behind" : "On track"}
+        <Badge variant="secondary" className={badge.cls} data-testid={`badge-goal-status-${goal.id}`}>
+          {badge.label}
         </Badge>
       </div>
       <Progress value={pct} className="h-2" />
@@ -140,6 +152,27 @@ function GoalProgress({ goal }: { goal: Goal }) {
           Schedule expected <FormatCurrency amount={expectedByNow} /> saved by today —{" "}
           <span className="text-destructive font-medium"><FormatCurrency amount={Math.round((expectedByNow - actual) * 100) / 100} /> behind</span>.
         </p>
+      )}
+      {goal.targetReachedEarly && (
+        <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2" data-testid={`prompt-stop-contributions-${goal.id}`}>
+          <p className="text-sm text-emerald-900">
+            You hit your target early — you have <FormatCurrency amount={actual} /> saved against a{" "}
+            <FormatCurrency amount={target} /> target, and contributions are still scheduled. Stop contributing?
+          </p>
+          <p className="text-xs text-emerald-800/80">
+            Stopping ends the contribution schedule today and removes future transfers from your forecast. Money already saved stays saved.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-emerald-300 text-emerald-800"
+            disabled={stopping}
+            onClick={() => onStopContributions(goal)}
+            data-testid={`button-stop-contributions-${goal.id}`}
+          >
+            {stopping ? "Stopping…" : "Stop contributing"}
+          </Button>
+        </div>
       )}
     </div>
   );
@@ -234,6 +267,21 @@ export default function Goals() {
       onError: (err) =>
         toast({
           title: "Couldn't uncommit goal",
+          description: (err as { response?: { data?: { error?: string } } })?.response?.data?.error,
+          variant: "destructive",
+        }),
+    },
+  });
+
+  const stopContributions = useStopGoalContributions({
+    mutation: {
+      onSuccess: () => {
+        invalidate();
+        toast({ title: "Contributions stopped", description: "Future transfers were removed from your forecast. Everything already saved stays saved." });
+      },
+      onError: (err) =>
+        toast({
+          title: "Couldn't stop contributions",
           description: (err as { response?: { data?: { error?: string } } })?.response?.data?.error,
           variant: "destructive",
         }),
@@ -395,7 +443,13 @@ export default function Goals() {
                 <p className="text-muted-foreground truncate">
                   {accountName(g.sourceAccountId)} → {accountName(g.destinationAccountId)}
                 </p>
-                {g.billId != null && <GoalProgress goal={g} />}
+                {g.billId != null && (
+                  <GoalProgress
+                    goal={g}
+                    onStopContributions={(goal) => stopContributions.mutate({ id: goal.id })}
+                    stopping={stopContributions.isPending}
+                  />
+                )}
                 {g.goalType === "spend" && g.projectedBucketAtSpendDate != null && (
                   <p className="text-muted-foreground">
                     Saved by spend date:{" "}

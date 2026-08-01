@@ -44,6 +44,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { BillDialog, BillForm } from "@/components/bills/bill-dialog";
 import { BillsAnalytics } from "@/components/bills/bills-analytics";
 import { categoryMeta, getCategoryEmoji } from "@/utils/categoryIcons";
+import { isGoalContribution, GOAL_SAVINGS_LABEL } from "@/lib/bill-groups";
 import { PlannedVsActualTab } from "@/components/bills/planned-vs-actual";
 import { BudgetTab } from "@/components/bills/budget-tab";
 import { CardCompositionSection } from "@/components/bills/card-composition";
@@ -105,8 +106,11 @@ export default function Bills() {
     () =>
       bills?.filter((bill) =>
         (bill.billName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          bill.category.toLowerCase().includes(searchTerm.toLowerCase())) &&
-        (!selectedCategory || bill.category === selectedCategory)
+          (isGoalContribution(bill) ? GOAL_SAVINGS_LABEL : bill.category).toLowerCase().includes(searchTerm.toLowerCase())) &&
+        // Kind-aware: the analytics "Goal Savings" slice selects goal
+        // contributions; free-text categories never match them.
+        (!selectedCategory ||
+          (selectedCategory === GOAL_SAVINGS_LABEL ? isGoalContribution(bill) : !isGoalContribution(bill) && bill.category === selectedCategory))
       ) || [],
     [bills, searchTerm, selectedCategory],
   );
@@ -378,27 +382,44 @@ export default function Bills() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {(() => {
-                        const meta = categoryMeta(bill.category);
-                        return (
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="shrink-0"
-                              style={{ fontSize: "16px", lineHeight: 1 }}
-                              aria-hidden="true"
-                            >
-                              {getCategoryEmoji(bill.category, bill.billName)}
-                            </span>
-                            <Badge
-                              variant="outline"
-                              className="font-normal border-transparent"
-                              style={{ backgroundColor: meta.bg, color: meta.text }}
-                            >
-                              {bill.category}
-                            </Badge>
-                          </div>
-                        );
-                      })()}
+                      {isGoalContribution(bill) ? (
+                        // Kind-based grouping (shared concept, lib/bill-groups.ts):
+                        // goal contributions are savings toward a goal, never
+                        // their free-text category (which fell back to "Other").
+                        <div className="flex items-center gap-2" data-testid={`category-goal-savings-${bill.id}`}>
+                          <span className="shrink-0" style={{ fontSize: "16px", lineHeight: 1 }} aria-hidden="true">
+                            🎯
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="font-normal border-transparent bg-primary/10 text-primary"
+                          >
+                            {GOAL_SAVINGS_LABEL}
+                          </Badge>
+                        </div>
+                      ) : (
+                        (() => {
+                          const meta = categoryMeta(bill.category);
+                          return (
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="shrink-0"
+                                style={{ fontSize: "16px", lineHeight: 1 }}
+                                aria-hidden="true"
+                              >
+                                {getCategoryEmoji(bill.category, bill.billName)}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className="font-normal border-transparent"
+                                style={{ backgroundColor: meta.bg, color: meta.text }}
+                              >
+                                {bill.category}
+                              </Badge>
+                            </div>
+                          );
+                        })()
+                      )}
                     </TableCell>
                     <TableCell className="font-mono">
                       {bill.amountType === "positive" ? (

@@ -377,6 +377,29 @@ paths:
         "404":
           description: Not found
 
+  /goals/{id}/stop-contributions:
+    post:
+      operationId: stopGoalContributions
+      tags: [goals]
+      summary: Stop contributing — end-dates the contribution bill at today; reconciled history survives (§7.7 target-reached-early)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Contributions stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+        "400":
+          description: Goal has no active contribution bill
+        "404":
+          description: Not found
+
   /goals/{id}/purchase-removed:
     post:
       operationId: removeGoalPurchase
@@ -2522,6 +2545,9 @@ components:
         shortfall:
           type: ["number", "null"]
           description: Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.
+        targetReachedEarly:
+          type: boolean
+          description: §7.7 — actual bucket reached the target before the target date while future contributions are still scheduled. UI should prompt to stop contributing.
         bucketInvariant:
           type: ["object", "null"]
           description: Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.
