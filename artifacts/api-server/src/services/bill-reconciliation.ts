@@ -11,6 +11,7 @@ import {
 } from "@workspace/db";
 import { and, eq, inArray, isNull, isNotNull, ne } from "drizzle-orm";
 import { merchantMatchStrength } from "./cycle-processing";
+import { goalsTable } from "@workspace/db";
 
 /**
  * P6/P7 — planned-vs-actual reconciliation for BANK-PAID bills and paychecks.
@@ -50,6 +51,21 @@ export interface ReconcileSuggestion {
 const AMOUNT_TOLERANCE = 0.15;
 const DATE_WINDOW_DAYS = 7;
 
+// TRANSFER match class (goal contributions — Addendum §7). Transfers are
+// usually exact and land on schedule, so both windows are tighter than bills.
+// Merchant matching is impossible here: merchant_name is NULL on transfer
+// rows and the bank reference code in `name` changes on every transfer.
+const TRANSFER_AMOUNT_TOLERANCE = 0.05;
+const TRANSFER_DATE_WINDOW_DAYS = 5;
+// Destination-leg corroboration: the matching inflow usually posts the same
+// day; allow a small settle window.
+const TRANSFER_CORROBORATION_DAYS = 2;
+
+function isTransferCategory(txn: PlaidTransaction): boolean {
+  const cat = `${txn.personalFinanceCategory ?? ""} ${txn.personalFinanceCategoryDetailed ?? ""}`;
+  return cat.includes("TRANSFER_OUT") || cat.includes("TRANSFER_IN");
+}
+
 function dayDiff(aIso: string, bIso: string): number {
   return Math.abs(Date.parse(`${aIso}T00:00:00Z`) - Date.parse(`${bIso}T00:00:00Z`)) / 86_400_000;
 }
@@ -71,10 +87,51 @@ async function eligibleBills(userId: string): Promise<Array<{ bill: Bill; plaidA
   return rows.map((r) => ({ bill: r.bill, plaidAccountId: r.plaidAccountId! }));
 }
 
+/** TRANSFER class eligibility: active goal-contribution bills paid from a
+ * Plaid-linked non-card account, joined to their goal for the destination
+ * account's plaid id (corroboration leg). No matchMerchant requirement —
+ * transfer rows carry no usable merchant (see class comment above). */
+async function eligibleGoalContributionBills(
+  userId: string,
+): Promise<Array<{ bill: Bill; plaidAccountId: string; destPlaidAccountId: string | null }>> {
+  const rows = await db
+    .select({ bill: billsTable, plaidAccountId: accountsTable.plaidAccountId, destAccountId: goalsTable.destinationAccountId })
+    .from(billsTable)
+    .innerJoin(accountsTable, eq(accountsTable.id, billsTable.paymentAccountId))
+    .innerJoin(goalsTable, eq(goalsTable.billId, billsTable.id))
+    .where(and(
+      eq(billsTable.userId, userId),
+      eq(billsTable.isActive, true),
+      eq(billsTable.billKind, "goal_contribution"),
+      ne(accountsTable.accountType, "credit_card"),
+      isNotNull(accountsTable.plaidAccountId),
+    ));
+  if (rows.length === 0) return [];
+  const destIds = [...new Set(rows.map((r) => r.destAccountId).filter((id): id is number => id != null))];
+  const destAccounts = destIds.length
+    ? await db
+        .select({ id: accountsTable.id, plaidAccountId: accountsTable.plaidAccountId })
+        .from(accountsTable)
+        .where(and(eq(accountsTable.userId, userId), inArray(accountsTable.id, destIds)))
+    : [];
+  const destPlaidById = new Map(destAccounts.map((a) => [a.id, a.plaidAccountId]));
+  return rows.map((r) => ({
+    bill: r.bill,
+    plaidAccountId: r.plaidAccountId!,
+    destPlaidAccountId: r.destAccountId != null ? destPlaidById.get(r.destAccountId) ?? null : null,
+  }));
+}
+
 export async function findReconcileSuggestions(userId: string): Promise<ReconcileSuggestion[]> {
   const eligible = await eligibleBills(userId);
   const billIds = eligible.map((e) => e.bill.id);
   const byBillId = new Map(eligible.map((e) => [e.bill.id, e]));
+
+  // TRANSFER class: goal contributions match by account+amount+date+category,
+  // never merchant. Kept in a separate map so the fixed/variable branch can't
+  // accidentally pick them up (they have no matchMerchant).
+  const goalEligible = await eligibleGoalContributionBills(userId);
+  const goalByBillId = new Map(goalEligible.map((e) => [e.bill.id, e]));
 
   const paySchedules = await db
     .select()
@@ -82,7 +139,7 @@ export async function findReconcileSuggestions(userId: string): Promise<Reconcil
     .where(eq(paySchedulesTable.userId, userId));
   const payById = new Map(paySchedules.map((p) => [p.id, p]));
 
-  if (billIds.length === 0 && paySchedules.length === 0) return [];
+  if (billIds.length === 0 && goalEligible.length === 0 && paySchedules.length === 0) return [];
 
   // Planned rows: not yet actual/confirmed, not missed/removed, and not part
   // of any card path (standalone bank-paid rows only).
@@ -97,7 +154,7 @@ export async function findReconcileSuggestions(userId: string): Promise<Reconcil
       isNull(forecastedTransactionsTable.status),
     ));
   const relevantRows = plannedRows.filter((r) =>
-    (r.sourceBillId != null && byBillId.has(r.sourceBillId)) ||
+    (r.sourceBillId != null && (byBillId.has(r.sourceBillId) || goalByBillId.has(r.sourceBillId))) ||
     (r.sourcePayId != null && payById.has(r.sourcePayId)),
   );
   if (relevantRows.length === 0) return [];
@@ -157,7 +214,41 @@ export async function findReconcileSuggestions(userId: string): Promise<Reconcil
     const planned = Math.abs(parseFloat(String(row.amount)));
     let ranked: Ranked[] = [];
 
-    if (row.sourceBillId != null && row.transactionType === "expense") {
+    if (row.sourceBillId != null && goalByBillId.has(row.sourceBillId) && row.transactionType === "expense") {
+      // ── TRANSFER match class (goal contributions, Addendum §7) ──
+      // source account + amount ±5% + date ±5d + transfer category. The
+      // destination-side inflow (outside the forecast pool — its transactions
+      // are in plaid_transactions but NEVER in the ledger) only corroborates:
+      // a matching inflow on destinationAccountId makes the match strong.
+      // BOUNDARY RULE: only this OUTFLOW row is ever reconciled; the inflow
+      // leg must never enter the forecast or it would cancel the contribution.
+      const entry = goalByBillId.get(row.sourceBillId)!;
+      if (!(planned > 0)) continue;
+      for (const txn of txns) {
+        if (claimed.has(txn.id)) continue;
+        if (txn.accountId !== entry.plaidAccountId) continue;
+        if (dismissedPairs.has(`b${entry.bill.id}|${txn.id}`)) continue;
+        const actual = parseFloat(String(txn.amount));
+        if (!(actual > 0)) continue; // outflow leg only
+        if (Math.abs(actual - planned) > planned * TRANSFER_AMOUNT_TOLERANCE) continue;
+        if (dayDiff(txn.date, row.transactionDate) > TRANSFER_DATE_WINDOW_DAYS) continue;
+        if (!isTransferCategory(txn)) continue; // never match a regular purchase
+        // Corroborate against the destination account's inflow leg.
+        const corroborated = entry.destPlaidAccountId != null && txns.some((d) =>
+          d.accountId === entry.destPlaidAccountId &&
+          -parseFloat(String(d.amount)) > 0 && // Plaid: negative = inflow
+          Math.abs(-parseFloat(String(d.amount)) - actual) < 0.005 &&
+          dayDiff(d.date, txn.date) <= TRANSFER_CORROBORATION_DAYS &&
+          isTransferCategory(d),
+        );
+        ranked.push({
+          txn,
+          strong: corroborated,
+          amountDelta: Math.abs(actual - planned),
+          dateDelta: dayDiff(txn.date, row.transactionDate),
+        });
+      }
+    } else if (row.sourceBillId != null && row.transactionType === "expense") {
       const entry = byBillId.get(row.sourceBillId)!;
       if (!(planned > 0) && !entry.bill.isVariable) continue;
       for (const txn of txns) {

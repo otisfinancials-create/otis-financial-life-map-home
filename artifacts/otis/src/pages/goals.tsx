@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/hooks/use-toast";
@@ -103,6 +104,45 @@ function previewContribution(f: FormState): number | null {
   const remainingCents = Math.round(target * 100) - Math.round(saved * 100);
   if (remainingCents <= 0) return 0;
   return Math.ceil(remainingCents / months / 500 - 1e-9) * 5;
+}
+
+/**
+ * Part 4 — progress toward the target, driven by the ACTUAL bucket (money
+ * that really moved), never the projection. On-track compares the actual
+ * bucket against what the schedule says should have been saved BY TODAY
+ * (alreadySaved + contribution × occurrences ≤ today).
+ */
+function GoalProgress({ goal }: { goal: Goal }) {
+  const actual = goal.actualBucket ?? goal.alreadySaved;
+  const target = goal.targetAmount;
+  const pct = target > 0 ? Math.min(100, Math.max(0, (actual / target) * 100)) : 0;
+  const today = todayIso();
+  const dueByNow = contributionCount(goal.startDate, today < goal.targetDate ? today : goal.targetDate, goal.contributionDay);
+  const expectedByNow = Math.min(target, goal.alreadySaved + goal.monthlyContribution * dueByNow);
+  const behind = actual < expectedByNow - 0.005;
+  return (
+    <div className="space-y-1 pt-1" data-testid={`progress-goal-${goal.id}`}>
+      <div className="flex items-center justify-between text-sm">
+        <span>
+          <span className="font-mono font-medium"><FormatCurrency amount={actual} /></span>{" "}
+          <span className="text-muted-foreground">of <FormatCurrency amount={target} /> saved</span>
+        </span>
+        <Badge
+          variant="secondary"
+          className={behind ? "bg-destructive/10 text-destructive border-transparent" : "bg-emerald-100 text-emerald-700 border-transparent"}
+        >
+          {behind ? "Behind" : "On track"}
+        </Badge>
+      </div>
+      <Progress value={pct} className="h-2" />
+      {behind && (
+        <p className="text-xs text-muted-foreground">
+          Schedule expected <FormatCurrency amount={expectedByNow} /> saved by today —{" "}
+          <span className="text-destructive font-medium"><FormatCurrency amount={Math.round((expectedByNow - actual) * 100) / 100} /> behind</span>.
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function Goals() {
@@ -355,6 +395,7 @@ export default function Goals() {
                 <p className="text-muted-foreground truncate">
                   {accountName(g.sourceAccountId)} → {accountName(g.destinationAccountId)}
                 </p>
+                {g.billId != null && <GoalProgress goal={g} />}
                 {g.goalType === "spend" && g.projectedBucketAtSpendDate != null && (
                   <p className="text-muted-foreground">
                     Saved by spend date:{" "}

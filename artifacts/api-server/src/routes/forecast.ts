@@ -4,6 +4,7 @@ import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEve
 import { findReconcileSuggestions } from "../services/bill-reconciliation";
 import { rollActualsForUser } from "../services/actuals-roll";
 import { getForecastAccounts } from "../services/forecast-accounts";
+import { deriveActualBucket, projectedAtSpendDate, recomputeGoalActualBuckets } from "../services/goal-buckets";
 
 // Detailed Plaid categories treated as asset movement (kept in sync with
 // services/actuals-roll.ts — the ledger classification source of truth).
@@ -874,18 +875,19 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
       // dates (before the regeneration boundary) are skipped.
       if (goal.targetDate < genStartStr) continue;
 
-      // PROJECTED bucket at the spend date: alreadySaved + scheduled
-      // contributions with date <= spend date. Future contributions haven't
-      // posted, so the purchase must net against the SCHEDULE, not actuals.
+      // PROJECTED bucket at the spend date (§2b/§3c): actual bucket so far +
+      // contributions still scheduled in the FUTURE. The purchase keeps
+      // netting against the projection (never actuals alone), but missed /
+      // didn't-happen past contributions no longer inflate it — the funding
+      // leg shrinks by exactly the missed amounts at the spend date.
       const bill = goal.billId != null ? goalBillById.get(goal.billId) : undefined;
       const contribution = bill ? parseFloat(String(bill.amount)) : parseFloat(String(goal.monthlyContribution));
       const occurrences = bill
         ? generateBillOccurrences(bill, goal.startDate, goal.targetDate)
         : [];
-      const scheduled = occurrences.filter((d) => d <= goal.targetDate).length;
       const target = parseFloat(String(goal.targetAmount));
-      const alreadySaved = parseFloat(String(goal.alreadySaved));
-      const projectedBucket = Math.round((alreadySaved + contribution * scheduled) * 100) / 100;
+      const { derived: actualSoFar } = await deriveActualBucket(userId, goal);
+      const projectedBucket = projectedAtSpendDate(actualSoFar, contribution, occurrences, todayStr, goal.targetDate);
       const funded = Math.min(projectedBucket, target);
 
       // Row B first (sortOrder 0) — the purchase is the headline line; the
@@ -1544,6 +1546,13 @@ router.patch("/forecast/:id", async (req, res): Promise<void> => {
     }
     return updated;
   });
+
+  // Mark-paid / un-mark on a goal-contribution row changes the goal's ACTUAL
+  // bucket (an actualized contribution counts even without a Plaid link) —
+  // keep the stored bucket honest immediately, not at the next roll.
+  if (parsed.data.isActual !== undefined && existing.sourceBillId != null) {
+    await recomputeGoalActualBuckets(req.userId);
+  }
 
   res.json(UpdateForecastedTransactionResponse.parse(serialize(tx)));
 });

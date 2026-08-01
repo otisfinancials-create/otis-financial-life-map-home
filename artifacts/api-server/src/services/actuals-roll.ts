@@ -9,6 +9,7 @@ import {
 import { and, eq, gte, lt, inArray, isNull, isNotNull, or } from "drizzle-orm";
 import { findReconcileSuggestions } from "./bill-reconciliation";
 import { getForecastAccounts } from "./forecast-accounts";
+import { recomputeGoalActualBuckets } from "./goal-buckets";
 import { logger } from "../lib/logger";
 
 /**
@@ -426,6 +427,10 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
     result.unplannedRows = rows.length;
     result.cardPaymentsMaterialized = cardPayRows.length;
   });
+
+  // Contribution rows may have been auto-reconciled or marked missed above —
+  // keep every goal's stored actual bucket honest (Addendum §2a invariant).
+  await recomputeGoalActualBuckets(userId);
 
   logger.info({ userId, ...result }, "Rolled posted actuals into forecast past");
   return result;

@@ -20,6 +20,7 @@ import {
   GetGoalSurplusResponse,
 } from "@workspace/api-zod";
 import { regenerateForecastForUser, generateBillOccurrences } from "./forecast";
+import { deriveActualBucket, projectedAtSpendDate } from "../services/goal-buckets";
 
 const router: IRouter = Router();
 
@@ -144,37 +145,10 @@ type BucketInfo = {
  *     every read so a drift is visible, not a console warning.
  */
 async function computeBuckets(userId: string, goal: Goal): Promise<BucketInfo> {
-  const alreadySaved = parseFloat(String(goal.alreadySaved));
   const target = parseFloat(String(goal.targetAmount));
 
-  // Reconciled contributions on the goal's bill (none exist yet in this
-  // phase — reconciliation is the next task — but derive, don't assume).
-  let reconciledSum = 0;
-  if (goal.billId != null) {
-    const rows = await db
-      .select({ amount: forecastedTransactionsTable.amount })
-      .from(forecastedTransactionsTable)
-      .where(and(
-        eq(forecastedTransactionsTable.userId, userId),
-        eq(forecastedTransactionsTable.sourceBillId, goal.billId),
-        eq(forecastedTransactionsTable.isActual, true),
-        isNotNull(forecastedTransactionsTable.matchedPlaidTransactionId),
-      ));
-    reconciledSum = rows.reduce((s, r) => s + parseFloat(String(r.amount)), 0);
-  }
-  // Withdrawals: actualized funding legs (money pulled back out of the bucket).
-  const withdrawalRows = await db
-    .select({ amount: forecastedTransactionsTable.amount })
-    .from(forecastedTransactionsTable)
-    .where(and(
-      eq(forecastedTransactionsTable.userId, userId),
-      eq(forecastedTransactionsTable.sourceGoalId, goal.id),
-      eq(forecastedTransactionsTable.transactionType, "income"),
-      eq(forecastedTransactionsTable.isActual, true),
-    ));
-  const withdrawals = withdrawalRows.reduce((s, r) => s + parseFloat(String(r.amount)), 0);
-
-  const derived = Math.round((alreadySaved + reconciledSum - withdrawals) * 100) / 100;
+  const breakdown = await deriveActualBucket(userId, goal);
+  const derived = breakdown.derived;
   const stored = parseFloat(String(goal.actualBucket));
   const invariant = { stored, derived, ok: Math.abs(stored - derived) < 0.005 };
 
@@ -196,8 +170,14 @@ async function computeBuckets(userId: string, goal: Goal): Promise<BucketInfo> {
       schedDay = bill.dueDay;
     }
   }
-  const count = scheduledContributionDates(schedStart, schedEnd, schedDay).filter((d) => d <= goal.targetDate).length;
-  const projected = Math.round((alreadySaved + contribution * count) * 100) / 100;
+  const dates = scheduledContributionDates(schedStart, schedEnd, schedDay);
+  // §3c: committed goals project from REALITY — actual bucket + contributions
+  // still in the future. A missed/didn't-happen past contribution therefore
+  // lowers the projection ("missed two transfers → $X short at the spend
+  // date"). Draft goals have no actuals; they project the pure plan.
+  const projected = goal.billId != null
+    ? projectedAtSpendDate(derived, contribution, dates, toLocalIsoDate(new Date()), goal.targetDate)
+    : Math.round((parseFloat(String(goal.alreadySaved)) + contribution * dates.filter((d) => d <= goal.targetDate).length) * 100) / 100;
   const shortfall = Math.max(0, Math.round((target - Math.min(projected, target)) * 100) / 100);
   return { projectedBucketAtSpendDate: projected, shortfall, bucketInvariant: invariant };
 }
