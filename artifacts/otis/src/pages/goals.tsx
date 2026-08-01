@@ -392,23 +392,36 @@ export default function Goals() {
               <Label htmlFor="goal-name">Name</Label>
               <Input id="goal-name" data-testid="input-goal-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Emergency fund" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Type</Label>
-                <Select value={form.goalType} onValueChange={(v) => setForm({ ...form, goalType: v as FormState["goalType"] })}>
-                  <SelectTrigger data-testid="select-goal-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="accumulation">Accumulation (build savings)</SelectItem>
-                    <SelectItem value="spend">Spend (save up, then buy)</SelectItem>
-                  </SelectContent>
-                </Select>
+            <div className="grid gap-2">
+              <Label>Will you spend this on a date, or are you building it up?</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  data-testid="button-goal-type-spend"
+                  onClick={() => setForm({ ...form, goalType: "spend" })}
+                  className={`rounded-lg border p-3 text-left transition-colors ${
+                    form.goalType === "spend" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:border-primary/40"
+                  }`}
+                >
+                  <span className="block text-sm font-medium">Spend it on a date</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">Save up, then make the purchase</span>
+                </button>
+                <button
+                  type="button"
+                  data-testid="button-goal-type-accumulation"
+                  onClick={() => setForm({ ...form, goalType: "accumulation" })}
+                  className={`rounded-lg border p-3 text-left transition-colors ${
+                    form.goalType === "accumulation" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:border-primary/40"
+                  }`}
+                >
+                  <span className="block text-sm font-medium">Build it up</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">Grow savings toward a target</span>
+                </button>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="goal-day">Contribution day of month</Label>
-                <Input id="goal-day" data-testid="input-goal-day" type="number" min={1} max={31} value={form.contributionDay} onChange={(e) => setForm({ ...form, contributionDay: e.target.value })} />
-              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="goal-day">Contribution day of month</Label>
+              <Input id="goal-day" data-testid="input-goal-day" type="number" min={1} max={31} value={form.contributionDay} onChange={(e) => setForm({ ...form, contributionDay: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
@@ -426,8 +439,11 @@ export default function Goals() {
                 <Input id="goal-start" data-testid="input-goal-start" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="goal-target-date">Target date</Label>
+                <Label htmlFor="goal-target-date">{form.goalType === "spend" ? "Spend date (purchase day)" : "Target date"}</Label>
                 <Input id="goal-target-date" data-testid="input-goal-target-date" type="date" value={form.targetDate} onChange={(e) => setForm({ ...form, targetDate: e.target.value })} />
+                {form.goalType === "spend" && (
+                  <p className="text-xs text-muted-foreground">The purchase shows up in your forecast on this day, funded by what you've saved.</p>
+                )}
               </div>
             </div>
             <div className="grid gap-2">
