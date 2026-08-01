@@ -23,6 +23,11 @@ export interface ForecastedTransaction {
   /** @nullable */
   sourceBalanceSyncId?: number | null;
   /**
+     * Spend-goal purchase pair — funding inflow + purchase expense both carry the goal id so they regenerate and are removed together
+     * @nullable
+     */
+  sourceGoalId?: number | null;
+  /**
      * Credit-card account this row belongs to (CC billing cycle grouping)
      * @nullable
      */

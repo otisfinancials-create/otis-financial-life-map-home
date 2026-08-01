@@ -364,6 +364,27 @@ paths:
         "404":
           description: Not found
 
+  /goals/{id}/purchase-removed:
+    post:
+      operationId: removeGoalPurchase
+      tags: [goals]
+      summary: Mark a committed spend goal's purchase as "didn't happen" — both purchase rows get status=removed
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Purchase marked removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+        "404":
+          description: Not found
+
   # ── Pay Schedules ─────────────────────────────────────────────────────────
   /pay-schedules:
     get:
@@ -2451,6 +2472,26 @@ components:
           type: ["integer", "null"]
         isActive:
           type: boolean
+        actualBucket:
+          type: number
+          description: Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.
+        projectedBucketAtSpendDate:
+          type: ["number", "null"]
+          description: Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.
+        shortfall:
+          type: ["number", "null"]
+          description: Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.
+        bucketInvariant:
+          type: ["object", "null"]
+          description: Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.
+          required: [stored, derived, ok]
+          properties:
+            stored:
+              type: number
+            derived:
+              type: number
+            ok:
+              type: boolean
         createdAt:
           type: string
         updatedAt:
@@ -3386,6 +3427,9 @@ components:
           type: ["integer", "null"]
         sourceBalanceSyncId:
           type: ["integer", "null"]
+        sourceGoalId:
+          type: ["integer", "null"]
+          description: Spend-goal purchase pair — funding inflow + purchase expense both carry the goal id so they regenerate and are removed together
         ccAccountId:
           type: ["integer", "null"]
           description: Credit-card account this row belongs to (CC billing cycle grouping)

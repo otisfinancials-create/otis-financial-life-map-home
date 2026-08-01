@@ -14,6 +14,11 @@ export const forecastedTransactionsTable = pgTable("forecasted_transactions", {
   sourcePayId: integer("source_pay_id"),
   sourceLifeEventId: integer("source_life_event_id"),
   sourceBalanceSyncId: integer("source_balance_sync_id"),
+  // Spend-goal purchase event (Goals part 2): the funding inflow ("Transfer
+  // from <goal>") and the purchase expense both carry the goal's id so they
+  // can be found, regenerated, and removed TOGETHER. Two rows, not one netted
+  // row — each leg mirrors a real transaction and keeps conservation auditable.
+  sourceGoalId: integer("source_goal_id"),
   // Credit-card billing cycle grouping (manual version — Plaid will automate
   // this in a future phase). ccAccountId links a row to a credit_card account.
   // isCcParent=true marks the "Credit Card Payment" row (starts at $0 and

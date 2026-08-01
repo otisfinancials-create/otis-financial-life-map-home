@@ -8,6 +8,7 @@ import {
   useDeleteGoal,
   useCommitGoal,
   useUncommitGoal,
+  useRemoveGoalPurchase,
   useListAccounts,
   getListGoalsQueryKey,
   getListBillsQueryKey,
@@ -174,6 +175,21 @@ export default function Goals() {
     },
   });
 
+  const removePurchase = useRemoveGoalPurchase({
+    mutation: {
+      onSuccess: () => {
+        invalidate();
+        toast({ title: "Purchase removed", description: "Both the purchase and its funding transfer were taken out of the forecast." });
+      },
+      onError: (err) =>
+        toast({
+          title: "Couldn't remove purchase",
+          description: (err as { response?: { data?: { error?: string } } })?.response?.data?.error,
+          variant: "destructive",
+        }),
+    },
+  });
+
   const poolAccounts = useMemo(
     () => (accounts ?? []).filter((a) => a.isForecastAccount),
     [accounts],
@@ -274,6 +290,12 @@ export default function Goals() {
                     {g.status === "committed" && (
                       <Badge className="bg-primary/10 text-primary border-transparent shrink-0">In forecast</Badge>
                     )}
+                    {g.status === "completed" && (
+                      <Badge className="bg-emerald-100 text-emerald-700 border-transparent shrink-0">Completed</Badge>
+                    )}
+                    {g.status === "cancelled" && (
+                      <Badge variant="secondary" className="shrink-0">Purchase removed</Badge>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">
                     <FormatCurrency amount={g.targetAmount} /> by {g.targetDate}
@@ -306,12 +328,31 @@ export default function Goals() {
                 <p className="text-muted-foreground truncate">
                   {accountName(g.sourceAccountId)} → {accountName(g.destinationAccountId)}
                 </p>
+                {g.goalType === "spend" && g.projectedBucketAtSpendDate != null && (
+                  <p className="text-muted-foreground">
+                    Saved by spend date:{" "}
+                    <span className="font-mono font-medium text-foreground">
+                      <FormatCurrency amount={g.projectedBucketAtSpendDate} />
+                    </span>
+                    {(g.shortfall ?? 0) > 0 && (
+                      <span className="ml-1.5 text-destructive font-medium">
+                        <FormatCurrency amount={g.shortfall!} /> short
+                      </span>
+                    )}
+                  </p>
+                )}
+                {g.bucketInvariant && !g.bucketInvariant.ok && (
+                  <p className="text-destructive text-xs font-medium">
+                    Bucket check failed: stored <FormatCurrency amount={g.bucketInvariant.stored} /> ≠ derived{" "}
+                    <FormatCurrency amount={g.bucketInvariant.derived} /> — contribution history may be inconsistent.
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-1 border-t border-border">
                 <span className="text-sm text-muted-foreground">Include in forecast</span>
                 <Switch
-                  checked={g.status === "committed"}
+                  checked={g.billId != null}
                   disabled={commitGoal.isPending || uncommitGoal.isPending}
                   onCheckedChange={(on) =>
                     on ? commitGoal.mutate({ id: g.id }) : uncommitGoal.mutate({ id: g.id })
@@ -319,6 +360,18 @@ export default function Goals() {
                   data-testid={`switch-commit-goal-${g.id}`}
                 />
               </div>
+              {g.goalType === "spend" && g.status === "committed" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-muted-foreground"
+                  disabled={removePurchase.isPending}
+                  onClick={() => removePurchase.mutate({ id: g.id })}
+                  data-testid={`button-remove-purchase-${g.id}`}
+                >
+                  Purchase didn't happen
+                </Button>
+              )}
             </Card>
           ))}
         </div>

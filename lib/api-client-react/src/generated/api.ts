@@ -1460,6 +1460,76 @@ export const useUncommitGoal = <TError = ErrorType<void>,
       return useMutation(getUncommitGoalMutationOptions(options));
     }
 
+export const getRemoveGoalPurchaseUrl = (id: number,) => {
+
+
+
+
+  return `/api/goals/${id}/purchase-removed`
+}
+
+/**
+ * @summary Mark a committed spend goal's purchase as "didn't happen" — both purchase rows get status=removed
+ */
+export const removeGoalPurchase = async (id: number, options?: RequestInit): Promise<Goal> => {
+
+  return customFetch<Goal>(getRemoveGoalPurchaseUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRemoveGoalPurchaseMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeGoalPurchase>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeGoalPurchase>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['removeGoalPurchase'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeGoalPurchase>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  removeGoalPurchase(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveGoalPurchaseMutationResult = NonNullable<Awaited<ReturnType<typeof removeGoalPurchase>>>
+
+    export type RemoveGoalPurchaseMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark a committed spend goal's purchase as "didn't happen" — both purchase rows get status=removed
+ */
+export const useRemoveGoalPurchase = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeGoalPurchase>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof removeGoalPurchase>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRemoveGoalPurchaseMutationOptions(options));
+    }
+
 export const getListPaySchedulesUrl = () => {
 
 

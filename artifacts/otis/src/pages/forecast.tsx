@@ -561,6 +561,7 @@ type TxRow = {
   sourcePayId?: number | null;
   sourceLifeEventId?: number | null;
   sourceBalanceSyncId?: number | null;
+  sourceGoalId?: number | null;
   ccAccountId?: number | null;
   isCcParent: boolean;
   sourceCardCycleId?: number | null;
@@ -605,6 +606,15 @@ export default function Forecast() {
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   // CC groups are expanded by default; this tracks the ones the user collapsed.
   const [collapsedCc, setCollapsedCc] = useState<Set<number>>(new Set());
+  // Spend-goal purchase pairs reuse the same idiom: the purchase row is the
+  // parent, the "Transfer from <goal>" funding leg is its expandable child.
+  const [collapsedGoal, setCollapsedGoal] = useState<Set<number>>(new Set());
+  const toggleGoalPair = (parentId: number) =>
+    setCollapsedGoal((prev) => {
+      const next = new Set(prev);
+      if (next.has(parentId)) next.delete(parentId); else next.add(parentId);
+      return next;
+    });
 
   // inline edit
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -1798,9 +1808,14 @@ export default function Forecast() {
                     // Map each CC group (date + card) to its parent row id so
                     // child rows can find their parent for collapse handling.
                     const ccParentIdByKey: Record<string, number> = {};
+                    // Spend-goal purchase pair: expense row = parent line.
+                    const goalParentIdByKey: Record<string, number> = {};
                     for (const t of group.rows) {
                       if (t.isCcParent && t.ccAccountId != null) {
                         ccParentIdByKey[`${t.transactionDate}|${t.ccAccountId}`] = t.id;
+                      }
+                      if (t.sourceGoalId != null && t.transactionType === "expense") {
+                        goalParentIdByKey[`${t.transactionDate}|${t.sourceGoalId}`] = t.id;
                       }
                     }
                     return (
@@ -1844,6 +1859,15 @@ export default function Forecast() {
                           // chevron toggles a read-only breakdown instead.
                           const isCyclePayment = tx.sourceCardCycleId != null;
                           const cycleExpanded = isCyclePayment && expandedCycles.has(tx.sourceCardCycleId!);
+
+                          // ── Spend-goal purchase pair (parent/child idiom) ──
+                          const isGoalParent = tx.sourceGoalId != null && tx.transactionType === "expense";
+                          const isGoalChild = tx.sourceGoalId != null && tx.transactionType === "income";
+                          const goalParentId = isGoalChild
+                            ? goalParentIdByKey[`${tx.transactionDate}|${tx.sourceGoalId}`]
+                            : undefined;
+                          if (isGoalChild && goalParentId != null && collapsedGoal.has(goalParentId)) return null;
+                          const goalCollapsed = isGoalParent && collapsedGoal.has(tx.id);
 
                           // Day header: shown once per date (before the first
                           // row of a new day within this month group).
@@ -1906,7 +1930,7 @@ export default function Forecast() {
                               <div
                                 className="py-[11px] flex items-center justify-center"
                                 style={{ fontSize: "16px", lineHeight: 1 }}
-                                onClick={isCcParent ? (e) => { e.stopPropagation(); if (isCyclePayment) toggleCycle(tx.sourceCardCycleId!); else toggleCc(tx.id); } : undefined}
+                                onClick={isCcParent ? (e) => { e.stopPropagation(); if (isCyclePayment) toggleCycle(tx.sourceCardCycleId!); else toggleCc(tx.id); } : isGoalParent ? (e) => { e.stopPropagation(); toggleGoalPair(tx.id); } : undefined}
                               >
                                 {isCcParent ? (
                                   <button
@@ -1915,14 +1939,21 @@ export default function Forecast() {
                                   >
                                     <ChevronRight className={`h-4 w-4 transition-transform ${(isCyclePayment ? cycleExpanded : !ccCollapsed) ? "rotate-90" : ""}`} />
                                   </button>
+                                ) : isGoalParent ? (
+                                  <button
+                                    aria-label={goalCollapsed ? "Expand purchase composition" : "Collapse purchase composition"}
+                                    className="text-muted-foreground hover:text-foreground transition-colors"
+                                  >
+                                    <ChevronRight className={`h-4 w-4 transition-transform ${!goalCollapsed ? "rotate-90" : ""}`} />
+                                  </button>
                                 ) : (
                                   getCategoryEmoji(tx.category, tx.description)
                                 )}
                               </div>
 
                               {/* Description + status badges (Part F) */}
-                              <div className={`px-2 py-[11px] flex items-center gap-1.5 min-w-0 ${ccChild ? "pl-6" : ""}`}>
-                                {ccChild && (
+                              <div className={`px-2 py-[11px] flex items-center gap-1.5 min-w-0 ${ccChild || isGoalChild ? "pl-6" : ""}`}>
+                                {(ccChild || isGoalChild) && (
                                   <span className="shrink-0 text-muted-foreground text-[13px]" aria-hidden>↳</span>
                                 )}
                                 <span

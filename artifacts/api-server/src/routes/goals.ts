@@ -1,6 +1,10 @@
 import { Router, type IRouter } from "express";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, isNotNull, inArray } from "drizzle-orm";
 import { db, goalsTable, billsTable, accountsTable, forecastedTransactionsTable, type Goal } from "@workspace/db";
+import {
+  RemoveGoalPurchaseParams,
+  RemoveGoalPurchaseResponse,
+} from "@workspace/api-zod";
 import {
   CreateGoalBody,
   UpdateGoalBody,
@@ -107,20 +111,117 @@ async function validateGoalCore(userId: string, g: GoalCore): Promise<{ error: s
   return { error: null, monthlyContribution: computeMonthlyContribution(g.targetAmount, g.alreadySaved, months) };
 }
 
-function serializeGoal(goal: Goal) {
+/** Monthly occurrence dates on contributionDay in [startIso, endIso] (clamped day). */
+function scheduledContributionDates(startIso: string, endIso: string, day: number): string[] {
+  const out: string[] = [];
+  let y = Number(startIso.slice(0, 4));
+  let m = Number(startIso.slice(5, 7));
+  for (let i = 0; i < 2000; i++) {
+    const last = new Date(y, m, 0).getDate();
+    const occ = `${y}-${String(m).padStart(2, "0")}-${String(Math.min(day, last)).padStart(2, "0")}`;
+    if (occ > endIso) break;
+    if (occ >= startIso) out.push(occ);
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+type BucketInfo = {
+  projectedBucketAtSpendDate: number | null;
+  shortfall: number | null;
+  bucketInvariant: { stored: number; derived: number; ok: boolean };
+};
+
+/**
+ * Part 1 bucket numbers.
+ *  1a PROJECTED bucket at the spend date = alreadySaved + scheduled
+ *     contributions ≤ that date (future contributions haven't posted — the
+ *     purchase nets against the SCHEDULE).
+ *  1b ACTUAL bucket = alreadySaved + reconciled contributions − withdrawals.
+ *     Stored on the goal; the invariant (stored == derived) is exposed on
+ *     every read so a drift is visible, not a console warning.
+ */
+async function computeBuckets(userId: string, goal: Goal): Promise<BucketInfo> {
+  const alreadySaved = parseFloat(String(goal.alreadySaved));
+  const target = parseFloat(String(goal.targetAmount));
+
+  // Reconciled contributions on the goal's bill (none exist yet in this
+  // phase — reconciliation is the next task — but derive, don't assume).
+  let reconciledSum = 0;
+  if (goal.billId != null) {
+    const rows = await db
+      .select({ amount: forecastedTransactionsTable.amount })
+      .from(forecastedTransactionsTable)
+      .where(and(
+        eq(forecastedTransactionsTable.userId, userId),
+        eq(forecastedTransactionsTable.sourceBillId, goal.billId),
+        eq(forecastedTransactionsTable.isActual, true),
+        isNotNull(forecastedTransactionsTable.matchedPlaidTransactionId),
+      ));
+    reconciledSum = rows.reduce((s, r) => s + parseFloat(String(r.amount)), 0);
+  }
+  // Withdrawals: actualized funding legs (money pulled back out of the bucket).
+  const withdrawalRows = await db
+    .select({ amount: forecastedTransactionsTable.amount })
+    .from(forecastedTransactionsTable)
+    .where(and(
+      eq(forecastedTransactionsTable.userId, userId),
+      eq(forecastedTransactionsTable.sourceGoalId, goal.id),
+      eq(forecastedTransactionsTable.transactionType, "income"),
+      eq(forecastedTransactionsTable.isActual, true),
+    ));
+  const withdrawals = withdrawalRows.reduce((s, r) => s + parseFloat(String(r.amount)), 0);
+
+  const derived = Math.round((alreadySaved + reconciledSum - withdrawals) * 100) / 100;
+  const stored = parseFloat(String(goal.actualBucket));
+  const invariant = { stored, derived, ok: Math.abs(stored - derived) < 0.005 };
+
+  if (goal.goalType !== "spend") {
+    return { projectedBucketAtSpendDate: null, shortfall: null, bucketInvariant: invariant };
+  }
+  // Scheduled contributions ≤ spend date. Use the committed bill's terms when
+  // one exists; otherwise the draft goal's own schedule.
+  let contribution = parseFloat(String(goal.monthlyContribution));
+  let schedStart = goal.startDate;
+  let schedEnd = goal.targetDate;
+  let schedDay = goal.contributionDay;
+  if (goal.billId != null) {
+    const [bill] = await db.select().from(billsTable).where(and(eq(billsTable.id, goal.billId), eq(billsTable.userId, userId)));
+    if (bill) {
+      contribution = parseFloat(String(bill.amount));
+      schedStart = bill.startDate ?? schedStart;
+      schedEnd = bill.endDate && bill.endDate < goal.targetDate ? bill.endDate : goal.targetDate;
+      schedDay = bill.dueDay;
+    }
+  }
+  const count = scheduledContributionDates(schedStart, schedEnd, schedDay).filter((d) => d <= goal.targetDate).length;
+  const projected = Math.round((alreadySaved + contribution * count) * 100) / 100;
+  const shortfall = Math.max(0, Math.round((target - Math.min(projected, target)) * 100) / 100);
+  return { projectedBucketAtSpendDate: projected, shortfall, bucketInvariant: invariant };
+}
+
+function serializeGoal(goal: Goal, buckets?: BucketInfo) {
   return {
     ...goal,
     targetAmount: parseFloat(String(goal.targetAmount)),
     alreadySaved: parseFloat(String(goal.alreadySaved)),
     monthlyContribution: parseFloat(String(goal.monthlyContribution)),
+    actualBucket: parseFloat(String(goal.actualBucket)),
+    ...(buckets ?? {}),
     createdAt: goal.createdAt.toISOString(),
     updatedAt: goal.updatedAt.toISOString(),
   };
 }
 
+async function serializeGoalFull(userId: string, goal: Goal) {
+  return serializeGoal(goal, await computeBuckets(userId, goal));
+}
+
 router.get("/goals", async (req, res): Promise<void> => {
   const goals = await db.select().from(goalsTable).where(eq(goalsTable.userId, req.userId)).orderBy(goalsTable.createdAt);
-  res.json(ListGoalsResponse.parse(goals.map(serializeGoal)));
+  const serialized = await Promise.all(goals.map((g) => serializeGoalFull(req.userId, g)));
+  res.json(ListGoalsResponse.parse(serialized));
 });
 
 router.post("/goals", async (req, res): Promise<void> => {
@@ -159,6 +260,8 @@ router.post("/goals", async (req, res): Promise<void> => {
       contributionDay: b.contributionDay,
       monthlyContribution: String(monthlyContribution),
       status: "draft",
+      // ACTUAL bucket starts at alreadySaved (no reconciled contributions yet).
+      actualBucket: String(core.alreadySaved),
     })
     .returning();
   req.log.info({ goalId: goal.id }, "Created goal (draft)");
@@ -190,11 +293,21 @@ router.patch("/goals/:id", async (req, res): Promise<void> => {
     destinationAccountId: b.destinationAccountId ?? existing.destinationAccountId,
     contributionDay: b.contributionDay ?? existing.contributionDay,
   };
-  const { error, monthlyContribution } = await validateGoalCore(req.userId, core);
+  const { error, monthlyContribution: recomputed } = await validateGoalCore(req.userId, core);
   if (error) {
     res.status(400).json({ error });
     return;
   }
+  // COMMITTED goals: the contribution is a promise the user committed to.
+  // Moving dates changes how much gets FUNDED, not the monthly amount —
+  // that's what makes an underfunded spend goal (shortfall) representable.
+  // The amount only recomputes when the target itself changes
+  // (targetAmount / alreadySaved). Draft goals always recompute.
+  const amountsChanged = b.targetAmount !== undefined || b.alreadySaved !== undefined;
+  const monthlyContribution =
+    existing.status === "committed" && !amountsChanged
+      ? parseFloat(String(existing.monthlyContribution))
+      : recomputed;
   // Goal + linked-bill updates are atomic: a committed goal must never end
   // up with a bill whose terms drifted from the goal's.
   const goal = await db.transaction(async (tx) => {
@@ -211,6 +324,15 @@ router.patch("/goals/:id", async (req, res): Promise<void> => {
         destinationAccountId: core.destinationAccountId,
         contributionDay: core.contributionDay,
         monthlyContribution: String(monthlyContribution),
+        // Keep the stored ACTUAL bucket in lockstep with alreadySaved edits
+        // (reconciled − withdrawals delta carries over unchanged).
+        ...(b.alreadySaved !== undefined && {
+          actualBucket: String(
+            Math.round(
+              (parseFloat(String(existing.actualBucket)) - parseFloat(String(existing.alreadySaved)) + core.alreadySaved) * 100,
+            ) / 100,
+          ),
+        }),
         isActive: b.isActive ?? existing.isActive,
       })
       .where(eq(goalsTable.id, existing.id))
@@ -241,7 +363,7 @@ router.patch("/goals/:id", async (req, res): Promise<void> => {
   if (existing.status === "committed" && existing.billId != null) {
     await regenerateForecastForUser(req.userId);
   }
-  res.json(UpdateGoalResponse.parse(serializeGoal(goal)));
+  res.json(UpdateGoalResponse.parse(await serializeGoalFull(req.userId, goal)));
 });
 
 router.delete("/goals/:id", async (req, res): Promise<void> => {
@@ -285,7 +407,7 @@ router.post("/goals/:id/commit", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Goal not found" });
     return;
   }
-  if (goal.status === "committed") {
+  if (goal.status === "committed" || goal.billId != null) {
     res.status(400).json({ error: "Goal is already committed." });
     return;
   }
@@ -345,7 +467,7 @@ router.post("/goals/:id/commit", async (req, res): Promise<void> => {
 
   await regenerateForecastForUser(req.userId);
   req.log.info({ goalId: goal.id, billId: updated.billId }, "Committed goal");
-  res.json(CommitGoalResponse.parse(serializeGoal(updated.linked)));
+  res.json(CommitGoalResponse.parse(await serializeGoalFull(req.userId, updated.linked)));
 });
 
 /**
@@ -370,7 +492,9 @@ router.post("/goals/:id/uncommit", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Goal not found" });
     return;
   }
-  if (goal.status !== "committed" || goal.billId == null) {
+  // 'cancelled' (purchase removed) goals still carry their contribution bill —
+  // uncommit remains the way to unwind them fully.
+  if ((goal.status !== "committed" && goal.status !== "cancelled" && goal.status !== "completed") || goal.billId == null) {
     res.status(400).json({ error: "Goal is not committed." });
     return;
   }
@@ -389,23 +513,40 @@ router.post("/goals/:id/uncommit", async (req, res): Promise<void> => {
     .limit(1);
 
   if (reconciled.length === 0) {
-    // Clean removal: planned forecast rows first, then the bill.
+    // Clean removal: planned forecast rows first, then the bill. Spend-goal
+    // purchase rows (both legs, including any "removed" markers) go with it —
+    // balance must return to pre-commit EXACTLY.
     await db.transaction(async (tx) => {
       await tx
         .delete(forecastedTransactionsTable)
         .where(and(eq(forecastedTransactionsTable.userId, req.userId), eq(forecastedTransactionsTable.sourceBillId, goal.billId!)));
+      await tx
+        .delete(forecastedTransactionsTable)
+        .where(and(
+          eq(forecastedTransactionsTable.userId, req.userId),
+          eq(forecastedTransactionsTable.sourceGoalId, goal.id),
+          eq(forecastedTransactionsTable.isActual, false),
+        ));
       await tx.update(goalsTable).set({ billId: null, status: "draft" }).where(eq(goalsTable.id, goal.id));
       await tx.delete(billsTable).where(and(eq(billsTable.id, goal.billId!), eq(billsTable.userId, req.userId)));
     });
   } else {
     // History exists: end-date + deactivate, keep the bill row and its
     // reconciled forecast rows intact. Future planned rows are cleaned up
-    // by regeneration (bill inactive => no occurrences emitted).
+    // by regeneration (bill inactive => no occurrences emitted). Planned
+    // (non-actual) purchase rows still go — the purchase isn't happening.
     await db.transaction(async (tx) => {
       await tx
         .update(billsTable)
         .set({ endDate: toLocalIsoDate(new Date()), isActive: false })
         .where(and(eq(billsTable.id, goal.billId!), eq(billsTable.userId, req.userId)));
+      await tx
+        .delete(forecastedTransactionsTable)
+        .where(and(
+          eq(forecastedTransactionsTable.userId, req.userId),
+          eq(forecastedTransactionsTable.sourceGoalId, goal.id),
+          eq(forecastedTransactionsTable.isActual, false),
+        ));
       await tx.update(goalsTable).set({ billId: null, status: "draft" }).where(eq(goalsTable.id, goal.id));
     });
   }
@@ -413,7 +554,84 @@ router.post("/goals/:id/uncommit", async (req, res): Promise<void> => {
   await regenerateForecastForUser(req.userId);
   const [updated] = await db.select().from(goalsTable).where(eq(goalsTable.id, goal.id));
   req.log.info({ goalId: goal.id, billId: goal.billId, hadReconciled: reconciled.length > 0 }, "Uncommitted goal");
-  res.json(UncommitGoalResponse.parse(serializeGoal(updated)));
+  res.json(UncommitGoalResponse.parse(await serializeGoalFull(req.userId, updated)));
+});
+
+/**
+ * "DIDN'T HAPPEN" — the purchase isn't going to occur. Reuses the existing
+ * removal idiom: status='removed' + isCommitted=true on BOTH purchase rows
+ * (if the purchase doesn't happen, the funding transfer doesn't either).
+ * Those rows survive regeneration, which suppresses re-emitting the pair.
+ *
+ * Goal status choice: 'cancelled' — the commit lifecycle ended without the
+ * purchase. The saved money stays where it is (the contribution bill is left
+ * untouched; it ends at the spend date on its own terms), and the goal never
+ * auto-flips to 'completed'.
+ */
+router.post("/goals/:id/purchase-removed", async (req, res): Promise<void> => {
+  const params = RemoveGoalPurchaseParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [goal] = await db
+    .select()
+    .from(goalsTable)
+    .where(and(eq(goalsTable.id, params.data.id), eq(goalsTable.userId, req.userId)));
+  if (!goal) {
+    res.status(404).json({ error: "Goal not found" });
+    return;
+  }
+  if (goal.goalType !== "spend") {
+    res.status(400).json({ error: "Only spend goals have a purchase event." });
+    return;
+  }
+  if (goal.status !== "committed" && goal.status !== "completed") {
+    res.status(400).json({ error: "Goal has no committed purchase to remove." });
+    return;
+  }
+  // Atomic + pair-strict: BOTH legs (purchase expense + funding income) must
+  // exist; anything else is an integrity error, not a partial success.
+  let updated: typeof goal;
+  try {
+    updated = await db.transaction(async (tx) => {
+      const legs = await tx
+        .select({ id: forecastedTransactionsTable.id, transactionType: forecastedTransactionsTable.transactionType })
+        .from(forecastedTransactionsTable)
+        .where(and(
+          eq(forecastedTransactionsTable.userId, req.userId),
+          eq(forecastedTransactionsTable.sourceGoalId, goal.id),
+        ));
+      const hasPair =
+        legs.length === 2 &&
+        legs.some((l) => l.transactionType === "expense") &&
+        legs.some((l) => l.transactionType === "income");
+      if (!hasPair) {
+        throw new Error(`PAIR_INTEGRITY:${legs.length}`);
+      }
+      await tx
+        .update(forecastedTransactionsTable)
+        .set({ status: "removed", isCommitted: true })
+        .where(and(
+          eq(forecastedTransactionsTable.userId, req.userId),
+          eq(forecastedTransactionsTable.sourceGoalId, goal.id),
+        ));
+      const [g] = await tx
+        .update(goalsTable)
+        .set({ status: "cancelled" })
+        .where(eq(goalsTable.id, goal.id))
+        .returning();
+      return g;
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("PAIR_INTEGRITY")) {
+      res.status(409).json({ error: "The goal's purchase rows are in an inconsistent state — refresh the forecast and try again." });
+      return;
+    }
+    throw e;
+  }
+  req.log.info({ goalId: goal.id }, "Goal purchase marked removed");
+  res.json(RemoveGoalPurchaseResponse.parse(await serializeGoalFull(req.userId, updated)));
 });
 
 export default router;

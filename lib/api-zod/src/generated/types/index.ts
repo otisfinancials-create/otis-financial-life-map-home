@@ -81,6 +81,7 @@ export * from './forecastedTransactionUpdate';
 export * from './getDetectedNewBillCount200';
 export * from './getForecastCalendarParams';
 export * from './goal';
+export * from './goalBucketInvariant';
 export * from './goalGoalType';
 export * from './goalInput';
 export * from './goalInputGoalType';

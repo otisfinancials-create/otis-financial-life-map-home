@@ -5,6 +5,7 @@
  * Otis Financial Life Map API
  * OpenAPI spec version: 0.1.0
  */
+import type { GoalBucketInvariant } from './goalBucketInvariant';
 import type { GoalGoalType } from './goalGoalType';
 import type { GoalStatus } from './goalStatus';
 
@@ -24,6 +25,23 @@ export interface Goal {
   /** @nullable */
   billId?: number | null;
   isActive: boolean;
+  /** Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet. */
+  actualBucket?: number;
+  /**
+     * Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.
+     * @nullable
+     */
+  projectedBucketAtSpendDate?: number | null;
+  /**
+     * Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.
+     * @nullable
+     */
+  shortfall?: number | null;
+  /**
+     * Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.
+     * @nullable
+     */
+  bucketInvariant?: GoalBucketInvariant;
   createdAt: string;
   updatedAt: string;
 }

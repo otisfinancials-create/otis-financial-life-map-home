@@ -346,6 +346,14 @@ export const ListGoalsResponseItem = zod.object({
   "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
   "billId": zod.number().nullish(),
   "isActive": zod.boolean(),
+  "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
+  "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
+  "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "bucketInvariant": zod.object({
+  "stored": zod.number(),
+  "derived": zod.number(),
+  "ok": zod.boolean()
+}).nullish().describe('Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -386,6 +394,14 @@ export const CreateGoalResponse = zod.object({
   "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
   "billId": zod.number().nullish(),
   "isActive": zod.boolean(),
+  "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
+  "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
+  "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "bucketInvariant": zod.object({
+  "stored": zod.number(),
+  "derived": zod.number(),
+  "ok": zod.boolean()
+}).nullish().describe('Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -430,6 +446,14 @@ export const UpdateGoalResponse = zod.object({
   "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
   "billId": zod.number().nullish(),
   "isActive": zod.boolean(),
+  "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
+  "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
+  "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "bucketInvariant": zod.object({
+  "stored": zod.number(),
+  "derived": zod.number(),
+  "ok": zod.boolean()
+}).nullish().describe('Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -467,6 +491,14 @@ export const CommitGoalResponse = zod.object({
   "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
   "billId": zod.number().nullish(),
   "isActive": zod.boolean(),
+  "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
+  "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
+  "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "bucketInvariant": zod.object({
+  "stored": zod.number(),
+  "derived": zod.number(),
+  "ok": zod.boolean()
+}).nullish().describe('Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -494,6 +526,49 @@ export const UncommitGoalResponse = zod.object({
   "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
   "billId": zod.number().nullish(),
   "isActive": zod.boolean(),
+  "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
+  "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
+  "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "bucketInvariant": zod.object({
+  "stored": zod.number(),
+  "derived": zod.number(),
+  "ok": zod.boolean()
+}).nullish().describe('Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Mark a committed spend goal's purchase as "didn't happen" — both purchase rows get status=removed
+ */
+export const RemoveGoalPurchaseParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RemoveGoalPurchaseResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "goalType": zod.enum(['spend', 'accumulation']),
+  "targetAmount": zod.number(),
+  "alreadySaved": zod.number(),
+  "startDate": zod.string(),
+  "targetDate": zod.string(),
+  "sourceAccountId": zod.number(),
+  "destinationAccountId": zod.number(),
+  "contributionDay": zod.number(),
+  "monthlyContribution": zod.number(),
+  "status": zod.enum(['draft', 'committed', 'completed', 'cancelled']),
+  "billId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "actualBucket": zod.number().optional().describe('Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet.'),
+  "projectedBucketAtSpendDate": zod.number().nullish().describe('Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.'),
+  "shortfall": zod.number().nullish().describe('Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.'),
+  "bucketInvariant": zod.object({
+  "stored": zod.number(),
+  "derived": zod.number(),
+  "ok": zod.boolean()
+}).nullish().describe('Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1615,6 +1690,7 @@ export const ListForecastResponseItem = zod.object({
   "sourcePayId": zod.number().nullish(),
   "sourceLifeEventId": zod.number().nullish(),
   "sourceBalanceSyncId": zod.number().nullish(),
+  "sourceGoalId": zod.number().nullish().describe('Spend-goal purchase pair — funding inflow + purchase expense both carry the goal id so they regenerate and are removed together'),
   "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
   "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
   "sourceCardCycleId": zod.number().nullish().describe('When set, this row is a card cycle\'s due-date payment (no child rows)'),
@@ -1660,6 +1736,7 @@ export const CreateForecastedTransactionResponse = zod.object({
   "sourcePayId": zod.number().nullish(),
   "sourceLifeEventId": zod.number().nullish(),
   "sourceBalanceSyncId": zod.number().nullish(),
+  "sourceGoalId": zod.number().nullish().describe('Spend-goal purchase pair — funding inflow + purchase expense both carry the goal id so they regenerate and are removed together'),
   "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
   "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
   "sourceCardCycleId": zod.number().nullish().describe('When set, this row is a card cycle\'s due-date payment (no child rows)'),
@@ -1811,6 +1888,7 @@ export const ReconcileForecastedTransactionResponse = zod.object({
   "sourcePayId": zod.number().nullish(),
   "sourceLifeEventId": zod.number().nullish(),
   "sourceBalanceSyncId": zod.number().nullish(),
+  "sourceGoalId": zod.number().nullish().describe('Spend-goal purchase pair — funding inflow + purchase expense both carry the goal id so they regenerate and are removed together'),
   "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
   "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
   "sourceCardCycleId": zod.number().nullish().describe('When set, this row is a card cycle\'s due-date payment (no child rows)'),
@@ -1847,6 +1925,7 @@ export const UnreconcileForecastedTransactionResponse = zod.object({
   "sourcePayId": zod.number().nullish(),
   "sourceLifeEventId": zod.number().nullish(),
   "sourceBalanceSyncId": zod.number().nullish(),
+  "sourceGoalId": zod.number().nullish().describe('Spend-goal purchase pair — funding inflow + purchase expense both carry the goal id so they regenerate and are removed together'),
   "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
   "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
   "sourceCardCycleId": zod.number().nullish().describe('When set, this row is a card cycle\'s due-date payment (no child rows)'),
@@ -1921,6 +2000,7 @@ export const UpdateForecastedTransactionResponse = zod.object({
   "sourcePayId": zod.number().nullish(),
   "sourceLifeEventId": zod.number().nullish(),
   "sourceBalanceSyncId": zod.number().nullish(),
+  "sourceGoalId": zod.number().nullish().describe('Spend-goal purchase pair — funding inflow + purchase expense both carry the goal id so they regenerate and are removed together'),
   "ccAccountId": zod.number().nullish().describe('Credit-card account this row belongs to (CC billing cycle grouping)'),
   "isCcParent": zod.boolean().describe('True for the \"Credit Card Payment\" parent row of a CC group'),
   "sourceCardCycleId": zod.number().nullish().describe('When set, this row is a card cycle\'s due-date payment (no child rows)'),

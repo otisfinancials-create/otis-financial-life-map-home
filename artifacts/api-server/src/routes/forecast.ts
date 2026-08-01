@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, ne, and, or, gte, lt, lte, gt, inArray, isNull, isNotNull, desc } from "drizzle-orm";
-import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable, cardCyclesTable, billMatchDismissalsTable } from "@workspace/db";
+import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable, cardCyclesTable, billMatchDismissalsTable, goalsTable } from "@workspace/db";
 import { findReconcileSuggestions } from "../services/bill-reconciliation";
 import { rollActualsForUser } from "../services/actuals-roll";
 import { getForecastAccounts } from "../services/forecast-accounts";
@@ -809,6 +809,115 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     }
   }
 
+  // ── Spend-goal purchase events (Goals part 2) ──────────────────────────
+  // On the spend date, a committed spend goal emits TWO rows (never one
+  // netted row — each leg mirrors a real transaction and keeps conservation
+  // auditable):
+  //   Row A — funding inflow "Transfer from <goal>": money crossing INTO the
+  //           pool, capped at targetAmount (you don't withdraw more than you
+  //           need). Asset movement: steps balance, never counts as spending.
+  //   Row B — the purchase itself, expense of the full targetAmount.
+  // Net balance effect = target − funded (fully funded ⇒ $0).
+  const spendGoals = await db
+    .select()
+    .from(goalsTable)
+    .where(and(
+      eq(goalsTable.userId, userId),
+      eq(goalsTable.goalType, "spend"),
+      inArray(goalsTable.status, ["committed", "completed"]),
+      eq(goalsTable.isActive, true),
+    ));
+  if (spendGoals.length > 0) {
+    // Rows the user marked "didn't happen" (status='removed', isCommitted)
+    // survive the delete above — never re-emit the purchase pair for those
+    // goals. Reconciled (isActual) legs likewise suppress re-emission.
+    const preservedGoalRows = await db
+      .select({
+        id: forecastedTransactionsTable.id,
+        sourceGoalId: forecastedTransactionsTable.sourceGoalId,
+        status: forecastedTransactionsTable.status,
+        isActual: forecastedTransactionsTable.isActual,
+      })
+      .from(forecastedTransactionsTable)
+      .where(and(
+        eq(forecastedTransactionsTable.userId, userId),
+        isNotNull(forecastedTransactionsTable.sourceGoalId),
+      ));
+    // Pair-aware suppression: only INTENTIONAL survivors (user marked the
+    // purchase removed, or a leg reconciled to a real transaction) block
+    // re-emission. Any other leftover (e.g. a stray committed leg) is
+    // malformed — delete it and re-emit the canonical pair.
+    const goalsWithIntentionalRows = new Set(
+      preservedGoalRows.filter((r) => r.status === "removed" || r.isActual).map((r) => r.sourceGoalId),
+    );
+    const malformedRowIds = preservedGoalRows
+      .filter((r) => !goalsWithIntentionalRows.has(r.sourceGoalId) && !r.isActual)
+      .map((r) => r.id);
+    if (malformedRowIds.length > 0) {
+      await db.delete(forecastedTransactionsTable).where(inArray(forecastedTransactionsTable.id, malformedRowIds));
+    }
+    const goalBillIds = spendGoals.map((g) => g.billId).filter((id): id is number => id != null);
+    const goalBills = goalBillIds.length
+      ? await db.select().from(billsTable).where(and(eq(billsTable.userId, userId), inArray(billsTable.id, goalBillIds)))
+      : [];
+    const goalBillById = new Map(goalBills.map((b) => [b.id, b]));
+
+    for (const goal of spendGoals) {
+      // 3e: purchase date passed and the purchase was NOT removed → completed.
+      if (goal.status === "committed" && goal.targetDate < todayStr) {
+        await db.update(goalsTable).set({ status: "completed" }).where(eq(goalsTable.id, goal.id));
+      }
+      if (goalsWithIntentionalRows.has(goal.id)) continue; // removed/reconciled pair survives as-is
+      // The pair is a bounded one-off, not an open-ended recurrence — emit it
+      // even when the spend date falls just past the rolling 12-month window
+      // (e.g. start 08-01 → spend next 08-01, window ends 07-31). Only far-past
+      // dates (before the regeneration boundary) are skipped.
+      if (goal.targetDate < genStartStr) continue;
+
+      // PROJECTED bucket at the spend date: alreadySaved + scheduled
+      // contributions with date <= spend date. Future contributions haven't
+      // posted, so the purchase must net against the SCHEDULE, not actuals.
+      const bill = goal.billId != null ? goalBillById.get(goal.billId) : undefined;
+      const contribution = bill ? parseFloat(String(bill.amount)) : parseFloat(String(goal.monthlyContribution));
+      const occurrences = bill
+        ? generateBillOccurrences(bill, goal.startDate, goal.targetDate)
+        : [];
+      const scheduled = occurrences.filter((d) => d <= goal.targetDate).length;
+      const target = parseFloat(String(goal.targetAmount));
+      const alreadySaved = parseFloat(String(goal.alreadySaved));
+      const projectedBucket = Math.round((alreadySaved + contribution * scheduled) * 100) / 100;
+      const funded = Math.min(projectedBucket, target);
+
+      // Row B first (sortOrder 0) — the purchase is the headline line; the
+      // funding transfer renders as its expandable composition.
+      toInsert.push({
+        userId,
+        transactionDate: goal.targetDate,
+        description: goal.name,
+        amount: String(target),
+        transactionType: "expense",
+        category: "Other",
+        sourceGoalId: goal.id,
+        isActual: false,
+        isCommitted: false,
+        sortOrder: 0,
+      });
+      toInsert.push({
+        userId,
+        transactionDate: goal.targetDate,
+        description: `Transfer from ${goal.name}`,
+        amount: String(funded),
+        transactionType: "income",
+        category: "Other",
+        sourceGoalId: goal.id,
+        isAssetMovement: true,
+        isActual: false,
+        isCommitted: false,
+        sortOrder: 1,
+      });
+    }
+  }
+
   if (toInsert.length > 0) {
     await db.insert(forecastedTransactionsTable).values(toInsert);
   }
@@ -1347,6 +1456,14 @@ router.patch("/forecast/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Spend-goal purchase pairs (funding transfer + purchase) are derived from
+  // the goal itself. Editing one leg would break the pair's netting math —
+  // change the goal (dates/amounts) or use "Purchase didn't happen" instead.
+  if (existing.sourceGoalId != null) {
+    res.status(400).json({ error: "Goal purchase rows are managed from the goal — edit the goal or use \"Purchase didn't happen\" on the Goals page" });
+    return;
+  }
+
   // Cycle payment rows are derived from the card-cycle engine; editing or
   // marking them paid would desync from the rollup and (since isActual /
   // isCommitted rows survive regeneration) risk duplicate payment rows.
@@ -1445,6 +1562,7 @@ router.delete("/forecast/:id", async (req, res): Promise<void> => {
       isCcParent: forecastedTransactionsTable.isCcParent,
       transactionDate: forecastedTransactionsTable.transactionDate,
       isUnplanned: forecastedTransactionsTable.isUnplanned,
+      sourceGoalId: forecastedTransactionsTable.sourceGoalId,
     })
     .from(forecastedTransactionsTable)
     .where(and(eq(forecastedTransactionsTable.id, params.data.id), eq(forecastedTransactionsTable.userId, req.userId)));
@@ -1458,6 +1576,10 @@ router.delete("/forecast/:id", async (req, res): Promise<void> => {
   }
   if (existing.isUnplanned) {
     res.status(400).json({ error: "Unplanned spending rows reflect posted bank activity and can't be deleted — they are rebuilt on every sync" });
+    return;
+  }
+  if (existing.sourceGoalId != null) {
+    res.status(400).json({ error: "Goal purchase rows are managed from the goal — uncommit the goal or use \"Purchase didn't happen\" on the Goals page" });
     return;
   }
   await db.transaction(async (trx) => {

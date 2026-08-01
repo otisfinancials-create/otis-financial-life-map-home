@@ -258,6 +258,16 @@ export const GoalStatus = {
   cancelled: 'cancelled',
 } as const;
 
+/**
+ * Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.
+ * @nullable
+ */
+export type GoalBucketInvariant = {
+  stored: number;
+  derived: number;
+  ok: boolean;
+} | null;
+
 export interface Goal {
   id: number;
   name: string;
@@ -274,6 +284,23 @@ export interface Goal {
   /** @nullable */
   billId?: number | null;
   isActive: boolean;
+  /** Stored ACTUAL bucket — alreadySaved + reconciled contributions − withdrawals. Progress-bar number; nothing consumes it yet. */
+  actualBucket?: number;
+  /**
+     * Spend goals only — alreadySaved + scheduled contributions ≤ target date. Used for purchase netting.
+     * @nullable
+     */
+  projectedBucketAtSpendDate?: number | null;
+  /**
+     * Spend goals only — max(0, targetAmount − projected bucket at the spend date). The net balance effect of the purchase.
+     * @nullable
+     */
+  shortfall?: number | null;
+  /**
+     * Invariant check — stored actual bucket must equal alreadySaved + reconciled contributions − withdrawals.
+     * @nullable
+     */
+  bucketInvariant?: GoalBucketInvariant;
   createdAt: string;
   updatedAt: string;
 }
@@ -1048,6 +1075,11 @@ export interface ForecastedTransaction {
   sourceLifeEventId?: number | null;
   /** @nullable */
   sourceBalanceSyncId?: number | null;
+  /**
+     * Spend-goal purchase pair — funding inflow + purchase expense both carry the goal id so they regenerate and are removed together
+     * @nullable
+     */
+  sourceGoalId?: number | null;
   /**
      * Credit-card account this row belongs to (CC billing cycle grouping)
      * @nullable

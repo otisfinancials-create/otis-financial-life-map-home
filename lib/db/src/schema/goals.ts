@@ -37,6 +37,11 @@ export const goalsTable = pgTable("goals", {
   monthlyContribution: numeric("monthly_contribution", { precision: 12, scale: 2 }).notNull(),
   // 'draft' | 'committed' | 'completed' | 'cancelled'
   status: text("status").notNull().default("draft"),
+  // ACTUAL bucket (Goals part 2 §1b): alreadySaved + reconciled contributions
+  // − withdrawals. Stored so the invariant (stored == derived) is checkable;
+  // nothing consumes it yet — it is the future progress-bar number and the
+  // reconciliation target. Kept in lockstep whenever alreadySaved changes.
+  actualBucket: numeric("actual_bucket", { precision: 12, scale: 2 }).notNull().default("0"),
   // Set on commit; the contribution bill this goal rides on.
   billId: integer("bill_id").references(() => billsTable.id),
   isActive: boolean("is_active").notNull().default(true),
