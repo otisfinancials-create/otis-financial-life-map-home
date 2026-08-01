@@ -2035,7 +2035,8 @@ export const ExchangePlaidTokenResponse = zod.object({
  */
 export const SetPlaidForecastAccountsBody = zod.object({
   "itemId": zod.number().describe('Internal plaid_items row id whose accounts are being configured'),
-  "selectedAccountIds": zod.array(zod.number()).describe('Account ids (from this item) the user pays bills from; other non-credit-card accounts of the item are set to false')
+  "selectedAccountIds": zod.array(zod.number()).describe('Account ids (from this item) the user pays bills from. Must be a subset of presentedAccountIds.'),
+  "presentedAccountIds": zod.array(zod.number()).describe('Account ids that were actually shown in the selection dialog. The save is scoped to exactly these accounts — presented+selected → true, presented+unselected → false. Accounts of the item NOT in this list are left completely untouched (update-mode dialogs only present newly added accounts; existing selections must survive).\n')
 })
 
 export const SetPlaidForecastAccountsResponse = zod.object({

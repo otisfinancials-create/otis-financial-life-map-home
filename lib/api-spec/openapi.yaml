@@ -3729,7 +3729,7 @@ components:
 
     PlaidForecastAccountsInput:
       type: object
-      required: [itemId, selectedAccountIds]
+      required: [itemId, selectedAccountIds, presentedAccountIds]
       properties:
         itemId:
           type: integer
@@ -3738,7 +3738,17 @@ components:
           type: array
           items:
             type: integer
-          description: Account ids (from this item) the user pays bills from; other non-credit-card accounts of the item are set to false
+          description: Account ids (from this item) the user pays bills from. Must be a subset of presentedAccountIds.
+        presentedAccountIds:
+          type: array
+          items:
+            type: integer
+          description: >
+            Account ids that were actually shown in the selection dialog. The save is
+            scoped to exactly these accounts — presented+selected → true,
+            presented+unselected → false. Accounts of the item NOT in this list are
+            left completely untouched (update-mode dialogs only present newly added
+            accounts; existing selections must survive).
 
     PlaidForecastAccountsResult:
       type: object

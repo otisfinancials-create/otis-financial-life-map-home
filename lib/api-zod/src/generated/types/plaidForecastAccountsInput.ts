@@ -9,6 +9,8 @@
 export interface PlaidForecastAccountsInput {
   /** Internal plaid_items row id whose accounts are being configured */
   itemId: number;
-  /** Account ids (from this item) the user pays bills from; other non-credit-card accounts of the item are set to false */
+  /** Account ids (from this item) the user pays bills from. Must be a subset of presentedAccountIds. */
   selectedAccountIds: number[];
+  /** Account ids that were actually shown in the selection dialog. The save is scoped to exactly these accounts — presented+selected → true, presented+unselected → false. Accounts of the item NOT in this list are left completely untouched (update-mode dialogs only present newly added accounts; existing selections must survive). */
+  presentedAccountIds: number[];
 }

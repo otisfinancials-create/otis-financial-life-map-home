@@ -59,7 +59,16 @@ export function ForecastAccountsDialog({ itemId, accounts, onClose }: Props) {
 
   const handleSave = () => {
     save.mutate(
-      { data: { itemId, selectedAccountIds: [...selected] } },
+      {
+        data: {
+          itemId,
+          selectedAccountIds: [...selected],
+          // Scope the save to exactly what this dialog showed — accounts not
+          // presented (e.g. pre-existing accounts during update mode) must be
+          // left untouched by the server.
+          presentedAccountIds: cashAccounts.map((a) => a.id),
+        },
+      },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });

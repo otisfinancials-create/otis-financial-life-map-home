@@ -233,7 +233,17 @@ router.put("/plaid/forecast-accounts", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { itemId, selectedAccountIds } = parsed.data;
+  const { itemId, selectedAccountIds, presentedAccountIds } = parsed.data;
+  // Contract: selections must come from the presented set — anything else is
+  // a malformed client. Reject instead of silently ignoring.
+  const presentedCheck = new Set(presentedAccountIds);
+  const outOfScope = selectedAccountIds.filter((id) => !presentedCheck.has(id));
+  if (outOfScope.length > 0) {
+    res.status(400).json({
+      error: `selectedAccountIds must be a subset of presentedAccountIds (out of scope: ${outOfScope.join(", ")})`,
+    });
+    return;
+  }
   const [item] = await db
     .select({ id: plaidItemsTable.id })
     .from(plaidItemsTable)
@@ -247,8 +257,14 @@ router.put("/plaid/forecast-accounts", async (req, res): Promise<void> => {
     .from(accountsTable)
     .where(and(eq(accountsTable.userId, req.userId), eq(accountsTable.plaidItemId, itemId)));
   const selected = new Set(selectedAccountIds);
+  // The write is scoped to the accounts the dialog actually presented. An
+  // update-mode dialog only shows newly added accounts — accounts absent from
+  // the dialog must be left completely untouched, or an existing forecast
+  // selection is silently cleared (the item-wide loop used to do exactly that).
+  const presented = new Set(presentedAccountIds);
   let updated = 0;
   for (const a of itemAccounts) {
+    if (!presented.has(a.id)) continue;
     const desired = a.accountType !== "credit_card" && selected.has(a.id);
     if (a.isForecastAccount !== desired) {
       await db.update(accountsTable).set({ isForecastAccount: desired, updatedAt: new Date() }).where(eq(accountsTable.id, a.id));

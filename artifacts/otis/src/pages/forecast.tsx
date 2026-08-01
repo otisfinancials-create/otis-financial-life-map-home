@@ -42,6 +42,7 @@ import {
   getListCycleEnvelopesQueryKey,
   useGetAccount,
   getGetAccountQueryKey,
+  useListAccounts,
   useListCycleCharges,
   getListCycleChargesQueryKey,
   useCreateCycleCharge,
@@ -679,6 +680,15 @@ export default function Forecast() {
   const { data: monthlyData = [], isLoading: loadingMonthly } = useGetMonthlyForecast();
   const { data: bills = [] } = useListBills();
   const { data: balanceSyncs = [] } = useListBalanceSyncs();
+  // Mirror the server's noneSelected guard (services/forecast-accounts.ts):
+  // linked cash accounts exist but none are selected for the forecast. The
+  // forecast silently loses its balance basis in that state — surface it
+  // loudly instead of letting the user discover a zeroed forecast themselves.
+  const { data: allAccounts = [] } = useListAccounts();
+  const linkedCash = allAccounts.filter(
+    (a) => a.plaidAccountId != null && a.accountType !== "credit_card",
+  );
+  const noForecastAccounts = linkedCash.length > 0 && !linkedCash.some((a) => a.isForecastAccount);
   const lastSync = balanceSyncs[0] ?? null;
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -1516,6 +1526,30 @@ export default function Forecast() {
         <h1 className="text-2xl font-bold tracking-tight">Forecast</h1>
         <p className="text-muted-foreground mt-1">Your complete financial picture, month by month</p>
       </div>
+
+      {/* ── No-forecast-accounts warning ────────────────────────────────────── */}
+      {noForecastAccounts && (
+        <div className="px-6 pb-3 shrink-0">
+          <div
+            className="flex items-center gap-3 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3"
+            data-testid="banner-no-forecast-accounts"
+          >
+            <TriangleAlert className="h-5 w-5 shrink-0 text-destructive" />
+            <div className="flex-1 text-sm">
+              <span className="font-medium">No accounts are selected for your forecast.</span>{" "}
+              Your forecast has no balance basis until you choose at least one account you pay bills from.
+            </div>
+            <button
+              onClick={() => navigate("/accounts")}
+              className="shrink-0 rounded-[20px] px-[13px] py-[5px] text-xs font-medium text-white"
+              style={{ backgroundColor: "#0D2B45" }}
+              data-testid="button-fix-forecast-accounts"
+            >
+              Choose accounts
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Controls Bar ─────────────────────────────────────────────────────── */}
       <div className="shrink-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border px-6 py-3 flex items-center gap-2 flex-wrap">
