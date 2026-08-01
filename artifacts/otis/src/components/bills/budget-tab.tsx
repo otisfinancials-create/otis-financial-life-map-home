@@ -3,8 +3,6 @@ import { ChevronDown, ChevronRight, Wallet } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
-  useListBills,
-  useListPaySchedules,
   useUpdateBill,
   useUpdatePaySchedule,
   useRegenerateForecast,
@@ -33,8 +31,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getCategoryEmoji } from "@/utils/categoryIcons";
 import { monthlyFactor } from "@/lib/bill-math";
-import { useListCardCompositions } from "@workspace/api-client-react";
-import { foldCarryover, nearestCyclePerCard, todayIso } from "@/components/bills/card-composition";
+import { useBudgetMath } from "@/hooks/use-budget-math";
 import type { DisplayEnvelope } from "@/components/bills/card-composition";
 
 const moneyCell = "text-right font-mono";
@@ -128,9 +125,19 @@ function BarRow({ label, amount, max, color }: { label: string; amount: number; 
 export function BudgetTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: bills, isLoading: billsLoading } = useListBills();
-  const { data: paySchedules, isLoading: payLoading } = useListPaySchedules();
-  const { data: compositions } = useListCardCompositions({ dueStart: todayIso() });
+  const {
+    isLoading: budgetLoading,
+    bills,
+    paySchedules,
+    monthlyIncome,
+    goalBills,
+    groups,
+    envelopeGroups,
+    totalBills,
+    netCashFlow,
+  } = useBudgetMath();
+  const billsLoading = budgetLoading;
+  const payLoading = budgetLoading;
   const updateBill = useUpdateBill();
   const updatePaySchedule = useUpdatePaySchedule();
   const regenerateForecast = useRegenerateForecast();
@@ -182,59 +189,6 @@ export function BudgetTab() {
     );
   };
 
-  const monthlyIncome = useMemo(
-    () => (paySchedules ?? []).reduce((s, p) => s + p.amount * monthlyFactor(p.frequency), 0),
-    [paySchedules],
-  );
-
-  // Goal contributions are SAVINGS, not miscellaneous spending — they get
-  // their own section below instead of landing in an "Other" category.
-  const goalBills = useMemo(
-    () => (bills ?? []).filter((b) => b.isActive && b.billKind === "goal_contribution"),
-    [bills],
-  );
-  const totalGoalSavings = useMemo(
-    () => goalBills.reduce((s, b) => s + b.amount * monthlyFactor(b.frequency), 0),
-    [goalBills],
-  );
-
-  const groups = useMemo(() => {
-    const byCategory: Record<string, Bill[]> = {};
-    for (const bill of bills ?? []) {
-      if (!bill.isActive || bill.amountType === "positive" || bill.billKind === "goal_contribution") continue;
-      (byCategory[bill.category] ??= []).push(bill);
-    }
-    return Object.entries(byCategory)
-      .map(([category, list]) => ({
-        category,
-        bills: list.sort((a, b) => b.amount * monthlyFactor(b.frequency) - a.amount * monthlyFactor(a.frequency)),
-        monthlyTotal: list.reduce((s, b) => s + b.amount * monthlyFactor(b.frequency), 0),
-      }))
-      .sort((a, b) => b.monthlyTotal - a.monthlyTotal);
-  }, [bills]);
-
-  // Card envelopes: each card's current cycle is ~monthly, so envelope
-  // planned amounts ARE the monthly equivalent. Bills allocated to a cycle
-  // already appear in their own categories above — only envelopes are added
-  // here, so nothing is counted twice. Carryover is folded, never listed.
-  const envelopeGroups = useMemo(() => {
-    return nearestCyclePerCard(compositions ?? [])
-      .map((c) => {
-        const envelopes = foldCarryover(c.envelopes).filter((e) => e.plannedAmount > 0.005);
-        return {
-          key: `card-${c.accountId}`,
-          cardName: c.accountName,
-          envelopes,
-          monthlyTotal: envelopes.reduce((s, e) => s + e.plannedAmount, 0),
-        };
-      })
-      .filter((g) => g.envelopes.length > 0);
-  }, [compositions]);
-
-  const totalEnvelopes = useMemo(() => envelopeGroups.reduce((s, g) => s + g.monthlyTotal, 0), [envelopeGroups]);
-  const totalBills =
-    useMemo(() => groups.reduce((s, g) => s + g.monthlyTotal, 0), [groups]) + totalEnvelopes + totalGoalSavings;
-  const netCashFlow = monthlyIncome - totalBills;
   const pctOfIncome = (v: number) => (monthlyIncome > 0 ? `${((v / monthlyIncome) * 100).toFixed(1)}%` : "—");
 
   const toggle = (cat: string) =>

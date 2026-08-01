@@ -60,7 +60,11 @@ const fmtDate = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 
 type ImpactProps = {
+  /** Ledger-derived month detail (advisory month-by-month toggle only). */
   surplus: GoalSurplus | undefined;
+  /** Budget-derived available surplus (= Budget tab net cash flow) — the
+   * headline baseline. Must come from useBudgetMath, never the ledger. */
+  availableSurplus: number | null;
   monthly: number | null; // computed contribution for the drafted terms
   startDate: string;
   targetDate: string;
@@ -79,9 +83,9 @@ export function GoalImpactPanel(props: ImpactProps) {
   const [monthsOpen, setMonthsOpen] = useState(false);
 
   const baseline = useMemo(() => {
-    if (!surplus) return null;
-    return Math.round((surplus.availableMonthly + (props.editingCommittedContribution ?? 0)) * 100) / 100;
-  }, [surplus, props.editingCommittedContribution]);
+    if (props.availableSurplus == null) return null;
+    return Math.round((props.availableSurplus + (props.editingCommittedContribution ?? 0)) * 100) / 100;
+  }, [props.availableSurplus, props.editingCommittedContribution]);
 
   const surplusRateDate = useMemo(
     () => (baseline != null && baseline > 0
@@ -104,9 +108,9 @@ export function GoalImpactPanel(props: ImpactProps) {
     [customMonthly, startDate, contributionDay, targetAmount, alreadySaved],
   );
 
-  if (!surplus || monthly == null || baseline == null) return null;
+  if (monthly == null || baseline == null) return null;
   const fits = monthly <= baseline;
-  const negativeMonths = surplus.months.filter((m) => m.available < 0).length;
+  const negativeMonths = (surplus?.months ?? []).filter((m) => m.available < 0).length;
 
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 text-sm" data-testid="panel-goal-impact">
@@ -187,12 +191,14 @@ export function GoalImpactPanel(props: ImpactProps) {
         </>
       )}
 
+      {surplus && (
       <button type="button" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         onClick={() => setMonthsOpen((o) => !o)} data-testid="button-toggle-surplus-months">
         <ChevronDown className={`h-3 w-3 transition-transform ${monthsOpen ? "rotate-180" : ""}`} />
-        Month-by-month surplus{negativeMonths > 0 ? ` (${negativeMonths} negative month${negativeMonths > 1 ? "s" : ""})` : ""} — averages hide lumpy months
+        Month-by-month forecast net{negativeMonths > 0 ? ` (${negativeMonths} negative month${negativeMonths > 1 ? "s" : ""})` : ""} — averages hide lumpy months
       </button>
-      {monthsOpen && (
+      )}
+      {monthsOpen && surplus && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5 text-xs font-mono" data-testid="list-surplus-months">
           {surplus.months.map((m) => (
             <div key={m.month} className={`flex justify-between gap-2 ${m.available < 0 ? "text-destructive font-semibold" : ""}`}>
@@ -206,34 +212,57 @@ export function GoalImpactPanel(props: ImpactProps) {
   );
 }
 
-/** Multiple-goals readout (§7.1): committed contributions vs GROSS surplus. */
-export function MultipleGoalsCard({ surplus, goals }: { surplus: GoalSurplus | undefined; goals: Goal[] | undefined }) {
-  if (!surplus || surplus.committedGoals.length === 0) return null;
-  const need = surplus.committedMonthlyTotal;
-  const have = surplus.grossMonthly;
+/**
+ * Multiple-goals readout (§7.1): committed contributions vs GROSS surplus.
+ *
+ * Always visible — headroom must be shown BEFORE anything is committed.
+ * All numbers are pure functions of current bills/pay/goals state (budget
+ * math + goals query), never the forecast ledger, so the value cannot
+ * drift with commit/uncommit history.
+ */
+export function MultipleGoalsCard({
+  grossSurplus,
+  goals,
+}: {
+  /** Budget-derived gross surplus (= Budget tab net cash flow before goal contributions). */
+  grossSurplus: number | null;
+  goals: Goal[] | undefined;
+}) {
+  if (grossSurplus == null) return null;
+  const committed = (goals ?? []).filter((g) => g.status === "committed");
+  const need = Math.round(committed.reduce((s, g) => s + g.monthlyContribution, 0) * 100) / 100;
+  const have = Math.round(grossSurplus * 100) / 100;
+  const remaining = Math.round((have - need) * 100) / 100;
   const over = need > have;
-  void goals;
   return (
     <Card className={`border-card-border bg-card rounded-xl p-4 space-y-2 ${over ? "border-destructive/40" : ""}`} data-testid="card-multiple-goals">
       <div className="flex items-center gap-2">
         <Scale className="h-4 w-4 text-muted-foreground" />
         <h2 className="font-semibold text-sm">Committed goals vs. your income</h2>
       </div>
-      <p className={`text-sm ${over ? "text-destructive font-medium" : ""}`} data-testid="text-goals-vs-income">
-        Your goals need <FormatCurrency amount={need} />/mo — your income supports{" "}
-        <FormatCurrency amount={have} />/mo{over ? ". Something has to give." : "."}
-      </p>
-      <ul className="text-sm text-muted-foreground space-y-0.5" data-testid="list-committed-goal-contributions">
-        {surplus.committedGoals.map((g) => (
-          <li key={g.goalId} className="flex justify-between gap-4">
-            <span className="truncate">{g.name}</span>
-            <span className="font-mono"><FormatCurrency amount={g.monthlyContribution} />/mo</span>
-          </li>
-        ))}
-      </ul>
-      <p className="text-xs text-muted-foreground">
-        After these contributions, <FormatCurrency amount={surplus.availableMonthly} />/mo remains available for new goals.
-      </p>
+      {committed.length === 0 ? (
+        <p className="text-sm" data-testid="text-goals-vs-income">
+          Your income currently supports <FormatCurrency amount={have} />/month in goal contributions.
+        </p>
+      ) : (
+        <>
+          <p className={`text-sm ${over ? "text-destructive font-medium" : ""}`} data-testid="text-goals-vs-income">
+            Your goals need <FormatCurrency amount={need} />/mo — your income supports{" "}
+            <FormatCurrency amount={have} />/mo{over ? ". Something has to give." : "."}
+          </p>
+          <ul className="text-sm text-muted-foreground space-y-0.5" data-testid="list-committed-goal-contributions">
+            {committed.map((g) => (
+              <li key={g.id} className="flex justify-between gap-4">
+                <span className="truncate">{g.name}</span>
+                <span className="font-mono"><FormatCurrency amount={g.monthlyContribution} />/mo</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-muted-foreground">
+            After these contributions, <FormatCurrency amount={remaining} />/mo remains available for new goals.
+          </p>
+        </>
+      )}
     </Card>
   );
 }

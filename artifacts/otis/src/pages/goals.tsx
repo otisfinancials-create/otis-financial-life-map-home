@@ -18,6 +18,7 @@ import {
   type GoalInput,
 } from "@workspace/api-client-react";
 import { useSyncForecast } from "@/hooks/use-sync-forecast";
+import { useBudgetMath } from "@/hooks/use-budget-math";
 import { GoalImpactPanel, MultipleGoalsCard } from "@/components/goals/goal-impact";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -111,6 +112,11 @@ export default function Goals() {
   const { data: goals, isLoading } = useListGoals();
   const { data: accounts } = useListAccounts();
   const { data: surplus } = useGetGoalSurplus();
+  // Headline surplus numbers come from the shared budget math (same
+  // computation as the Budget tab, by construction). The ledger-based
+  // endpoint is kept only for the advisory month-by-month detail.
+  const budget = useBudgetMath();
+
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
@@ -283,7 +289,7 @@ export default function Goals() {
         </Button>
       </div>
 
-      <MultipleGoalsCard surplus={surplus} goals={goals} />
+      <MultipleGoalsCard grossSurplus={budget.isLoading ? null : budget.grossSurplus} goals={goals} />
 
       {isLoading ? (
         <Card className="p-6 space-y-3">
@@ -513,6 +519,7 @@ export default function Goals() {
             {preview != null && (
               <GoalImpactPanel
                 surplus={surplus}
+                availableSurplus={budget.isLoading ? null : budget.availableSurplus}
                 monthly={preview}
                 startDate={form.startDate}
                 targetDate={form.targetDate}
