@@ -18,7 +18,7 @@ import {
   CommitGoalResponse,
   UncommitGoalResponse,
 } from "@workspace/api-zod";
-import { regenerateForecastForUser } from "./forecast";
+import { regenerateForecastForUser, generateBillOccurrences } from "./forecast";
 
 const router: IRouter = Router();
 
@@ -39,19 +39,26 @@ function toLocalIsoDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-/** Whole months from start to target (partial trailing month doesn't count). */
-export function wholeMonthsBetween(startIso: string, targetIso: string): number {
-  const [sy, sm, sd] = startIso.split("-").map(Number);
-  const [ty, tm, td] = targetIso.split("-").map(Number);
-  let months = (ty - sy) * 12 + (tm - sm);
-  if (td < sd) months -= 1;
-  return months;
+/**
+ * Number of contribution occurrences the forecast will ACTUALLY emit for a
+ * monthly contribution bill (startDate, endDate=targetDate, dueDay). Derived
+ * from generateBillOccurrences — the exact generator the forecast uses — so
+ * the divisor can never drift from the emitted schedule again (the old
+ * whole-months computation was off by one: a 09-01→12-31 day-1 window emits
+ * FOUR rows, not three).
+ */
+export function contributionOccurrenceCount(startIso: string, targetIso: string, day: number): number {
+  return generateBillOccurrences(
+    { frequency: "monthly", dueDay: day, startDate: startIso, endDate: targetIso },
+    startIso,
+    targetIso,
+  ).length;
 }
 
 /**
- * (target − alreadySaved) ÷ months, rounded UP to the nearest $5 so users
- * arrive slightly early rather than short. Cent-safe: an exact quotient
- * (e.g. $6,000 ÷ 12 = $500) must NOT round up a bracket to $505.
+ * (target − alreadySaved) ÷ contribution count, rounded UP to the nearest $5
+ * so users arrive slightly early rather than short. Cent-safe: an exact
+ * quotient (e.g. $6,000 ÷ 12 = $500) must NOT round up a bracket to $505.
  */
 export function computeMonthlyContribution(targetAmount: number, alreadySaved: number, months: number): number {
   const remainingCents = Math.round(targetAmount * 100) - Math.round(alreadySaved * 100);
@@ -75,12 +82,12 @@ async function validateGoalCore(userId: string, g: GoalCore): Promise<{ error: s
   if (g.targetDate <= g.startDate) {
     return { error: "Target date must be after the start date.", monthlyContribution: 0 };
   }
-  const months = wholeMonthsBetween(g.startDate, g.targetDate);
-  if (months < 1) {
-    return { error: "Target date must be at least one whole month after the start date.", monthlyContribution: 0 };
-  }
   if (g.contributionDay < 1 || g.contributionDay > 31) {
     return { error: "Contribution day must be between 1 and 31.", monthlyContribution: 0 };
+  }
+  const months = contributionOccurrenceCount(g.startDate, g.targetDate, g.contributionDay);
+  if (months < 1) {
+    return { error: "No contribution dates fall between the start date and the target date for that contribution day.", monthlyContribution: 0 };
   }
   const ids = [g.sourceAccountId, g.destinationAccountId];
   const accounts = await db
@@ -111,20 +118,13 @@ async function validateGoalCore(userId: string, g: GoalCore): Promise<{ error: s
   return { error: null, monthlyContribution: computeMonthlyContribution(g.targetAmount, g.alreadySaved, months) };
 }
 
-/** Monthly occurrence dates on contributionDay in [startIso, endIso] (clamped day). */
+/** Monthly occurrence dates on contributionDay in [startIso, endIso] — same generator the forecast uses. */
 function scheduledContributionDates(startIso: string, endIso: string, day: number): string[] {
-  const out: string[] = [];
-  let y = Number(startIso.slice(0, 4));
-  let m = Number(startIso.slice(5, 7));
-  for (let i = 0; i < 2000; i++) {
-    const last = new Date(y, m, 0).getDate();
-    const occ = `${y}-${String(m).padStart(2, "0")}-${String(Math.min(day, last)).padStart(2, "0")}`;
-    if (occ > endIso) break;
-    if (occ >= startIso) out.push(occ);
-    m++;
-    if (m > 12) { m = 1; y++; }
-  }
-  return out;
+  return generateBillOccurrences(
+    { frequency: "monthly", dueDay: day, startDate: startIso, endDate: endIso },
+    startIso,
+    endIso,
+  );
 }
 
 type BucketInfo = {

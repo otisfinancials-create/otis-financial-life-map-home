@@ -68,19 +68,33 @@ const emptyForm = (): FormState => ({
   contributionDay: "1",
 });
 
-function wholeMonthsBetween(startIso: string, targetIso: string): number {
-  const [sy, sm, sd] = startIso.split("-").map(Number);
-  const [ty, tm, td] = targetIso.split("-").map(Number);
-  let months = (ty - sy) * 12 + (tm - sm);
-  if (td < sd) months -= 1;
-  return months;
+/**
+ * Number of monthly contribution occurrences the forecast will emit between
+ * start and target for the chosen contribution day — mirrors the server's
+ * generateBillOccurrences (monthly, day clamped to month length).
+ */
+function contributionCount(startIso: string, targetIso: string, day: number): number {
+  let y = Number(startIso.slice(0, 4));
+  let m = Number(startIso.slice(5, 7));
+  let count = 0;
+  for (let i = 0; i < 2000; i++) {
+    const last = new Date(y, m, 0).getDate();
+    const occ = `${y}-${String(m).padStart(2, "0")}-${String(Math.min(Math.max(day, 1), last)).padStart(2, "0")}`;
+    if (occ > targetIso) break;
+    if (occ >= startIso) count++;
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return count;
 }
 
 function previewContribution(f: FormState): number | null {
   const target = parseFloat(f.targetAmount);
   const saved = parseFloat(f.alreadySaved || "0");
   if (!f.startDate || !f.targetDate || !(target > 0)) return null;
-  const months = wholeMonthsBetween(f.startDate, f.targetDate);
+  const day = parseInt(f.contributionDay || "1", 10);
+  if (!(day >= 1 && day <= 31)) return null;
+  const months = contributionCount(f.startDate, f.targetDate, day);
   if (months < 1) return null;
   const remainingCents = Math.round(target * 100) - Math.round(saved * 100);
   if (remainingCents <= 0) return 0;

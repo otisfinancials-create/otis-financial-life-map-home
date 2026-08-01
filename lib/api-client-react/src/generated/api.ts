@@ -44,6 +44,7 @@ import type {
   BillLinkSample,
   BillMerchantSuggestInput,
   BillUpdate,
+  CardComposition,
   CardCycle,
   CloseCycleResult,
   ConfirmDetectedBillInput,
@@ -69,6 +70,7 @@ import type {
   LifeEventInput,
   LifeEventUpdate,
   ListAccountMerchantsParams,
+  ListCardCompositionsParams,
   ListForecastParams,
   ListPlaidTransactionsParams,
   Loan,
@@ -3144,6 +3146,90 @@ export const useCloseCycle = <TError = ErrorType<void>,
       > => {
       return useMutation(getCloseCycleMutationOptions(options));
     }
+
+export const getListCardCompositionsUrl = (params?: ListCardCompositionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/card-compositions?${stringifiedParams}` : `/api/card-compositions`
+}
+
+/**
+ * @summary Read-only per-card cycle compositions (envelopes + allocated bills) for the signed-in user, optionally filtered by due-date range
+ */
+export const listCardCompositions = async (params?: ListCardCompositionsParams, options?: RequestInit): Promise<CardComposition[]> => {
+
+  return customFetch<CardComposition[]>(getListCardCompositionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCardCompositionsQueryKey = (params?: ListCardCompositionsParams,) => {
+    return [
+    `/api/card-compositions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCardCompositionsQueryOptions = <TData = Awaited<ReturnType<typeof listCardCompositions>>, TError = ErrorType<unknown>>(params?: ListCardCompositionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCardCompositions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCardCompositionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCardCompositions>>> = ({ signal }) => listCardCompositions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCardCompositions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCardCompositionsQueryResult = NonNullable<Awaited<ReturnType<typeof listCardCompositions>>>
+export type ListCardCompositionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Read-only per-card cycle compositions (envelopes + allocated bills) for the signed-in user, optionally filtered by due-date range
+ */
+
+export function useListCardCompositions<TData = Awaited<ReturnType<typeof listCardCompositions>>, TError = ErrorType<unknown>>(
+ params?: ListCardCompositionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCardCompositions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCardCompositionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetCycleBreakdownUrl = (cycleId: number,) => {
 

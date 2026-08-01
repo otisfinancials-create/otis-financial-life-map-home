@@ -46,6 +46,7 @@ import { BillsAnalytics } from "@/components/bills/bills-analytics";
 import { categoryMeta, getCategoryEmoji } from "@/utils/categoryIcons";
 import { PlannedVsActualTab } from "@/components/bills/planned-vs-actual";
 import { BudgetTab } from "@/components/bills/budget-tab";
+import { CardCompositionSection } from "@/components/bills/card-composition";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -273,6 +274,8 @@ export default function Bills() {
       {view === "planned" && <PlannedVsActualTab bills={bills ?? []} />}
 
       {view === "budget" && <BudgetTab />}
+
+      {view === "bills" && <CardCompositionSection />}
 
       {view === "bills" && !isLoading && (
         <BillsAnalytics

@@ -817,6 +817,34 @@ paths:
         "404":
           description: Not found
 
+  /card-compositions:
+    get:
+      operationId: listCardCompositions
+      tags: [envelopes]
+      summary: Read-only per-card cycle compositions (envelopes + allocated bills) for the signed-in user, optionally filtered by due-date range
+      parameters:
+        - name: dueStart
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Include only cycles with dueDate >= this YYYY-MM-DD
+        - name: dueEnd
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Include only cycles with dueDate <= this YYYY-MM-DD
+      responses:
+        "200":
+          description: Card compositions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CardComposition"
+
   /cycles/{cycleId}/breakdown:
     get:
       operationId: getCycleBreakdown
@@ -2882,6 +2910,51 @@ components:
                 type: integer
               billName:
                 type: string
+              expectedAmount:
+                type: number
+              actualAmount:
+                type: ["number", "null"]
+              status:
+                type: string
+
+    CardComposition:
+      type: object
+      required: [accountId, accountName, cycleId, cycleStart, cycleEnd, dueDate, status, accumulatedTotal, plannedTotal, envelopes, bills]
+      properties:
+        accountId:
+          type: integer
+        accountName:
+          type: string
+        cycleId:
+          type: integer
+        cycleStart:
+          type: string
+        cycleEnd:
+          type: string
+        dueDate:
+          type: string
+        status:
+          type: string
+        accumulatedTotal:
+          type: number
+        plannedTotal:
+          type: number
+        envelopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Envelope"
+        bills:
+          type: array
+          items:
+            type: object
+            required: [id, billName, expectedAmount, status]
+            properties:
+              id:
+                type: integer
+              billName:
+                type: string
+              billId:
+                type: ["integer", "null"]
               expectedAmount:
                 type: number
               actualAmount:

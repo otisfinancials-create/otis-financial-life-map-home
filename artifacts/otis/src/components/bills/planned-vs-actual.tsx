@@ -5,7 +5,9 @@ import {
   useListForecast,
   getListForecastQueryKey,
   useListPaySchedules,
+  useListCardCompositions,
 } from "@workspace/api-client-react";
+import { foldCarryover } from "@/components/bills/card-composition";
 import type { Bill } from "@workspace/api-client-react";
 
 import { Card } from "@/components/ui/card";
@@ -81,6 +83,9 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
     { query: { queryKey: getListForecastQueryKey({ startDate: start, endDate: end }) } },
   );
   const { data: paySchedules = [], isLoading: payLoading } = useListPaySchedules();
+  // A cycle's envelopes belong to the month its payment lands in the
+  // forecast — the month containing the cycle's due date.
+  const { data: compositions = [] } = useListCardCompositions({ dueStart: start, dueEnd: end });
 
   const isLoading = txLoading || payLoading;
 
@@ -141,11 +146,29 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
       }))
       .sort((a, b) => b.planned - a.planned);
 
-    const totalPlanned = categories.reduce((s, c) => s + c.planned, 0);
-    const totalPaid = categories.reduce((s, c) => s + c.paid, 0);
+    // Card envelopes for cycles due this month. "Paid" = charges actually
+    // allocated to the envelope so far. Bills allocated to cycles already
+    // appear in their categories above — only envelopes are added here.
+    const cardGroups = compositions
+      .map((c) => {
+        const rows = foldCarryover(c.envelopes).filter((e) => e.plannedAmount > 0.005 || e.spentAmount > 0.005);
+        return {
+          key: `card-${c.cycleId}`,
+          cardName: c.accountName,
+          rows,
+          planned: rows.reduce((s, e) => s + e.plannedAmount, 0),
+          paid: rows.reduce((s, e) => s + e.spentAmount, 0),
+        };
+      })
+      .filter((g) => g.rows.length > 0);
 
-    return { incomePlanned, incomePaid, categories, totalPlanned, totalPaid };
-  }, [bills, txs, paySchedules]);
+    const envPlanned = cardGroups.reduce((s, g) => s + g.planned, 0);
+    const envPaid = cardGroups.reduce((s, g) => s + g.paid, 0);
+    const totalPlanned = categories.reduce((s, c) => s + c.planned, 0) + envPlanned;
+    const totalPaid = categories.reduce((s, c) => s + c.paid, 0) + envPaid;
+
+    return { incomePlanned, incomePaid, categories, cardGroups, totalPlanned, totalPaid };
+  }, [bills, txs, paySchedules, compositions]);
 
   return (
     <div className="space-y-4">
@@ -266,6 +289,63 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
                           </TableCell>
                           <TableCell className="text-center">
                             <StatusIcon planned={r.planned} paid={r.paid} />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </Fragment>
+                );
+              })}
+              {/* Card envelopes section */}
+              {data.cardGroups.length > 0 && (
+                <TableRow className="border-border bg-muted/30 hover:bg-muted/30">
+                  <TableCell colSpan={5} className="py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Card Envelopes
+                  </TableCell>
+                </TableRow>
+              )}
+              {data.cardGroups.map((g) => {
+                const open = expanded.has(g.key);
+                return (
+                  <Fragment key={g.key}>
+                    <TableRow className="border-border cursor-pointer" onClick={() => toggle(g.key)} data-testid={`row-pva-envelopes-${g.key}`}>
+                      <TableCell className="font-medium">
+                        <span className="inline-flex items-center gap-1.5">
+                          {open ? (
+                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                          ) : (
+                            <ChevronRightSmall className="h-3.5 w-3.5 text-muted-foreground" />
+                          )}
+                          <span style={{ fontSize: 16, lineHeight: 1 }}>💳</span>
+                          {g.cardName}
+                        </span>
+                      </TableCell>
+                      <TableCell className={moneyCell}><FormatCurrency amount={g.planned} /></TableCell>
+                      <TableCell className={moneyCell}><FormatCurrency amount={g.paid} /></TableCell>
+                      <TableCell className={`${moneyCell} ${g.planned - g.paid < -0.005 ? "text-red-600" : ""}`}>
+                        <FormatCurrency amount={g.planned - g.paid} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <StatusIcon planned={g.planned} paid={g.paid} />
+                      </TableCell>
+                    </TableRow>
+                    {open &&
+                      g.rows.map((e) => (
+                        <TableRow key={`${g.key}-${e.key}`} className="border-border bg-muted/20 hover:bg-muted/20">
+                          <TableCell className="pl-12 text-sm text-muted-foreground">
+                            {e.name}
+                            {e.includesCarryover && <span className="ml-1.5 text-[10px] text-muted-foreground/70">(incl. carryover)</span>}
+                          </TableCell>
+                          <TableCell className={`${moneyCell} text-sm text-muted-foreground`}>
+                            <FormatCurrency amount={e.plannedAmount} />
+                          </TableCell>
+                          <TableCell className={`${moneyCell} text-sm text-muted-foreground`}>
+                            <FormatCurrency amount={e.spentAmount} />
+                          </TableCell>
+                          <TableCell className={`${moneyCell} text-sm ${e.plannedAmount - e.spentAmount < -0.005 ? "text-red-600" : "text-muted-foreground"}`}>
+                            <FormatCurrency amount={e.plannedAmount - e.spentAmount} />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <StatusIcon planned={e.plannedAmount} paid={e.spentAmount} />
                           </TableCell>
                         </TableRow>
                       ))}

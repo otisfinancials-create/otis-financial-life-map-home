@@ -33,6 +33,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getCategoryEmoji } from "@/utils/categoryIcons";
 import { monthlyFactor } from "@/lib/bill-math";
+import { useListCardCompositions } from "@workspace/api-client-react";
+import { foldCarryover, nearestCyclePerCard, todayIso } from "@/components/bills/card-composition";
+import type { DisplayEnvelope } from "@/components/bills/card-composition";
 
 const moneyCell = "text-right font-mono";
 
@@ -127,6 +130,7 @@ export function BudgetTab() {
   const queryClient = useQueryClient();
   const { data: bills, isLoading: billsLoading } = useListBills();
   const { data: paySchedules, isLoading: payLoading } = useListPaySchedules();
+  const { data: compositions } = useListCardCompositions({ dueStart: todayIso() });
   const updateBill = useUpdateBill();
   const updatePaySchedule = useUpdatePaySchedule();
   const regenerateForecast = useRegenerateForecast();
@@ -198,7 +202,26 @@ export function BudgetTab() {
       .sort((a, b) => b.monthlyTotal - a.monthlyTotal);
   }, [bills]);
 
-  const totalBills = useMemo(() => groups.reduce((s, g) => s + g.monthlyTotal, 0), [groups]);
+  // Card envelopes: each card's current cycle is ~monthly, so envelope
+  // planned amounts ARE the monthly equivalent. Bills allocated to a cycle
+  // already appear in their own categories above — only envelopes are added
+  // here, so nothing is counted twice. Carryover is folded, never listed.
+  const envelopeGroups = useMemo(() => {
+    return nearestCyclePerCard(compositions ?? [])
+      .map((c) => {
+        const envelopes = foldCarryover(c.envelopes).filter((e) => e.plannedAmount > 0.005);
+        return {
+          key: `card-${c.accountId}`,
+          cardName: c.accountName,
+          envelopes,
+          monthlyTotal: envelopes.reduce((s, e) => s + e.plannedAmount, 0),
+        };
+      })
+      .filter((g) => g.envelopes.length > 0);
+  }, [compositions]);
+
+  const totalEnvelopes = useMemo(() => envelopeGroups.reduce((s, g) => s + g.monthlyTotal, 0), [envelopeGroups]);
+  const totalBills = useMemo(() => groups.reduce((s, g) => s + g.monthlyTotal, 0), [groups]) + totalEnvelopes;
   const netCashFlow = monthlyIncome - totalBills;
   const pctOfIncome = (v: number) => (monthlyIncome > 0 ? `${((v / monthlyIncome) * 100).toFixed(1)}%` : "—");
 
@@ -337,6 +360,55 @@ export function BudgetTab() {
                           </TableCell>
                           <TableCell className={`${moneyCell} text-sm text-muted-foreground`}>
                             {pctOfIncome(bill.amount * monthlyFactor(bill.frequency))}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </Fragment>
+                );
+              })}
+              {/* Card envelopes section — spending funded through each card's cycle */}
+              {envelopeGroups.length > 0 && (
+                <TableRow className="border-border bg-muted/30 hover:bg-muted/30">
+                  <TableCell colSpan={4} className="py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Card Envelopes
+                  </TableCell>
+                </TableRow>
+              )}
+              {envelopeGroups.map((g) => {
+                const open = expanded.has(g.key);
+                return (
+                  <Fragment key={g.key}>
+                    <TableRow className="border-border cursor-pointer" onClick={() => toggle(g.key)} data-testid={`row-budget-envelopes-${g.key}`}>
+                      <TableCell className="font-medium">
+                        <span className="inline-flex items-center gap-1.5">
+                          {open ? (
+                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                          )}
+                          <span style={{ fontSize: 16, lineHeight: 1 }}>💳</span>
+                          {g.cardName}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {g.envelopes.length} envelope{g.envelopes.length === 1 ? "" : "s"}
+                      </TableCell>
+                      <TableCell className={moneyCell}><FormatCurrency amount={g.monthlyTotal} /></TableCell>
+                      <TableCell className={`${moneyCell} text-sm text-muted-foreground`}>{pctOfIncome(g.monthlyTotal)}</TableCell>
+                    </TableRow>
+                    {open &&
+                      g.envelopes.map((e: DisplayEnvelope) => (
+                        <TableRow key={`${g.key}-${e.key}`} className="border-border bg-muted/20 hover:bg-muted/20">
+                          <TableCell className="pl-12 text-sm text-muted-foreground">
+                            {e.name}
+                            {e.includesCarryover && <span className="ml-1.5 text-[10px] text-muted-foreground/70">(incl. carryover)</span>}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">envelope</TableCell>
+                          <TableCell className={`${moneyCell} text-sm text-muted-foreground`}>
+                            <FormatCurrency amount={e.plannedAmount} />
+                          </TableCell>
+                          <TableCell className={`${moneyCell} text-sm text-muted-foreground`}>
+                            {pctOfIncome(e.plannedAmount)}
                           </TableCell>
                         </TableRow>
                       ))}

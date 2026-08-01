@@ -1185,6 +1185,54 @@ export const CloseCycleResponse = zod.object({
 
 
 /**
+ * @summary Read-only per-card cycle compositions (envelopes + allocated bills) for the signed-in user, optionally filtered by due-date range
+ */
+export const ListCardCompositionsQueryParams = zod.object({
+  "dueStart": zod.coerce.string().optional().describe('Include only cycles with dueDate >= this YYYY-MM-DD'),
+  "dueEnd": zod.coerce.string().optional().describe('Include only cycles with dueDate <= this YYYY-MM-DD')
+})
+
+export const ListCardCompositionsResponseItem = zod.object({
+  "accountId": zod.number(),
+  "accountName": zod.string(),
+  "cycleId": zod.number(),
+  "cycleStart": zod.string(),
+  "cycleEnd": zod.string(),
+  "dueDate": zod.string(),
+  "status": zod.string(),
+  "accumulatedTotal": zod.number(),
+  "plannedTotal": zod.number(),
+  "envelopes": zod.array(zod.object({
+  "id": zod.number(),
+  "cardCycleId": zod.number(),
+  "name": zod.string(),
+  "category": zod.string().nullish(),
+  "plannedAmount": zod.number(),
+  "spentAmount": zod.number(),
+  "cadence": zod.union([zod.literal('weekly'),zod.literal('one-time'),zod.literal(null)]).nullish(),
+  "note": zod.string().nullish(),
+  "envelopeType": zod.enum(['standard', 'food', 'carryover']),
+  "isCatchall": zod.boolean(),
+  "recurring": zod.boolean(),
+  "weeklyRate": zod.number().nullish(),
+  "isCarryover": zod.boolean(),
+  "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),
+  "bills": zod.array(zod.object({
+  "id": zod.number(),
+  "billName": zod.string(),
+  "billId": zod.number().nullish(),
+  "expectedAmount": zod.number(),
+  "actualAmount": zod.number().nullish(),
+  "status": zod.string()
+}))
+})
+export const ListCardCompositionsResponse = zod.array(ListCardCompositionsResponseItem)
+
+
+/**
  * @summary Read-only composition of a cycle's payment — its envelopes and bills with amounts
  */
 export const GetCycleBreakdownParams = zod.object({

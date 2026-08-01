@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, gt, gte, asc, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, gte, lte, asc, inArray, sql } from "drizzle-orm";
 import { db, cardCyclesTable, envelopesTable, cardCycleBillsTable, billsTable, envelopeAllocationsTable, accountsTable, type Envelope, type CardCycle, type EnvelopeAllocation } from "@workspace/db";
 import {
   ListCycleEnvelopesParams,
@@ -18,6 +18,7 @@ import { regenerateForecastForUser } from "./forecast";
 import {
   ProcessCycleParams, ProcessCycleResponse, CloseCycleParams, CloseCycleResponse,
   GetCycleBreakdownParams, GetCycleBreakdownResponse,
+  ListCardCompositionsQueryParams, ListCardCompositionsResponse,
   ListCycleChargesParams, ListCycleChargesResponse,
   CreateCycleChargeParams, CreateCycleChargeBody, CreateCycleChargeResponse,
   UpdateCycleChargeParams, UpdateCycleChargeBody, UpdateCycleChargeResponse,
@@ -116,6 +117,64 @@ router.post("/cycles/:cycleId/close", async (req, res): Promise<void> => {
 
 // Read-only composition of a cycle's payment (forecast drill-down):
 // envelopes + bills with amounts. Full interactive cycle UI is Stage 5.
+/**
+ * Read-only, user-wide composition listing: every card cycle (optionally
+ * filtered by due-date range) with its envelopes and allocated bills, plus
+ * the owning card's name. PRESENTATION ONLY — powers the Bills page's
+ * per-card grouping. Never writes; envelopes never become forecast rows.
+ */
+router.get("/card-compositions", async (req, res): Promise<void> => {
+  const q = ListCardCompositionsQueryParams.safeParse(req.query);
+  const dueStart = q.success ? q.data.dueStart : undefined;
+  const dueEnd = q.success ? q.data.dueEnd : undefined;
+
+  const conditions = [eq(cardCyclesTable.userId, req.userId)];
+  if (dueStart) conditions.push(gte(cardCyclesTable.dueDate, dueStart));
+  if (dueEnd) conditions.push(lte(cardCyclesTable.dueDate, dueEnd));
+
+  const cycles = await db
+    .select({ cycle: cardCyclesTable, accountName: accountsTable.accountName })
+    .from(cardCyclesTable)
+    .innerJoin(accountsTable, eq(cardCyclesTable.accountId, accountsTable.id))
+    .where(and(...conditions))
+    .orderBy(asc(accountsTable.accountName), asc(cardCyclesTable.dueDate));
+
+  const cycleIds = cycles.map((c) => c.cycle.id);
+  const envelopes = cycleIds.length
+    ? await db.select().from(envelopesTable).where(inArray(envelopesTable.cardCycleId, cycleIds))
+    : [];
+  const cycleBills = cycleIds.length
+    ? await db
+        .select({ cb: cardCycleBillsTable, billName: billsTable.billName })
+        .from(cardCycleBillsTable)
+        .innerJoin(billsTable, eq(cardCycleBillsTable.billId, billsTable.id))
+        .where(inArray(cardCycleBillsTable.cardCycleId, cycleIds))
+    : [];
+
+  res.json(ListCardCompositionsResponse.parse(cycles.map(({ cycle, accountName }) => ({
+    accountId: cycle.accountId,
+    accountName,
+    cycleId: cycle.id,
+    cycleStart: cycle.cycleStart,
+    cycleEnd: cycle.cycleEnd,
+    dueDate: cycle.dueDate,
+    status: cycle.status ?? "open",
+    accumulatedTotal: parseFloat(String(cycle.accumulatedTotal ?? "0")) || 0,
+    plannedTotal: parseFloat(String(cycle.plannedTotal ?? "0")) || 0,
+    envelopes: orderEnvelopes(envelopes.filter((e) => e.cardCycleId === cycle.id)).map(serializeEnvelope),
+    bills: cycleBills
+      .filter(({ cb }) => cb.cardCycleId === cycle.id)
+      .map(({ cb, billName }) => ({
+        id: cb.id,
+        billId: cb.billId,
+        billName,
+        expectedAmount: parseFloat(String(cb.expectedAmount ?? "0")) || 0,
+        actualAmount: cb.actualAmount == null ? null : parseFloat(String(cb.actualAmount)),
+        status: cb.status ?? "pending",
+      })),
+  }))));
+});
+
 router.get("/cycles/:cycleId/breakdown", async (req, res): Promise<void> => {
   const params = GetCycleBreakdownParams.safeParse(req.params);
   if (!params.success) {
