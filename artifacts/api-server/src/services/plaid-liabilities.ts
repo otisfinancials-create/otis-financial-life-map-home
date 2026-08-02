@@ -78,6 +78,14 @@ export async function syncLiabilitiesForItem(
       credit.aprs?.find((a) => a.apr_type === "purchase_apr")?.apr_percentage ??
       credit.aprs?.[0]?.apr_percentage ??
       null;
+    // Full aprs[] as reported — a 'special' entry (often 0%) with a
+    // balance_subject_to_apr signals promotional financing.
+    const aprs = (credit.aprs ?? []).map((a) => ({
+      aprType: a.apr_type,
+      aprPercentage: a.apr_percentage ?? null,
+      balanceSubjectToApr: a.balance_subject_to_apr ?? null,
+      interestChargeAmount: a.interest_charge_amount ?? null,
+    }));
 
     try {
       await db
@@ -87,6 +95,8 @@ export async function syncLiabilitiesForItem(
           lastStatementBalance: credit.last_statement_balance != null ? String(credit.last_statement_balance) : null,
           nextPaymentDueDate: credit.next_payment_due_date ?? null,
           purchaseApr: apr != null ? String(apr) : null,
+          aprs,
+          lastPaymentAmount: credit.last_payment_amount != null ? String(credit.last_payment_amount) : null,
           liabilitiesSyncedAt: now,
           updatedAt: now,
         })

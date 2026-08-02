@@ -640,6 +640,56 @@ paths:
         "404":
           description: Not found
 
+  /accounts/{id}/payment-mode:
+    patch:
+      operationId: updateAccountPaymentMode
+      tags: [accounts]
+      summary: Set how a card's carried balance is projected (full vs fixed monthly payment)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentModeInput"
+      responses:
+        "200":
+          description: Updated account plus payoff projection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentModeResult"
+        "400":
+          description: Invalid input
+        "404":
+          description: Not found
+
+  /accounts/{id}/dismiss-payment-suggestion:
+    post:
+      operationId: dismissPaymentSuggestion
+      tags: [accounts]
+      summary: Dismiss the fixed-payment suggestion prompt for a card
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Dismissed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "404":
+          description: Not found
+
   /accounts/{id}/cycles:
     get:
       operationId: listAccountCycles
@@ -2703,10 +2753,75 @@ components:
           description: Base64 institution logo from Plaid, if available
         lastSyncedAt:
           type: ["string", "null"]
+        minimumPayment:
+          type: ["number", "null"]
+          description: Minimum payment from Plaid Liabilities (credit cards)
+        lastStatementBalance:
+          type: ["number", "null"]
+          description: Last statement balance from Plaid Liabilities
+        nextPaymentDueDate:
+          type: ["string", "null"]
+          description: Next payment due date (YYYY-MM-DD) from Plaid Liabilities
+        lastPaymentAmount:
+          type: ["number", "null"]
+          description: Amount of the last payment from Plaid Liabilities
+        aprs:
+          type: ["array", "null"]
+          description: Full Plaid aprs[] — a 'special' entry signals promotional financing
+          items:
+            type: object
+            required: [aprType]
+            properties:
+              aprType:
+                type: string
+              aprPercentage:
+                type: ["number", "null"]
+              balanceSubjectToApr:
+                type: ["number", "null"]
+              interestChargeAmount:
+                type: ["number", "null"]
+        paymentMode:
+          type: string
+          enum: [full, fixed]
+          description: How the card's carried balance is projected — pay the statement in full, or a fixed amount per cycle
+        fixedPaymentAmount:
+          type: ["number", "null"]
+        payoffTargetDate:
+          type: ["string", "null"]
+        paymentSuggestionDismissedAt:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
           type: string
+
+    PaymentModeInput:
+      type: object
+      required: [paymentMode]
+      properties:
+        paymentMode:
+          type: string
+          enum: [full, fixed]
+        fixedPaymentAmount:
+          type: ["number", "null"]
+          exclusiveMinimum: 0
+          description: Required when paymentMode is 'fixed'
+        payoffTargetDate:
+          type: ["string", "null"]
+          description: Optional YYYY-MM-DD payoff goal; response reports any shortfall
+
+    PaymentModeResult:
+      type: object
+      required: [account]
+      properties:
+        account:
+          $ref: "#/components/schemas/Account"
+        projectedPayoffDate:
+          type: ["string", "null"]
+          description: Date of the final fixed payment (null in full mode or without a carried balance)
+        shortfallAtTarget:
+          type: ["number", "null"]
+          description: Balance still remaining on payoffTargetDate at the fixed amount — null when no target set or on track
 
     ProcessCycleSummary:
       type: object

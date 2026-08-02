@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, MoreHorizontal, Landmark, CreditCard, PiggyBank, Briefcase, TrendingUp, Home, Banknote, Trash2, Pencil, Link2, AlertTriangle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useListAccounts, useListAccountBalances, useDeleteAccount, useDisconnectPlaidAccount, useUpdateAccount, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { useListAccounts, useListAccountBalances, useDeleteAccount, useDisconnectPlaidAccount, useUpdateAccount, useUpdateAccountPaymentMode, useDismissPaymentSuggestion, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import type { Account } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
@@ -122,6 +122,44 @@ export default function Accounts() {
   const unconfiguredCards = (accounts ?? []).filter(
     (a) => a.accountType === "credit_card" && (a.statementDay == null || a.dueDay == null),
   );
+
+  // Fixed-payment suggestion: a last payment materially smaller than the
+  // statement balance signals the user is paying down a carried balance at a
+  // fixed amount (promo financing etc.). Suggest, never silently switch.
+  const fixedPaymentCandidates = (accounts ?? []).filter(
+    (a) =>
+      a.accountType === "credit_card" &&
+      (a.paymentMode ?? "full") === "full" &&
+      a.paymentSuggestionDismissedAt == null &&
+      (a.lastPaymentAmount ?? 0) > 0 &&
+      (a.lastStatementBalance ?? 0) > 0 &&
+      (a.lastPaymentAmount ?? 0) < 0.5 * (a.lastStatementBalance ?? 0),
+  );
+  const dismissSuggestion = useDismissPaymentSuggestion();
+  const setPaymentMode = useUpdateAccountPaymentMode();
+  const acceptSuggestion = (card: Account) => {
+    setPaymentMode.mutate(
+      { id: card.id, data: { paymentMode: "fixed", fixedPaymentAmount: card.lastPaymentAmount ?? 0 } },
+      {
+        onSuccess: (result) => {
+          queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
+          toast({
+            title: "Fixed payment plan set",
+            description: result.projectedPayoffDate
+              ? `$${(card.lastPaymentAmount ?? 0).toFixed(2)}/month — projected payoff ${result.projectedPayoffDate}. Edit the card to adjust.`
+              : `$${(card.lastPaymentAmount ?? 0).toFixed(2)}/month. Edit the card to adjust.`,
+          });
+        },
+        onError: () => toast({ title: "Failed to set payment plan", variant: "destructive" }),
+      },
+    );
+  };
+  const declineSuggestion = (card: Account) => {
+    dismissSuggestion.mutate(
+      { id: card.id },
+      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() }) },
+    );
+  };
 
   // Post-link handoff for card-only institutions: once the refreshed account
   // list arrives, open the config dialog for the first card the Liabilities
@@ -380,6 +418,55 @@ export default function Accounts() {
             </CardContent>
           </Card>
         )}
+
+        {/* Cards whose last payment was well below the statement balance — the
+            user is likely paying down a carried balance at a fixed amount. */}
+        {fixedPaymentCandidates.map((card) => (
+          <Card key={card.id} className="border-sky-500/40 bg-sky-500/5 rounded-xl" data-testid={`banner-fixed-payment-${card.id}`}>
+            <CardContent className="py-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <CreditCard className="h-5 w-5 text-sky-500 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium">
+                    You paid <FormatCurrency amount={card.lastPaymentAmount ?? 0} /> on a{" "}
+                    <FormatCurrency amount={card.lastStatementBalance ?? 0} /> balance on {card.accountName}.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Are you paying this down at a fixed amount each month? Your forecast currently assumes
+                    you'll pay the whole statement at once.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 pl-8">
+                <Button
+                  size="sm"
+                  onClick={() => acceptSuggestion(card)}
+                  disabled={setPaymentMode.isPending}
+                  data-testid={`button-accept-fixed-${card.id}`}
+                >
+                  Yes — <FormatCurrency amount={card.lastPaymentAmount ?? 0} />/month
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEdit(card)}
+                  data-testid={`button-edit-fixed-${card.id}`}
+                >
+                  Yes, a different amount
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => declineSuggestion(card)}
+                  disabled={dismissSuggestion.isPending}
+                  data-testid={`button-dismiss-fixed-${card.id}`}
+                >
+                  No, I pay in full
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
 
         {/* Account Lists */}
         {isLoadingAccounts ? (

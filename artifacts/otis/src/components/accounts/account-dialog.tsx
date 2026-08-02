@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
-import { useCreateAccount, useUpdateAccount, useUpdateAccountCycleConfig, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey, getListAccountCyclesQueryKey } from "@workspace/api-client-react";
+import { useCreateAccount, useUpdateAccount, useUpdateAccountCycleConfig, useUpdateAccountPaymentMode, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey, getListAccountCyclesQueryKey } from "@workspace/api-client-react";
 import type { Account } from "@workspace/api-client-react";
 
 export const ACCOUNT_TYPE_OPTIONS = [
@@ -72,6 +72,9 @@ const accountSchema = z
     notes: z.string().max(200, { message: "Notes are limited to 200 characters." }),
     statementDay: z.string(),
     dueDay: z.string(),
+    paymentMode: z.enum(["full", "fixed"]),
+    fixedPaymentAmount: z.string(),
+    payoffTargetDate: z.string(),
   })
   .superRefine((vals, ctx) => {
     if (vals.accountType === "credit_card") {
@@ -83,6 +86,12 @@ const accountSchema = z
         const v = vals[key];
         if (v !== "" && !(/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 31)) {
           ctx.addIssue({ code: "custom", path: [key], message: "Enter a day of month (1-31)." });
+        }
+      }
+      if (vals.paymentMode === "fixed") {
+        const amt = Number(vals.fixedPaymentAmount);
+        if (vals.fixedPaymentAmount === "" || !Number.isFinite(amt) || amt <= 0) {
+          ctx.addIssue({ code: "custom", path: ["fixedPaymentAmount"], message: "Enter the amount you pay each month." });
         }
       }
     }
@@ -164,6 +173,7 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const updateCycleConfig = useUpdateAccountCycleConfig();
+  const updatePaymentMode = useUpdateAccountPaymentMode();
   const isEditing = !!account;
 
   const defaults = (): AccountFormValues => ({
@@ -176,6 +186,9 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
     notes: account?.notes || "",
     statementDay: account?.statementDay != null ? String(account.statementDay) : "",
     dueDay: account?.dueDay != null ? String(account.dueDay) : "",
+    paymentMode: (account?.paymentMode as "full" | "fixed" | undefined) ?? "full",
+    fixedPaymentAmount: account?.fixedPaymentAmount != null ? String(account.fixedPaymentAmount) : "",
+    payoffTargetDate: account?.payoffTargetDate ?? "",
   });
 
   const form = useForm<AccountFormValues>({
@@ -219,11 +232,20 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
     };
     // Envelope-cycle config (statement/due day): saved via its own endpoint,
     // which also generates the card's cycles.
-    const saveCycleConfig = (accountId: number) => {
-      if (values.accountType !== "credit_card" || values.statementDay === "" || values.dueDay === "") return;
+    // `then` runs after the cycle-config save settles (or immediately when
+    // nothing changed) — payment-mode must not race it, since both endpoints
+    // regenerate the forecast and last-write-wins on stale state otherwise.
+    const saveCycleConfig = (accountId: number, then?: () => void) => {
+      if (values.accountType !== "credit_card" || values.statementDay === "" || values.dueDay === "") {
+        then?.();
+        return;
+      }
       const statementDay = Number(values.statementDay);
       const dueDay = Number(values.dueDay);
-      if (statementDay === account?.statementDay && dueDay === account?.dueDay) return;
+      if (statementDay === account?.statementDay && dueDay === account?.dueDay) {
+        then?.();
+        return;
+      }
       updateCycleConfig.mutate({ id: accountId, data: { statementDay, dueDay } }, {
         onSuccess: () => {
           invalidate();
@@ -231,13 +253,44 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
           toast({ title: "Billing cycles generated" });
         },
         onError: () => toast({ title: "Failed to generate billing cycles", variant: "destructive" }),
+        onSettled: () => then?.(),
       });
+    };
+    // Payment mode (full vs fixed) is saved via its own endpoint, which
+    // also rebuilds the forecast and reports the payoff projection.
+    const savePaymentMode = (accountId: number) => {
+      if (values.accountType !== "credit_card") return;
+      const fixedAmt = values.paymentMode === "fixed" ? Number(values.fixedPaymentAmount) : null;
+      const payoff = values.paymentMode === "fixed" && values.payoffTargetDate !== "" ? values.payoffTargetDate : null;
+      const unchanged =
+        values.paymentMode === (account?.paymentMode ?? "full") &&
+        (fixedAmt ?? null) === (account?.fixedPaymentAmount ?? null) &&
+        (payoff ?? null) === (account?.payoffTargetDate ?? null);
+      if (unchanged) return;
+      updatePaymentMode.mutate(
+        { id: accountId, data: { paymentMode: values.paymentMode, fixedPaymentAmount: fixedAmt, payoffTargetDate: payoff } },
+        {
+          onSuccess: (result) => {
+            invalidate();
+            if (result.shortfallAtTarget != null) {
+              toast({
+                title: "Fixed payment won't hit your payoff date",
+                description: `About $${result.shortfallAtTarget.toFixed(2)} would still remain on ${result.account.payoffTargetDate}. Consider a higher amount.`,
+                variant: "destructive",
+              });
+            } else if (values.paymentMode === "fixed" && result.projectedPayoffDate) {
+              toast({ title: "Fixed payment plan saved", description: `Projected payoff: ${result.projectedPayoffDate}` });
+            }
+          },
+          onError: () => toast({ title: "Failed to save payment plan", variant: "destructive" }),
+        },
+      );
     };
     if (isEditing) {
       updateAccount.mutate({ id: account.id, data }, {
         onSuccess: () => {
           invalidate();
-          saveCycleConfig(account.id);
+          saveCycleConfig(account.id, () => savePaymentMode(account.id));
           toast({ title: "Account updated successfully" });
           setIsOpen(false);
           if (!isControlled) form.reset();
@@ -250,7 +303,7 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
       createAccount.mutate({ data }, {
         onSuccess: (created) => {
           invalidate();
-          saveCycleConfig(created.id);
+          saveCycleConfig(created.id, () => savePaymentMode(created.id));
           toast({ title: "Account created successfully" });
           setIsOpen(false);
           if (!isControlled) form.reset();
@@ -380,6 +433,77 @@ export function AccountDialog({ account, trigger, open, onOpenChange }: AccountD
                   dueDay={form.watch("dueDay")}
                 />
                 <p className="text-xs text-muted-foreground">The cycle window and due date are derived from these two days. Billing cycles with spending envelopes are generated automatically; for cards without a bank connection you can record charges by hand from "Manage envelopes".</p>
+              </div>
+            )}
+            {form.watch("accountType") === "credit_card" && (
+              <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+                <p className="text-sm font-semibold">Payment Plan</p>
+                <FormField
+                  control={form.control}
+                  name="paymentMode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant={field.value === "full" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => field.onChange("full")}
+                            data-testid="button-payment-mode-full"
+                          >
+                            Pay statement in full
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={field.value === "fixed" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => field.onChange("fixed")}
+                            data-testid="button-payment-mode-fixed"
+                          >
+                            Fixed amount monthly
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {form.watch("paymentMode") === "fixed" && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="fixedPaymentAmount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Monthly payment ($)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="190" inputMode="decimal" data-testid="input-fixed-payment" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="payoffTargetDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Payoff goal (optional)</FormLabel>
+                          <FormControl>
+                            <Input type="date" data-testid="input-payoff-target" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {form.watch("paymentMode") === "fixed"
+                    ? "The forecast spreads the card's carried balance at this amount per cycle until it clears — new charges in a cycle are added on top. If a payoff goal is set, you'll be warned when the amount won't get there."
+                    : "The forecast assumes each statement is paid in full on its due date."}
+                </p>
               </div>
             )}
             {form.watch("accountType") === "retirement" && (

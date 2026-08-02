@@ -663,6 +663,20 @@ export const ListAccountsResponseItem = zod.object({
   "availableBalance": zod.number().nullish(),
   "institutionLogo": zod.string().nullish().describe('Base64 institution logo from Plaid, if available'),
   "lastSyncedAt": zod.string().nullish(),
+  "minimumPayment": zod.number().nullish().describe('Minimum payment from Plaid Liabilities (credit cards)'),
+  "lastStatementBalance": zod.number().nullish().describe('Last statement balance from Plaid Liabilities'),
+  "nextPaymentDueDate": zod.string().nullish().describe('Next payment due date (YYYY-MM-DD) from Plaid Liabilities'),
+  "lastPaymentAmount": zod.number().nullish().describe('Amount of the last payment from Plaid Liabilities'),
+  "aprs": zod.array(zod.object({
+  "aprType": zod.string(),
+  "aprPercentage": zod.number().nullish(),
+  "balanceSubjectToApr": zod.number().nullish(),
+  "interestChargeAmount": zod.number().nullish()
+})).nullish().describe('Full Plaid aprs[] — a \'special\' entry signals promotional financing'),
+  "paymentMode": zod.enum(['full', 'fixed']).optional().describe('How the card\'s carried balance is projected — pay the statement in full, or a fixed amount per cycle'),
+  "fixedPaymentAmount": zod.number().nullish(),
+  "payoffTargetDate": zod.string().nullish(),
+  "paymentSuggestionDismissedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -732,6 +746,20 @@ export const CreateAccountResponse = zod.object({
   "availableBalance": zod.number().nullish(),
   "institutionLogo": zod.string().nullish().describe('Base64 institution logo from Plaid, if available'),
   "lastSyncedAt": zod.string().nullish(),
+  "minimumPayment": zod.number().nullish().describe('Minimum payment from Plaid Liabilities (credit cards)'),
+  "lastStatementBalance": zod.number().nullish().describe('Last statement balance from Plaid Liabilities'),
+  "nextPaymentDueDate": zod.string().nullish().describe('Next payment due date (YYYY-MM-DD) from Plaid Liabilities'),
+  "lastPaymentAmount": zod.number().nullish().describe('Amount of the last payment from Plaid Liabilities'),
+  "aprs": zod.array(zod.object({
+  "aprType": zod.string(),
+  "aprPercentage": zod.number().nullish(),
+  "balanceSubjectToApr": zod.number().nullish(),
+  "interestChargeAmount": zod.number().nullish()
+})).nullish().describe('Full Plaid aprs[] — a \'special\' entry signals promotional financing'),
+  "paymentMode": zod.enum(['full', 'fixed']).optional().describe('How the card\'s carried balance is projected — pay the statement in full, or a fixed amount per cycle'),
+  "fixedPaymentAmount": zod.number().nullish(),
+  "payoffTargetDate": zod.string().nullish(),
+  "paymentSuggestionDismissedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -852,6 +880,20 @@ export const GetAccountResponse = zod.object({
   "availableBalance": zod.number().nullish(),
   "institutionLogo": zod.string().nullish().describe('Base64 institution logo from Plaid, if available'),
   "lastSyncedAt": zod.string().nullish(),
+  "minimumPayment": zod.number().nullish().describe('Minimum payment from Plaid Liabilities (credit cards)'),
+  "lastStatementBalance": zod.number().nullish().describe('Last statement balance from Plaid Liabilities'),
+  "nextPaymentDueDate": zod.string().nullish().describe('Next payment due date (YYYY-MM-DD) from Plaid Liabilities'),
+  "lastPaymentAmount": zod.number().nullish().describe('Amount of the last payment from Plaid Liabilities'),
+  "aprs": zod.array(zod.object({
+  "aprType": zod.string(),
+  "aprPercentage": zod.number().nullish(),
+  "balanceSubjectToApr": zod.number().nullish(),
+  "interestChargeAmount": zod.number().nullish()
+})).nullish().describe('Full Plaid aprs[] — a \'special\' entry signals promotional financing'),
+  "paymentMode": zod.enum(['full', 'fixed']).optional().describe('How the card\'s carried balance is projected — pay the statement in full, or a fixed amount per cycle'),
+  "fixedPaymentAmount": zod.number().nullish(),
+  "payoffTargetDate": zod.string().nullish(),
+  "paymentSuggestionDismissedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -925,6 +967,20 @@ export const UpdateAccountResponse = zod.object({
   "availableBalance": zod.number().nullish(),
   "institutionLogo": zod.string().nullish().describe('Base64 institution logo from Plaid, if available'),
   "lastSyncedAt": zod.string().nullish(),
+  "minimumPayment": zod.number().nullish().describe('Minimum payment from Plaid Liabilities (credit cards)'),
+  "lastStatementBalance": zod.number().nullish().describe('Last statement balance from Plaid Liabilities'),
+  "nextPaymentDueDate": zod.string().nullish().describe('Next payment due date (YYYY-MM-DD) from Plaid Liabilities'),
+  "lastPaymentAmount": zod.number().nullish().describe('Amount of the last payment from Plaid Liabilities'),
+  "aprs": zod.array(zod.object({
+  "aprType": zod.string(),
+  "aprPercentage": zod.number().nullish(),
+  "balanceSubjectToApr": zod.number().nullish(),
+  "interestChargeAmount": zod.number().nullish()
+})).nullish().describe('Full Plaid aprs[] — a \'special\' entry signals promotional financing'),
+  "paymentMode": zod.enum(['full', 'fixed']).optional().describe('How the card\'s carried balance is projected — pay the statement in full, or a fixed amount per cycle'),
+  "fixedPaymentAmount": zod.number().nullish(),
+  "payoffTargetDate": zod.string().nullish(),
+  "paymentSuggestionDismissedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -971,6 +1027,142 @@ export const UpdateAccountCycleConfigResponseItem = zod.object({
   "updatedAt": zod.string()
 })
 export const UpdateAccountCycleConfigResponse = zod.array(UpdateAccountCycleConfigResponseItem)
+
+
+/**
+ * @summary Set how a card's carried balance is projected (full vs fixed monthly payment)
+ */
+export const UpdateAccountPaymentModeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateAccountPaymentModeBodyFixedPaymentAmountExclusiveMin = 0;
+
+
+
+export const UpdateAccountPaymentModeBody = zod.object({
+  "paymentMode": zod.enum(['full', 'fixed']),
+  "fixedPaymentAmount": zod.number().gt(updateAccountPaymentModeBodyFixedPaymentAmountExclusiveMin).nullish().describe('Required when paymentMode is \'fixed\''),
+  "payoffTargetDate": zod.string().nullish().describe('Optional YYYY-MM-DD payoff goal; response reports any shortfall')
+})
+
+export const updateAccountPaymentModeResponseAccountCcCycleStartDateMax = 31;
+
+export const updateAccountPaymentModeResponseAccountCcCycleEndDateMax = 31;
+
+export const updateAccountPaymentModeResponseAccountCcPaymentDueDateMax = 31;
+
+export const updateAccountPaymentModeResponseAccountStatementDayMax = 31;
+
+export const updateAccountPaymentModeResponseAccountDueDayMax = 31;
+
+
+
+export const UpdateAccountPaymentModeResponse = zod.object({
+  "account": zod.object({
+  "id": zod.number(),
+  "accountName": zod.string(),
+  "accountType": zod.string(),
+  "institutionName": zod.string(),
+  "currentBalance": zod.number(),
+  "monthlyContribution": zod.number(),
+  "savingsGoal": zod.number().nullish(),
+  "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "isAsset": zod.boolean(),
+  "isForecastAccount": zod.boolean().describe('Account contributes to the forecast\'s running balance (\"pay bills from\"); always false for credit cards'),
+  "accountNumberLast4": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "ccCycleStartDate": zod.number().min(1).max(updateAccountPaymentModeResponseAccountCcCycleStartDateMax).nullish(),
+  "ccCycleEndDate": zod.number().min(1).max(updateAccountPaymentModeResponseAccountCcCycleEndDateMax).nullish(),
+  "ccPaymentDueDate": zod.number().min(1).max(updateAccountPaymentModeResponseAccountCcPaymentDueDateMax).nullish(),
+  "statementDay": zod.number().min(1).max(updateAccountPaymentModeResponseAccountStatementDayMax).nullish(),
+  "dueDay": zod.number().min(1).max(updateAccountPaymentModeResponseAccountDueDayMax).nullish(),
+  "plaidAccountId": zod.string().nullish(),
+  "plaidItemId": zod.number().nullish(),
+  "availableBalance": zod.number().nullish(),
+  "institutionLogo": zod.string().nullish().describe('Base64 institution logo from Plaid, if available'),
+  "lastSyncedAt": zod.string().nullish(),
+  "minimumPayment": zod.number().nullish().describe('Minimum payment from Plaid Liabilities (credit cards)'),
+  "lastStatementBalance": zod.number().nullish().describe('Last statement balance from Plaid Liabilities'),
+  "nextPaymentDueDate": zod.string().nullish().describe('Next payment due date (YYYY-MM-DD) from Plaid Liabilities'),
+  "lastPaymentAmount": zod.number().nullish().describe('Amount of the last payment from Plaid Liabilities'),
+  "aprs": zod.array(zod.object({
+  "aprType": zod.string(),
+  "aprPercentage": zod.number().nullish(),
+  "balanceSubjectToApr": zod.number().nullish(),
+  "interestChargeAmount": zod.number().nullish()
+})).nullish().describe('Full Plaid aprs[] — a \'special\' entry signals promotional financing'),
+  "paymentMode": zod.enum(['full', 'fixed']).optional().describe('How the card\'s carried balance is projected — pay the statement in full, or a fixed amount per cycle'),
+  "fixedPaymentAmount": zod.number().nullish(),
+  "payoffTargetDate": zod.string().nullish(),
+  "paymentSuggestionDismissedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}),
+  "projectedPayoffDate": zod.string().nullish().describe('Date of the final fixed payment (null in full mode or without a carried balance)'),
+  "shortfallAtTarget": zod.number().nullish().describe('Balance still remaining on payoffTargetDate at the fixed amount — null when no target set or on track')
+})
+
+
+/**
+ * @summary Dismiss the fixed-payment suggestion prompt for a card
+ */
+export const DismissPaymentSuggestionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const dismissPaymentSuggestionResponseCcCycleStartDateMax = 31;
+
+export const dismissPaymentSuggestionResponseCcCycleEndDateMax = 31;
+
+export const dismissPaymentSuggestionResponseCcPaymentDueDateMax = 31;
+
+export const dismissPaymentSuggestionResponseStatementDayMax = 31;
+
+export const dismissPaymentSuggestionResponseDueDayMax = 31;
+
+
+
+export const DismissPaymentSuggestionResponse = zod.object({
+  "id": zod.number(),
+  "accountName": zod.string(),
+  "accountType": zod.string(),
+  "institutionName": zod.string(),
+  "currentBalance": zod.number(),
+  "monthlyContribution": zod.number(),
+  "savingsGoal": zod.number().nullish(),
+  "retirementSubtype": zod.union([zod.literal('401k'),zod.literal('ira'),zod.literal('roth_ira'),zod.literal('pension'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "isAsset": zod.boolean(),
+  "isForecastAccount": zod.boolean().describe('Account contributes to the forecast\'s running balance (\"pay bills from\"); always false for credit cards'),
+  "accountNumberLast4": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "ccCycleStartDate": zod.number().min(1).max(dismissPaymentSuggestionResponseCcCycleStartDateMax).nullish(),
+  "ccCycleEndDate": zod.number().min(1).max(dismissPaymentSuggestionResponseCcCycleEndDateMax).nullish(),
+  "ccPaymentDueDate": zod.number().min(1).max(dismissPaymentSuggestionResponseCcPaymentDueDateMax).nullish(),
+  "statementDay": zod.number().min(1).max(dismissPaymentSuggestionResponseStatementDayMax).nullish(),
+  "dueDay": zod.number().min(1).max(dismissPaymentSuggestionResponseDueDayMax).nullish(),
+  "plaidAccountId": zod.string().nullish(),
+  "plaidItemId": zod.number().nullish(),
+  "availableBalance": zod.number().nullish(),
+  "institutionLogo": zod.string().nullish().describe('Base64 institution logo from Plaid, if available'),
+  "lastSyncedAt": zod.string().nullish(),
+  "minimumPayment": zod.number().nullish().describe('Minimum payment from Plaid Liabilities (credit cards)'),
+  "lastStatementBalance": zod.number().nullish().describe('Last statement balance from Plaid Liabilities'),
+  "nextPaymentDueDate": zod.string().nullish().describe('Next payment due date (YYYY-MM-DD) from Plaid Liabilities'),
+  "lastPaymentAmount": zod.number().nullish().describe('Amount of the last payment from Plaid Liabilities'),
+  "aprs": zod.array(zod.object({
+  "aprType": zod.string(),
+  "aprPercentage": zod.number().nullish(),
+  "balanceSubjectToApr": zod.number().nullish(),
+  "interestChargeAmount": zod.number().nullish()
+})).nullish().describe('Full Plaid aprs[] — a \'special\' entry signals promotional financing'),
+  "paymentMode": zod.enum(['full', 'fixed']).optional().describe('How the card\'s carried balance is projected — pay the statement in full, or a fixed amount per cycle'),
+  "fixedPaymentAmount": zod.number().nullish(),
+  "payoffTargetDate": zod.string().nullish(),
+  "paymentSuggestionDismissedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
 
 
 /**

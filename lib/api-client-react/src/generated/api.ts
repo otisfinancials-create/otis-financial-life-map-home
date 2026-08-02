@@ -87,6 +87,8 @@ import type {
   PaySchedule,
   PayScheduleInput,
   PayScheduleUpdate,
+  PaymentModeInput,
+  PaymentModeResult,
   PlaidDisconnectInput,
   PlaidDisconnectResult,
   PlaidExchangeInput,
@@ -2567,6 +2569,147 @@ export const useUpdateAccountCycleConfig = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUpdateAccountCycleConfigMutationOptions(options));
+    }
+
+export const getUpdateAccountPaymentModeUrl = (id: number,) => {
+
+
+
+
+  return `/api/accounts/${id}/payment-mode`
+}
+
+/**
+ * @summary Set how a card's carried balance is projected (full vs fixed monthly payment)
+ */
+export const updateAccountPaymentMode = async (id: number,
+    paymentModeInput: PaymentModeInput, options?: RequestInit): Promise<PaymentModeResult> => {
+
+  return customFetch<PaymentModeResult>(getUpdateAccountPaymentModeUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(paymentModeInput)
+  }
+);}
+
+
+
+
+export const getUpdateAccountPaymentModeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountPaymentMode>>, TError,{id: number;data: BodyType<PaymentModeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAccountPaymentMode>>, TError,{id: number;data: BodyType<PaymentModeInput>}, TContext> => {
+
+const mutationKey = ['updateAccountPaymentMode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAccountPaymentMode>>, {id: number;data: BodyType<PaymentModeInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAccountPaymentMode(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAccountPaymentModeMutationResult = NonNullable<Awaited<ReturnType<typeof updateAccountPaymentMode>>>
+    export type UpdateAccountPaymentModeMutationBody = BodyType<PaymentModeInput>
+    export type UpdateAccountPaymentModeMutationError = ErrorType<void>
+
+    /**
+ * @summary Set how a card's carried balance is projected (full vs fixed monthly payment)
+ */
+export const useUpdateAccountPaymentMode = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountPaymentMode>>, TError,{id: number;data: BodyType<PaymentModeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAccountPaymentMode>>,
+        TError,
+        {id: number;data: BodyType<PaymentModeInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAccountPaymentModeMutationOptions(options));
+    }
+
+export const getDismissPaymentSuggestionUrl = (id: number,) => {
+
+
+
+
+  return `/api/accounts/${id}/dismiss-payment-suggestion`
+}
+
+/**
+ * @summary Dismiss the fixed-payment suggestion prompt for a card
+ */
+export const dismissPaymentSuggestion = async (id: number, options?: RequestInit): Promise<Account> => {
+
+  return customFetch<Account>(getDismissPaymentSuggestionUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getDismissPaymentSuggestionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissPaymentSuggestion>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof dismissPaymentSuggestion>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['dismissPaymentSuggestion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dismissPaymentSuggestion>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  dismissPaymentSuggestion(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DismissPaymentSuggestionMutationResult = NonNullable<Awaited<ReturnType<typeof dismissPaymentSuggestion>>>
+
+    export type DismissPaymentSuggestionMutationError = ErrorType<void>
+
+    /**
+ * @summary Dismiss the fixed-payment suggestion prompt for a card
+ */
+export const useDismissPaymentSuggestion = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissPaymentSuggestion>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof dismissPaymentSuggestion>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDismissPaymentSuggestionMutationOptions(options));
     }
 
 export const getListAccountCyclesUrl = (id: number,) => {

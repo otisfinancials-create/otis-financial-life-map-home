@@ -429,6 +429,27 @@ export const AccountRetirementSubtype = {
   other: 'other',
 } as const;
 
+export type AccountAprsItem = {
+  aprType: string;
+  /** @nullable */
+  aprPercentage?: number | null;
+  /** @nullable */
+  balanceSubjectToApr?: number | null;
+  /** @nullable */
+  interestChargeAmount?: number | null;
+};
+
+/**
+ * How the card's carried balance is projected — pay the statement in full, or a fixed amount per cycle
+ */
+export type AccountPaymentMode = typeof AccountPaymentMode[keyof typeof AccountPaymentMode];
+
+
+export const AccountPaymentMode = {
+  full: 'full',
+  fixed: 'fixed',
+} as const;
+
 export interface Account {
   id: number;
   accountName: string;
@@ -490,8 +511,78 @@ export interface Account {
   institutionLogo?: string | null;
   /** @nullable */
   lastSyncedAt?: string | null;
+  /**
+     * Minimum payment from Plaid Liabilities (credit cards)
+     * @nullable
+     */
+  minimumPayment?: number | null;
+  /**
+     * Last statement balance from Plaid Liabilities
+     * @nullable
+     */
+  lastStatementBalance?: number | null;
+  /**
+     * Next payment due date (YYYY-MM-DD) from Plaid Liabilities
+     * @nullable
+     */
+  nextPaymentDueDate?: string | null;
+  /**
+     * Amount of the last payment from Plaid Liabilities
+     * @nullable
+     */
+  lastPaymentAmount?: number | null;
+  /**
+     * Full Plaid aprs[] — a 'special' entry signals promotional financing
+     * @nullable
+     */
+  aprs?: AccountAprsItem[] | null;
+  /** How the card's carried balance is projected — pay the statement in full, or a fixed amount per cycle */
+  paymentMode?: AccountPaymentMode;
+  /** @nullable */
+  fixedPaymentAmount?: number | null;
+  /** @nullable */
+  payoffTargetDate?: string | null;
+  /** @nullable */
+  paymentSuggestionDismissedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type PaymentModeInputPaymentMode = typeof PaymentModeInputPaymentMode[keyof typeof PaymentModeInputPaymentMode];
+
+
+export const PaymentModeInputPaymentMode = {
+  full: 'full',
+  fixed: 'fixed',
+} as const;
+
+export interface PaymentModeInput {
+  paymentMode: PaymentModeInputPaymentMode;
+  /**
+     * Required when paymentMode is 'fixed'
+     * @exclusiveMinimum 0
+     * @nullable
+     */
+  fixedPaymentAmount?: number | null;
+  /**
+     * Optional YYYY-MM-DD payoff goal; response reports any shortfall
+     * @nullable
+     */
+  payoffTargetDate?: string | null;
+}
+
+export interface PaymentModeResult {
+  account: Account;
+  /**
+     * Date of the final fixed payment (null in full mode or without a carried balance)
+     * @nullable
+     */
+  projectedPayoffDate?: string | null;
+  /**
+     * Balance still remaining on payoffTargetDate at the fixed amount — null when no target set or on track
+     * @nullable
+     */
+  shortfallAtTarget?: number | null;
 }
 
 export type ProcessCycleSummaryByTargetItemType = typeof ProcessCycleSummaryByTargetItemType[keyof typeof ProcessCycleSummaryByTargetItemType];

@@ -7,12 +7,14 @@
  */
 
 export * from './account';
+export * from './accountAprsItem';
 export * from './accountBalanceSnapshot';
 export * from './accountGoal';
 export * from './accountGoalInput';
 export * from './accountInput';
 export * from './accountInputRetirementSubtype';
 export * from './accountMerchant';
+export * from './accountPaymentMode';
 export * from './accountRetirementSubtype';
 export * from './accountsSummary';
 export * from './accountTypeGroup';
@@ -116,6 +118,9 @@ export * from './otisChatMessageRole';
 export * from './otisChatRequest';
 export * from './otisHistoryMessage';
 export * from './otisHistoryMessageRole';
+export * from './paymentModeInput';
+export * from './paymentModeInputPaymentMode';
+export * from './paymentModeResult';
 export * from './paySchedule';
 export * from './payScheduleInput';
 export * from './payScheduleUpdate';

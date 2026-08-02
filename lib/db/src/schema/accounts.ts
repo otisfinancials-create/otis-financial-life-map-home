@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, boolean, timestamp, integer, unique, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, boolean, timestamp, integer, unique, date, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -37,7 +37,19 @@ export const accountsTable = pgTable("accounts", {
   lastStatementBalance: numeric("last_statement_balance", { precision: 15, scale: 2 }),
   nextPaymentDueDate: date("next_payment_due_date", { mode: "string" }),
   purchaseApr: numeric("purchase_apr", { precision: 6, scale: 3 }),
+  // Full Plaid aprs[] array as reported: [{ aprType, aprPercentage, balanceSubjectToApr, interestChargeAmount }].
+  // A 'special' 0% entry signals promotional financing.
+  aprs: jsonb("aprs").$type<Array<{ aprType: string; aprPercentage: number | null; balanceSubjectToApr: number | null; interestChargeAmount: number | null }>>(),
+  lastPaymentAmount: numeric("last_payment_amount", { precision: 15, scale: 2 }),
   liabilitiesSyncedAt: timestamp("liabilities_synced_at", { withTimezone: true }),
+  // How the card's carried balance is paid off in the forecast:
+  // 'full' — pay the statement in full (default); 'fixed' — pay a set amount
+  // each cycle until the carried balance clears (promo financing etc.).
+  paymentMode: text("payment_mode").notNull().default("full"),
+  fixedPaymentAmount: numeric("fixed_payment_amount", { precision: 15, scale: 2 }),
+  payoffTargetDate: date("payoff_target_date", { mode: "string" }),
+  // User dismissed the "are you paying this down at a fixed amount?" prompt.
+  paymentSuggestionDismissedAt: timestamp("payment_suggestion_dismissed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
@@ -47,6 +59,6 @@ export const accountsTable = pgTable("accounts", {
   unique("accounts_user_plaid_account_unique").on(t.userId, t.plaidAccountId),
 ]);
 
-export const insertAccountSchema = createInsertSchema(accountsTable).omit({ id: true, userId: true, createdAt: true, updatedAt: true, plaidAccountId: true, plaidItemId: true, availableBalance: true, lastSyncedAt: true, plaidSubtype: true, minimumPayment: true, lastStatementBalance: true, nextPaymentDueDate: true, purchaseApr: true, liabilitiesSyncedAt: true });
+export const insertAccountSchema = createInsertSchema(accountsTable).omit({ id: true, userId: true, createdAt: true, updatedAt: true, plaidAccountId: true, plaidItemId: true, availableBalance: true, lastSyncedAt: true, plaidSubtype: true, minimumPayment: true, lastStatementBalance: true, nextPaymentDueDate: true, purchaseApr: true, aprs: true, lastPaymentAmount: true, liabilitiesSyncedAt: true, paymentMode: true, fixedPaymentAmount: true, payoffTargetDate: true, paymentSuggestionDismissedAt: true });
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type Account = typeof accountsTable.$inferSelect;

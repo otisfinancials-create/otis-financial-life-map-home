@@ -25,10 +25,15 @@ import {
   ListAccountCyclesResponse,
   GenerateAccountCyclesParams,
   GenerateAccountCyclesResponse,
+  UpdateAccountPaymentModeParams,
+  UpdateAccountPaymentModeBody,
+  UpdateAccountPaymentModeResponse,
+  DismissPaymentSuggestionParams,
+  DismissPaymentSuggestionResponse,
 } from "@workspace/api-zod";
 import { cardCyclesTable, billsTable, type CardCycle } from "@workspace/db";
 import { generateCyclesForAccount, deleteCycleWithDependentsTx } from "../services/card-cycles";
-import { regenerateForecastForUser } from "./forecast";
+import { regenerateForecastForUser, buildFixedPaymentSchedule } from "./forecast";
 
 const SAVINGS_INVESTMENT_TYPES = ["savings", "investment", "brokerage"];
 
@@ -385,6 +390,101 @@ router.patch("/accounts/:id/cycle-config", async (req, res): Promise<void> => {
   res.json(UpdateAccountCycleConfigResponse.parse(cycles.map(serializeCycle)));
 });
 
+router.patch("/accounts/:id/payment-mode", async (req, res): Promise<void> => {
+  const params = UpdateAccountPaymentModeParams.safeParse(req.params);
+  const body = UpdateAccountPaymentModeBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: (params.success ? body : params).error!.message });
+    return;
+  }
+  const account = await ownedAccount(params.data.id, req.userId);
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  if (account.accountType !== "credit_card") {
+    res.status(400).json({ error: "Payment mode applies to credit cards only" });
+    return;
+  }
+  const mode = body.data.paymentMode;
+  const fixedAmt = body.data.fixedPaymentAmount ?? null;
+  if (mode === "fixed" && (fixedAmt == null || fixedAmt <= 0)) {
+    res.status(400).json({ error: "fixedPaymentAmount is required for fixed mode" });
+    return;
+  }
+  const target = mode === "fixed" ? (body.data.payoffTargetDate ?? null) : null;
+  if (target != null && (!/^\d{4}-\d{2}-\d{2}$/.test(target) || Number.isNaN(Date.parse(target)))) {
+    res.status(400).json({ error: "payoffTargetDate must be a valid YYYY-MM-DD date" });
+    return;
+  }
+  await db
+    .update(accountsTable)
+    .set({
+      paymentMode: mode,
+      fixedPaymentAmount: mode === "fixed" ? String(fixedAmt) : null,
+      payoffTargetDate: target,
+      // Accepting or configuring a mode settles the suggestion.
+      paymentSuggestionDismissedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(accountsTable.id, account.id));
+  await regenerateForecastForUser(req.userId);
+
+  // Payoff projection from the SAME schedule builder the forecast uses —
+  // seam date + real cycle due dates + monthly extension — so the reported
+  // payoff can never disagree with the emitted rows. Horizon unbounded here:
+  // the payoff date is real even if it lies past the forecast window.
+  let projectedPayoffDate: string | null = null;
+  let shortfallAtTarget: number | null = null;
+  const balance = account.lastStatementBalance != null ? parseFloat(String(account.lastStatementBalance)) : 0;
+  if (mode === "fixed" && fixedAmt != null && balance > 0) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const cycles = await db
+      .select({ dueDate: cardCyclesTable.dueDate, id: cardCyclesTable.id })
+      .from(cardCyclesTable)
+      .where(and(eq(cardCyclesTable.accountId, account.id), eq(cardCyclesTable.userId, req.userId)));
+    const { slots } = buildFixedPaymentSchedule({
+      fixedAmt,
+      balance,
+      stmtDue: account.nextPaymentDueDate,
+      cycleDues: cycles.filter((c) => c.dueDate >= todayStr).map((c) => ({ date: c.dueDate, cycleId: c.id })),
+      todayStr,
+      endStr: "9999-12-31",
+    });
+    projectedPayoffDate = slots.length ? slots[slots.length - 1].date : null;
+    if (target) {
+      const paidByTarget = slots.filter((s) => s.date <= target).reduce((s, x) => s + x.portion, 0);
+      const remaining = Math.max(0, Math.round((balance - paidByTarget) * 100) / 100);
+      shortfallAtTarget = remaining > 0 ? remaining : null;
+    }
+  }
+  const [updated] = await db.select().from(accountsTable).where(eq(accountsTable.id, account.id));
+  res.json(UpdateAccountPaymentModeResponse.parse({
+    account: serialize(updated),
+    projectedPayoffDate,
+    shortfallAtTarget,
+  }));
+});
+
+router.post("/accounts/:id/dismiss-payment-suggestion", async (req, res): Promise<void> => {
+  const params = DismissPaymentSuggestionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const account = await ownedAccount(params.data.id, req.userId);
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  await db
+    .update(accountsTable)
+    .set({ paymentSuggestionDismissedAt: new Date(), updatedAt: new Date() })
+    .where(eq(accountsTable.id, account.id));
+  const [updated] = await db.select().from(accountsTable).where(eq(accountsTable.id, account.id));
+  res.json(DismissPaymentSuggestionResponse.parse(serialize(updated)));
+});
+
 router.get("/accounts/:id/cycles", async (req, res): Promise<void> => {
   const params = ListAccountCyclesParams.safeParse(req.params);
   if (!params.success) {
@@ -430,6 +530,11 @@ function serialize(a: typeof accountsTable.$inferSelect) {
     updatedAt: a.updatedAt.toISOString(),
     lastSyncedAt: a.lastSyncedAt ? a.lastSyncedAt.toISOString() : null,
     availableBalance: a.availableBalance != null ? parseFloat(String(a.availableBalance)) : null,
+    minimumPayment: a.minimumPayment != null ? parseFloat(String(a.minimumPayment)) : null,
+    lastStatementBalance: a.lastStatementBalance != null ? parseFloat(String(a.lastStatementBalance)) : null,
+    lastPaymentAmount: a.lastPaymentAmount != null ? parseFloat(String(a.lastPaymentAmount)) : null,
+    fixedPaymentAmount: a.fixedPaymentAmount != null ? parseFloat(String(a.fixedPaymentAmount)) : null,
+    paymentSuggestionDismissedAt: a.paymentSuggestionDismissedAt ? a.paymentSuggestionDismissedAt.toISOString() : null,
   };
 }
 

@@ -8,6 +8,47 @@ import { rollActualsForUser } from "../services/actuals-roll";
 import { getForecastAccounts } from "../services/forecast-accounts";
 import { deriveActualBucket, projectedAtSpendDate, recomputeGoalActualBuckets } from "../services/goal-buckets";
 
+/**
+ * Fixed-payment schedule for a card paying down a carried balance: the
+ * statement seam date (if not covered by a cycle), then cycle due dates,
+ * then monthly extensions past the last known due date, allocating
+ * min(fixedAmt, remaining) per slot until the balance clears or endStr.
+ * Single source of truth — used by forecast regeneration AND the
+ * payment-mode endpoint's payoff projection so they can never disagree.
+ */
+export function buildFixedPaymentSchedule(opts: {
+  fixedAmt: number;
+  balance: number;
+  stmtDue: string | null;
+  cycleDues: Array<{ date: string; cycleId: number }>;
+  todayStr: string;
+  endStr: string;
+}): { slots: Array<{ date: string; cycleId?: number; portion: number }>; remainingAtEnd: number } {
+  const { fixedAmt, balance, stmtDue, todayStr, endStr } = opts;
+  const cycleDues = [...opts.cycleDues].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const sched: Array<{ date: string; cycleId?: number }> = [];
+  if (stmtDue && stmtDue >= todayStr && !cycleDues.some((c) => c.date === stmtDue)) {
+    sched.push({ date: stmtDue });
+  }
+  for (const c of cycleDues) sched.push({ date: c.date, cycleId: c.cycleId });
+  const anchor = sched.length ? sched[sched.length - 1].date : null;
+  let step = 1;
+  while (anchor && sched.length * fixedAmt < balance) {
+    const next = addMonthsIso(anchor, step++);
+    if (next > endStr) break;
+    sched.push({ date: next });
+  }
+  let remaining = balance;
+  const slots: Array<{ date: string; cycleId?: number; portion: number }> = [];
+  for (const slot of sched) {
+    if (remaining <= 0) break;
+    const portion = Math.min(fixedAmt, remaining);
+    remaining = Math.round((remaining - portion) * 100) / 100;
+    slots.push({ ...slot, portion });
+  }
+  return { slots, remainingAtEnd: remaining };
+}
+
 // Detailed Plaid categories treated as asset movement (kept in sync with
 // services/actuals-roll.ts — the ledger classification source of truth).
 const ASSET_MOVEMENT_DETAILED_CATEGORIES = new Set([
@@ -695,13 +736,53 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
       isNotNull(forecastedTransactionsTable.sourceCardCycleId),
     ));
   const survivingCycleIds = new Set(survivingCycleRows.map((r) => r.sourceCardCycleId));
+
+  // (buildFixedPaymentSchedule is defined at module scope below so the
+  // payment-mode endpoint reports a payoff projection from the SAME schedule
+  // the forecast actually emits.)
+  // Fixed payment mode (promo/carried balances): instead of projecting the
+  // full statement once, spread the carried balance (lastStatementBalance)
+  // across due dates at fixedPaymentAmount per cycle until it clears. New
+  // charges in a cycle ADD to that cycle's payment (fixedPortionByCycleId is
+  // added in the cycle loop below); the final payment is the remainder.
+  // Conservation: the emitted fixed portions always sum to exactly the
+  // carried balance (unless the forecast horizon ends first).
+  const fixedPortionByCycleId = new Map<number, number>();
+  const fixedExtraRows: Array<{ card: typeof ccAccounts[number]; date: string; amount: number }> = [];
+  const fixedModeCardIds = new Set<number>();
+  for (const card of ccAccounts) {
+    if (card.paymentMode !== "fixed") continue;
+    const fixedAmt = parseFloat(String(card.fixedPaymentAmount ?? "0")) || 0;
+    const balance = parseFloat(String(card.lastStatementBalance ?? "0")) || 0;
+    if (fixedAmt <= 0 || balance <= 0) continue;
+    fixedModeCardIds.add(card.id);
+    const { slots } = buildFixedPaymentSchedule({
+      fixedAmt,
+      balance,
+      stmtDue: card.nextPaymentDueDate,
+      cycleDues: allCycles
+        .filter((c) => c.accountId === card.id && c.dueDate >= todayStr)
+        .map((c) => ({ date: c.dueDate, cycleId: c.id })),
+      todayStr,
+      endStr,
+    });
+    for (const slot of slots) {
+      if (slot.cycleId != null) fixedPortionByCycleId.set(slot.cycleId, slot.portion);
+      else fixedExtraRows.push({ card, date: slot.date, amount: slot.portion });
+    }
+  }
+
   for (const cyc of allCycles) {
     if (cyc.dueDate < todayStr || cyc.dueDate > endStr) continue;
     if (survivingCycleIds.has(cyc.id)) continue;
     const accumulated = parseFloat(String(cyc.accumulatedTotal ?? "0")) || 0;
     const planned = parseFloat(String(cyc.plannedTotal ?? "0")) || 0;
     const closed = todayStr > cyc.cycleEnd;
-    const amount = closed ? accumulated : Math.max(accumulated, planned);
+    // Fixed-mode cards pay their fixed portion of the carried balance PLUS
+    // any new charges in the cycle (a user paying down a promo balance still
+    // pays for what they buy).
+    const newCharges = closed ? accumulated : Math.max(accumulated, planned);
+    const amount = newCharges + (fixedPortionByCycleId.get(cyc.id) ?? 0);
     toInsert.push({
       userId,
       transactionDate: cyc.dueDate,
@@ -727,6 +808,8 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
   // Assumes paid-in-full, consistent with the cycle engine above.
   const cycleDueDates = new Set(allCycles.map((c) => `${c.accountId}|${c.dueDate}`));
   for (const card of ccAccounts) {
+    // Fixed-mode cards spread the balance instead (rows emitted below).
+    if (fixedModeCardIds.has(card.id)) continue;
     const stmtBalance = parseFloat(String(card.lastStatementBalance ?? "0")) || 0;
     const stmtDue = card.nextPaymentDueDate;
     if (stmtBalance <= 0 || !stmtDue || stmtDue < todayStr || stmtDue > endStr) continue;
@@ -755,6 +838,38 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
       transactionType: "expense",
       category: "debt_payments",
       ccAccountId: card.id,
+      isCcParent: true,
+      ccBasis: "actual",
+      isActual: false,
+      isCommitted: false,
+      sortOrder: 0,
+    });
+  }
+
+  // Fixed-mode schedule rows that don't ride a cycle (the statement seam
+  // date and monthly extensions past the last generated cycle).
+  for (const extra of fixedExtraRows) {
+    if (extra.date < todayStr || extra.date > endStr) continue;
+    if (ccGroups.has(`${extra.card.id}|${extra.date}`)) continue;
+    const [survivor] = await db
+      .select({ id: forecastedTransactionsTable.id })
+      .from(forecastedTransactionsTable)
+      .where(and(
+        eq(forecastedTransactionsTable.userId, userId),
+        eq(forecastedTransactionsTable.ccAccountId, extra.card.id),
+        eq(forecastedTransactionsTable.isCcParent, true),
+        isNull(forecastedTransactionsTable.sourceCardCycleId),
+        eq(forecastedTransactionsTable.transactionDate, extra.date),
+      ));
+    if (survivor) continue;
+    toInsert.push({
+      userId,
+      transactionDate: extra.date,
+      description: `${extra.card.accountName} payment`,
+      amount: String(Math.round(extra.amount * 100) / 100),
+      transactionType: "expense",
+      category: "debt_payments",
+      ccAccountId: extra.card.id,
       isCcParent: true,
       ccBasis: "actual",
       isActual: false,

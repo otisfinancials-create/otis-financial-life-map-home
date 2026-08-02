@@ -5,6 +5,8 @@
  * Otis Financial Life Map API
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountAprsItem } from './accountAprsItem';
+import type { AccountPaymentMode } from './accountPaymentMode';
 import type { AccountRetirementSubtype } from './accountRetirementSubtype';
 
 export interface Account {
@@ -68,6 +70,39 @@ export interface Account {
   institutionLogo?: string | null;
   /** @nullable */
   lastSyncedAt?: string | null;
+  /**
+     * Minimum payment from Plaid Liabilities (credit cards)
+     * @nullable
+     */
+  minimumPayment?: number | null;
+  /**
+     * Last statement balance from Plaid Liabilities
+     * @nullable
+     */
+  lastStatementBalance?: number | null;
+  /**
+     * Next payment due date (YYYY-MM-DD) from Plaid Liabilities
+     * @nullable
+     */
+  nextPaymentDueDate?: string | null;
+  /**
+     * Amount of the last payment from Plaid Liabilities
+     * @nullable
+     */
+  lastPaymentAmount?: number | null;
+  /**
+     * Full Plaid aprs[] — a 'special' entry signals promotional financing
+     * @nullable
+     */
+  aprs?: AccountAprsItem[] | null;
+  /** How the card's carried balance is projected — pay the statement in full, or a fixed amount per cycle */
+  paymentMode?: AccountPaymentMode;
+  /** @nullable */
+  fixedPaymentAmount?: number | null;
+  /** @nullable */
+  payoffTargetDate?: string | null;
+  /** @nullable */
+  paymentSuggestionDismissedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
