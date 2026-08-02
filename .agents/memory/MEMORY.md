@@ -13,6 +13,8 @@
 - [Mailchimp subscribe](mailchimp-subscribe.md) — Coming Soon email capture -> public /api/subscribe -> Mailchimp; datacenter from key suffix, distinguish outcomes by 400 title; @example.com is rejected as "Invalid Resource".
 - [Static HTML artifact](static-html-artifact.md) — to serve a plain HTML page, use react-vite but strip src/ + trim deps/tsconfig or typecheck fails; use relative asset hrefs under the mount path.
 - [Loans amortization parity](loans-amortization-parity.md) — amortization engine duplicated on server (routes/loans.ts) and client (components/loans/amortization.ts); change both in lockstep.
+- [Loan–account link](loan-account-link.md) — services/net-worth.ts is the only liabilities computation; linked loans store NULL balance (account owns it); dedupe heuristic retired to suggestions-only.
+- [Open-ended goals](open-ended-goals.md) — target_amount+target_date both NULL = open-ended; bill has no endDate; PATCH merge must use !== undefined, not ??.
 - [Codegen transient reload errors](codegen-transient-errors.md) — Orval codegen briefly deletes generated files; ignore Vite/Metro reload errors in that window, restart Expo to clear Metro's cached failure.
 - [Forecast-accounts scoped save](forecast-accounts-scoped-save.md) — selection saves write only presented account ids (selected ⊆ presented, else 400); item-wide writes wiped existing selections.
 - [Forecast account boundary](forecast-account-boundary.md) — getForecastAccounts is the only membership decider; asset-movement transfers step balance but never count as spending; backfills live in lib/db/src/backfill.ts.

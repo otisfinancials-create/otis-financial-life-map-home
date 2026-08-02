@@ -13,10 +13,18 @@ export interface Goal {
   id: number;
   name: string;
   goalType: GoalGoalType;
-  targetAmount: number;
+  /**
+     * NULL = open-ended goal (no target to measure against).
+     * @nullable
+     */
+  targetAmount: number | null;
   alreadySaved: number;
   startDate: string;
-  targetDate: string;
+  /**
+     * NULL = open-ended goal; the contribution bill has no end date.
+     * @nullable
+     */
+  targetDate: string | null;
   sourceAccountId: number;
   destinationAccountId: number;
   contributionDay: number;

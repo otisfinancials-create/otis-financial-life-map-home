@@ -11,8 +11,17 @@ export interface Loan {
   loanName: string;
   lenderName: string;
   loanType: string;
+  /**
+     * Connected Account tracking the same debt. When set, the account owns the balance and this loan contributes only the schedule.
+     * @nullable
+     */
+  accountId: number | null;
   originalAmount: number;
-  currentBalance: number;
+  /**
+     * NULL only when accountId is set (the account owns the balance).
+     * @nullable
+     */
+  currentBalance: number | null;
   interestRate: number;
   monthlyPayment: number;
   startDate: string;

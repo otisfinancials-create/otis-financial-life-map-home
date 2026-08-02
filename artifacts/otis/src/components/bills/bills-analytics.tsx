@@ -2,17 +2,22 @@ import { useMemo } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 import type { Bill } from "@workspace/api-client-react";
+import { useListCardCompositions } from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { categoryMeta } from "@/utils/categoryIcons";
 import { isGoalContribution, GOAL_SAVINGS_LABEL } from "@/lib/bill-groups";
 import { monthlyFactor } from "@/lib/bill-math";
+import { foldCarryover, nearestCyclePerCard, todayIso } from "@/components/bills/card-composition";
 
 type Slice = {
   name: string;
   value: number;
   pct: number;
   color: string;
+  // Envelope allowances are display-only aggregations, not bill categories —
+  // clicking them would filter the bills list to nothing, so they don't select.
+  selectable: boolean;
 };
 
 function SliceTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: Slice }> }) {
@@ -28,7 +33,7 @@ function SliceTooltip({ active, payload }: { active?: boolean; payload?: Array<{
         <FormatCurrency amount={s.value} />
         <span className="text-muted-foreground"> / mo</span>
       </div>
-      <div className="text-muted-foreground">{s.pct.toFixed(1)}% of total bills</div>
+      <div className="text-muted-foreground">{s.pct.toFixed(1)}% of total obligations</div>
     </div>
   );
 }
@@ -39,7 +44,13 @@ interface BillsAnalyticsProps {
   onSelectCategory?: (category: string | null) => void;
 }
 
+// Envelope-slice palette (card allowances) — distinct from category colors so
+// spending envelopes read as their own kind of obligation in the donut.
+const ENVELOPE_COLORS = ["#7c3aed", "#a855f7", "#c084fc", "#9333ea", "#6d28d9"];
+
 export function BillsAnalytics({ bills, selectedCategory = null, onSelectCategory }: BillsAnalyticsProps) {
+  const { data: comps } = useListCardCompositions({ dueStart: todayIso() });
+
   const { slices, totalMonthly } = useMemo(() => {
     const byCategory: Record<string, number> = {};
     for (const bill of bills) {
@@ -50,16 +61,40 @@ export function BillsAnalytics({ bills, selectedCategory = null, onSelectCategor
       const key = isGoalContribution(bill) ? GOAL_SAVINGS_LABEL : bill.category;
       byCategory[key] = (byCategory[key] ?? 0) + monthly;
     }
-    // Category % = (category monthly total ÷ sum of ALL category monthly totals) × 100.
-    const total = Object.values(byCategory).reduce((s, v) => s + v, 0);
-    const result: Slice[] = Object.entries(byCategory)
+
+    // Card envelope allowances — every monthly obligation, aggregated for
+    // display. Bills allocated to a card cycle already appear in their
+    // category slices above (they are ordinary bills), so ONLY envelopes are
+    // added here — card-allocated amounts are never counted twice.
+    const envByCard: Array<{ name: string; value: number }> = [];
+    for (const c of nearestCyclePerCard(comps ?? [])) {
+      const envTotal = foldCarryover(c.envelopes).reduce((s, e) => s + e.plannedAmount, 0);
+      if (envTotal > 0.005) envByCard.push({ name: `${c.accountName} envelopes`, value: envTotal });
+    }
+
+    // Category % = (slice total ÷ sum of ALL slice totals) × 100.
+    const total =
+      Object.values(byCategory).reduce((s, v) => s + v, 0) +
+      envByCard.reduce((s, e) => s + e.value, 0);
+    const billSlices: Slice[] = Object.entries(byCategory)
       .sort((a, b) => b[1] - a[1])
       .map(([name, value]) => ({
         name,
         value,
         pct: total > 0 ? (value / total) * 100 : 0,
         color: name === GOAL_SAVINGS_LABEL ? "#0f766e" : categoryMeta(name).color,
+        selectable: true,
       }));
+    const envSlices: Slice[] = envByCard
+      .sort((a, b) => b.value - a.value)
+      .map((e, i) => ({
+        name: e.name,
+        value: e.value,
+        pct: total > 0 ? (e.value / total) * 100 : 0,
+        color: ENVELOPE_COLORS[i % ENVELOPE_COLORS.length],
+        selectable: false,
+      }));
+    const result: Slice[] = [...billSlices, ...envSlices].sort((a, b) => b.value - a.value);
     // Largest-remainder rounding so the displayed 1-decimal percentages sum to exactly 100.0.
     if (total > 0 && result.length > 0) {
       const floored = result.map((s) => Math.floor(s.pct * 10));
@@ -75,7 +110,7 @@ export function BillsAnalytics({ bills, selectedCategory = null, onSelectCategor
       result.forEach((s, i) => { s.pct = floored[i] / 10; });
     }
     return { slices: result, totalMonthly: total };
-  }, [bills]);
+  }, [bills, comps]);
 
   if (slices.length === 0) return null;
 
@@ -86,19 +121,19 @@ export function BillsAnalytics({ bills, selectedCategory = null, onSelectCategor
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-lg border border-card-border bg-background px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Total Monthly Bills</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Total Monthly Obligations</p>
           <p className="mt-1 text-xl font-bold font-mono text-foreground">
             <FormatCurrency amount={totalMonthly} />
           </p>
         </div>
         <div className="rounded-lg border border-card-border bg-background px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Total Annual Bills</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Total Annual Obligations</p>
           <p className="mt-1 text-xl font-bold font-mono text-foreground">
             <FormatCurrency amount={totalMonthly * 12} />
           </p>
         </div>
         <div className="rounded-lg border border-card-border bg-background px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Largest Single Category</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Largest Single Slice</p>
           <p className="mt-1 text-xl font-bold text-foreground flex items-baseline gap-2 min-w-0">
             <span className="truncate">{largest.name}</span>
             <span className="font-mono text-sm text-muted-foreground shrink-0">
@@ -110,9 +145,10 @@ export function BillsAnalytics({ bills, selectedCategory = null, onSelectCategor
 
       {/* Donut + legend */}
       <div>
-        <h3 className="text-sm font-semibold text-foreground">Bills by Category</h3>
+        <h3 className="text-sm font-semibold text-foreground">Monthly Obligations by Category</h3>
         <p className="text-[11px] italic text-muted-foreground mt-0.5">
-          Monthly equivalents — all bill amounts normalized to a monthly figure for comparison.
+          Monthly equivalents — bills normalized to a monthly figure, plus each card's spending
+          envelopes. Card-allocated bills already appear in their category, so nothing is double counted.
         </p>
       </div>
       <div className="flex flex-col lg:flex-row items-center gap-8">
@@ -128,9 +164,9 @@ export function BillsAnalytics({ bills, selectedCategory = null, onSelectCategor
                 paddingAngle={2}
                 strokeWidth={0}
                 onClick={(_, index) => {
-                  const name = slices[index]?.name;
-                  if (!name || !onSelectCategory) return;
-                  onSelectCategory(selectedCategory === name ? null : name);
+                  const slice = slices[index];
+                  if (!slice?.selectable || !onSelectCategory) return;
+                  onSelectCategory(selectedCategory === slice.name ? null : slice.name);
                 }}
                 cursor={onSelectCategory ? "pointer" : undefined}
               >
@@ -169,9 +205,14 @@ export function BillsAnalytics({ bills, selectedCategory = null, onSelectCategor
               <button
                 key={s.name}
                 type="button"
-                onClick={() => onSelectCategory?.(selectedCategory === s.name ? null : s.name)}
+                data-testid={`legend-slice-${s.name}`}
+                disabled={!s.selectable}
+                onClick={() => {
+                  if (!s.selectable) return;
+                  onSelectCategory?.(selectedCategory === s.name ? null : s.name);
+                }}
                 className={`flex items-center gap-2.5 text-sm text-left w-full rounded-sm px-1 -mx-1 transition-colors ${
-                  selectedCategory === s.name ? "bg-muted/60" : "hover:bg-muted/40"
+                  selectedCategory === s.name ? "bg-muted/60" : s.selectable ? "hover:bg-muted/40" : "cursor-default"
                 }`}
               >
                 <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />

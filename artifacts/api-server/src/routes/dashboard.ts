@@ -1,15 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import {
-  db,
-  accountsTable,
-  assetsTable,
-  billsTable,
-  paySchedulesTable,
-  loansTable,
-} from "@workspace/db";
+import { db, billsTable, paySchedulesTable } from "@workspace/db";
 import { GetDashboardSummaryResponse } from "@workspace/api-zod";
-import { dedupedLoans } from "../lib/financial-dedup";
+import { computeNetWorth } from "../services/net-worth";
 
 const FREQ_TO_MONTHLY: Record<string, number> = {
   weekly: 52 / 12,
@@ -26,34 +19,16 @@ const router: IRouter = Router();
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   req.log.info("Fetching dashboard summary");
 
-  const [accounts, assets, bills, paySchedules, loans] = await Promise.all([
-    db.select().from(accountsTable).where(eq(accountsTable.userId, req.userId)),
-    db.select().from(assetsTable).where(eq(assetsTable.userId, req.userId)),
+  const [bills, paySchedules, netWorthCtx] = await Promise.all([
     db.select().from(billsTable).where(eq(billsTable.userId, req.userId)),
     db.select().from(paySchedulesTable).where(eq(paySchedulesTable.userId, req.userId)),
-    db.select().from(loansTable).where(eq(loansTable.userId, req.userId)),
+    computeNetWorth(req.userId),
   ]);
 
   const activeBills = bills.filter((b) => b.isActive);
 
-  // Net worth — accounts plus manually tracked assets & liabilities,
-  // plus loans from the Loans section that aren't already represented
-  // as a liability Connected Account (deduplicated by name or payment).
-  const holdings = [...accounts, ...assets];
-  const totalAssets = holdings
-    .filter((a) => a.isAsset)
-    .reduce((sum, a) => sum + parseFloat(String(a.currentBalance)), 0);
-  const liabilityAccounts = accounts.filter((a) => !a.isAsset);
-  const accountLiabilities = holdings
-    .filter((a) => !a.isAsset)
-    .reduce((sum, a) => sum + Math.abs(parseFloat(String(a.currentBalance))), 0);
-  const uniqueLoans = dedupedLoans(loans, liabilityAccounts);
-  const loanLiabilities = uniqueLoans.reduce(
-    (sum, l) => sum + Math.abs(parseFloat(String(l.currentBalance))),
-    0
-  );
-  const totalLiabilities = accountLiabilities + loanLiabilities;
-  const netWorth = totalAssets - totalLiabilities;
+  // Net worth — single shared computation (services/net-worth.ts).
+  const { totalAssets, totalLiabilities, netWorth, liabilitiesBreakdown } = netWorthCtx;
 
   // Monthly expenses from active bills
   const monthlyExpenses = activeBills.reduce((sum, b) => {
@@ -101,6 +76,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       netWorth,
       totalAssets,
       totalLiabilities,
+      liabilitiesBreakdown,
       monthlyIncome,
       monthlyExpenses,
       monthlyCashFlow,

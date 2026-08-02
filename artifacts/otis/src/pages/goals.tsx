@@ -51,10 +51,12 @@ import {
 type FormState = {
   name: string;
   goalType: "spend" | "accumulation";
+  openEnded: boolean;
   targetAmount: string;
   alreadySaved: string;
   startDate: string;
   targetDate: string;
+  monthlyContribution: string;
   sourceAccountId: string;
   destinationAccountId: string;
   contributionDay: string;
@@ -65,10 +67,12 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 const emptyForm = (): FormState => ({
   name: "",
   goalType: "accumulation",
+  openEnded: false,
   targetAmount: "",
   alreadySaved: "0",
   startDate: todayIso(),
   targetDate: "",
+  monthlyContribution: "",
   sourceAccountId: "",
   destinationAccountId: "",
   contributionDay: "1",
@@ -115,10 +119,23 @@ function previewContribution(f: FormState): number | null {
  */
 function GoalProgress({ goal, onStopContributions, stopping }: { goal: Goal; onStopContributions: (goal: Goal) => void; stopping: boolean }) {
   const actual = goal.actualBucket ?? goal.alreadySaved;
+  // Open-ended goals (null target/date) have nothing to measure against —
+  // show the amount saved to date only, with no bar/status/prompt.
+  if (goal.targetAmount == null || goal.targetDate == null) {
+    return (
+      <div className="space-y-1 pt-1" data-testid={`progress-goal-${goal.id}`}>
+        <div className="text-sm">
+          <span className="font-mono font-medium"><FormatCurrency amount={actual} /></span>{" "}
+          <span className="text-muted-foreground">saved to date</span>
+        </div>
+      </div>
+    );
+  }
   const target = goal.targetAmount;
+  const targetDate = goal.targetDate;
   const pct = target > 0 ? Math.min(100, Math.max(0, (actual / target) * 100)) : 0;
   const today = todayIso();
-  const dueByNow = contributionCount(goal.startDate, today < goal.targetDate ? today : goal.targetDate, goal.contributionDay);
+  const dueByNow = contributionCount(goal.startDate, today < targetDate ? today : targetDate, goal.contributionDay);
   const expectedByNow = Math.min(target, goal.alreadySaved + goal.monthlyContribution * dueByNow);
   // §7.7/3c — status must reflect reality. At or past target it reads as
   // reached/exceeded, never "on track", regardless of schedule arithmetic.
@@ -321,13 +338,16 @@ export default function Goals() {
   };
   const openEdit = (g: Goal) => {
     setEditing(g);
+    const openEnded = g.targetAmount == null || g.targetDate == null;
     setForm({
       name: g.name,
       goalType: g.goalType,
-      targetAmount: String(g.targetAmount),
+      openEnded,
+      targetAmount: g.targetAmount != null ? String(g.targetAmount) : "",
       alreadySaved: String(g.alreadySaved),
       startDate: g.startDate,
-      targetDate: g.targetDate,
+      targetDate: g.targetDate ?? "",
+      monthlyContribution: openEnded ? String(g.monthlyContribution) : "",
       sourceAccountId: String(g.sourceAccountId),
       destinationAccountId: String(g.destinationAccountId),
       contributionDay: String(g.contributionDay),
@@ -338,18 +358,31 @@ export default function Goals() {
 
   const submit = () => {
     setFormError(null);
+    // Open-ended goals are accumulation-only: no target amount / target date,
+    // monthlyContribution supplied directly instead of computed by the server.
+    const openEnded = form.goalType === "accumulation" && form.openEnded;
     const body: GoalInput = {
       name: form.name.trim(),
       goalType: form.goalType,
-      targetAmount: parseFloat(form.targetAmount),
+      targetAmount: openEnded ? null : parseFloat(form.targetAmount),
       alreadySaved: parseFloat(form.alreadySaved || "0"),
       startDate: form.startDate,
-      targetDate: form.targetDate,
+      targetDate: openEnded ? null : form.targetDate,
+      monthlyContribution: openEnded ? parseFloat(form.monthlyContribution) : undefined,
       sourceAccountId: parseInt(form.sourceAccountId, 10),
       destinationAccountId: parseInt(form.destinationAccountId, 10),
       contributionDay: parseInt(form.contributionDay, 10),
     };
-    if (!body.name || !(body.targetAmount > 0) || !body.startDate || !body.targetDate) {
+    if (!body.name || !body.startDate) {
+      setFormError("Name and start date are required.");
+      return;
+    }
+    if (openEnded) {
+      if (!(body.monthlyContribution != null && body.monthlyContribution > 0)) {
+        setFormError("Enter a monthly contribution greater than $0 for an open-ended goal.");
+        return;
+      }
+    } else if (!(body.targetAmount != null && body.targetAmount > 0) || !body.targetDate) {
       setFormError("Name, target amount, start date, and target date are required.");
       return;
     }
@@ -361,7 +394,8 @@ export default function Goals() {
     else createGoal.mutate({ data: body });
   };
 
-  const preview = previewContribution(form);
+  const isOpenEnded = form.goalType === "accumulation" && form.openEnded;
+  const preview = isOpenEnded ? null : previewContribution(form);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -413,7 +447,13 @@ export default function Goals() {
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    <FormatCurrency amount={g.targetAmount} /> by {g.targetDate}
+                    {g.targetAmount != null && g.targetDate != null ? (
+                      <>
+                        <FormatCurrency amount={g.targetAmount} /> by {g.targetDate}
+                      </>
+                    ) : (
+                      "Open-ended — save a fixed amount monthly"
+                    )}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -500,7 +540,7 @@ export default function Goals() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit goal" : "New goal"}</DialogTitle>
             <DialogDescription>
@@ -520,7 +560,7 @@ export default function Goals() {
                 <button
                   type="button"
                   data-testid="button-goal-type-spend"
-                  onClick={() => setForm({ ...form, goalType: "spend" })}
+                  onClick={() => setForm({ ...form, goalType: "spend", openEnded: false })}
                   className={`rounded-lg border p-3 text-left transition-colors ${
                     form.goalType === "spend" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:border-primary/40"
                   }`}
@@ -541,32 +581,63 @@ export default function Goals() {
                 </button>
               </div>
             </div>
+            {form.goalType === "accumulation" && (
+              <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-3">
+                <div className="min-w-0">
+                  <Label htmlFor="switch-open-ended" className="text-sm font-medium">No target — just save a fixed amount monthly</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Skip the target amount and date. You choose the monthly contribution and it keeps going until you stop it.
+                  </p>
+                </div>
+                <Switch
+                  id="switch-open-ended"
+                  checked={form.openEnded}
+                  onCheckedChange={(on) => setForm({ ...form, openEnded: on })}
+                  data-testid="switch-open-ended"
+                />
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="goal-day">Contribution day of month</Label>
               <Input id="goal-day" data-testid="input-goal-day" type="number" min={1} max={31} value={form.contributionDay} onChange={(e) => setForm({ ...form, contributionDay: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="goal-target">Target amount</Label>
-                <Input id="goal-target" data-testid="input-goal-target" type="number" min={0} value={form.targetAmount} onChange={(e) => setForm({ ...form, targetAmount: e.target.value })} placeholder="6000" />
+            {isOpenEnded ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="goal-monthly">Monthly contribution</Label>
+                  <Input id="goal-monthly" data-testid="input-monthly-contribution" type="number" min={0} value={form.monthlyContribution} onChange={(e) => setForm({ ...form, monthlyContribution: e.target.value })} placeholder="300" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="goal-saved">Already saved</Label>
+                  <Input id="goal-saved" data-testid="input-goal-saved" type="number" min={0} value={form.alreadySaved} onChange={(e) => setForm({ ...form, alreadySaved: e.target.value })} />
+                </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="goal-saved">Already saved</Label>
-                <Input id="goal-saved" data-testid="input-goal-saved" type="number" min={0} value={form.alreadySaved} onChange={(e) => setForm({ ...form, alreadySaved: e.target.value })} />
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="goal-target">Target amount</Label>
+                  <Input id="goal-target" data-testid="input-goal-target" type="number" min={0} value={form.targetAmount} onChange={(e) => setForm({ ...form, targetAmount: e.target.value })} placeholder="6000" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="goal-saved">Already saved</Label>
+                  <Input id="goal-saved" data-testid="input-goal-saved" type="number" min={0} value={form.alreadySaved} onChange={(e) => setForm({ ...form, alreadySaved: e.target.value })} />
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+            )}
+            <div className={`grid gap-4 ${isOpenEnded ? "" : "grid-cols-2"}`}>
               <div className="grid gap-2">
                 <Label htmlFor="goal-start">Start date</Label>
                 <Input id="goal-start" data-testid="input-goal-start" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="goal-target-date">{form.goalType === "spend" ? "Spend date (purchase day)" : "Target date"}</Label>
-                <Input id="goal-target-date" data-testid="input-goal-target-date" type="date" value={form.targetDate} onChange={(e) => setForm({ ...form, targetDate: e.target.value })} />
-                {form.goalType === "spend" && (
-                  <p className="text-xs text-muted-foreground">The purchase shows up in your forecast on this day, funded by what you've saved.</p>
-                )}
-              </div>
+              {!isOpenEnded && (
+                <div className="grid gap-2">
+                  <Label htmlFor="goal-target-date">{form.goalType === "spend" ? "Spend date (purchase day)" : "Target date"}</Label>
+                  <Input id="goal-target-date" data-testid="input-goal-target-date" type="date" value={form.targetDate} onChange={(e) => setForm({ ...form, targetDate: e.target.value })} />
+                  {form.goalType === "spend" && (
+                    <p className="text-xs text-muted-foreground">The purchase shows up in your forecast on this day, funded by what you've saved.</p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="grid gap-2">
               <Label>Money leaves from (spending account)</Label>

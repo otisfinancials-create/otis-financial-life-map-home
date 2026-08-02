@@ -14,6 +14,8 @@ import {
   GetAssetsSummaryResponse,
 } from "@workspace/api-zod";
 
+import { computeNetWorth } from "../services/net-worth";
+
 const router: IRouter = Router();
 
 router.get("/assets", async (req, res): Promise<void> => {
@@ -50,13 +52,10 @@ router.get("/assets/summary", async (req, res): Promise<void> => {
     .from(assetsTable)
     .where(eq(assetsTable.userId, req.userId));
 
-  const totalAssets = assets
-    .filter((a) => a.isAsset)
-    .reduce((sum, a) => sum + parseFloat(String(a.currentBalance)), 0);
-  const totalLiabilities = assets
-    .filter((a) => !a.isAsset)
-    .reduce((sum, a) => sum + parseFloat(String(a.currentBalance)), 0);
-  const netWorth = totalAssets - totalLiabilities;
+  // Totals come from the single shared net-worth computation — this endpoint
+  // must never disagree with the dashboard. byType below stays scoped to the
+  // manually tracked rows this page lists.
+  const { totalAssets, totalLiabilities, netWorth } = await computeNetWorth(req.userId);
 
   const byTypeMap: Record<string, { total: number; count: number }> = {};
   for (const asset of assets) {

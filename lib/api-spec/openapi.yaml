@@ -1227,6 +1227,62 @@ paths:
         "204":
           description: Deleted
 
+  /loans/link-suggestions:
+    get:
+      operationId: getLoanLinkSuggestions
+      tags: [loans]
+      summary: One-time heuristic pass suggesting account links for existing loans (never auto-links)
+      responses:
+        "200":
+          description: Suggested links for unlinked loans
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suggestions]
+                properties:
+                  suggestions:
+                    type: array
+                    items:
+                      type: object
+                      required: [loanId, loanName, accountId, accountName, reason]
+                      properties:
+                        loanId:
+                          type: integer
+                        loanName:
+                          type: string
+                        accountId:
+                          type: integer
+                        accountName:
+                          type: string
+                        reason:
+                          type: string
+
+  /loans/{id}/link:
+    patch:
+      operationId: updateLoanLink
+      tags: [loans]
+      summary: Link or unlink a loan to the Connected Account tracking the same debt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoanLinkInput"
+      responses:
+        "200":
+          description: Updated loan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+
   /loans/{id}/amortization:
     get:
       operationId: getLoanAmortization
@@ -2215,6 +2271,38 @@ components:
           type: number
         billsDueThisWeek:
           type: integer
+        liabilitiesBreakdown:
+          $ref: "#/components/schemas/LiabilitiesBreakdown"
+
+    LiabilityItem:
+      type: object
+      required: [name, balance, source]
+      properties:
+        name:
+          type: string
+        balance:
+          type: number
+        source:
+          type: string
+          enum: [account, loan, manual]
+
+    LiabilitiesBreakdown:
+      type: object
+      description: Server-computed liabilities split — the single source of truth consumed by the breakdown modal. Clients must not re-derive it.
+      required: [creditCards, mortgages, otherLoans]
+      properties:
+        creditCards:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiabilityItem"
+        mortgages:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiabilityItem"
+        otherLoans:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiabilityItem"
 
     # ── Bills ────────────────────────────────────────────────────────────────
     Bill:
@@ -2461,13 +2549,15 @@ components:
           type: string
           enum: [spend, accumulation]
         targetAmount:
-          type: number
+          type: ["number", "null"]
+          description: NULL = open-ended goal (no target to measure against).
         alreadySaved:
           type: number
         startDate:
           type: string
         targetDate:
-          type: string
+          type: ["string", "null"]
+          description: NULL = open-ended goal; the contribution bill has no end date.
         sourceAccountId:
           type: integer
         destinationAccountId:
@@ -2514,7 +2604,7 @@ components:
     GoalInput:
       type: object
       required:
-        [name, goalType, targetAmount, startDate, targetDate, sourceAccountId, destinationAccountId, contributionDay]
+        [name, goalType, startDate, sourceAccountId, destinationAccountId, contributionDay]
       properties:
         name:
           type: string
@@ -2522,13 +2612,17 @@ components:
           type: string
           enum: [spend, accumulation]
         targetAmount:
-          type: number
+          type: ["number", "null"]
+          description: Omit/null (accumulation only) for an open-ended goal — monthlyContribution must then be supplied.
         alreadySaved:
           type: number
         startDate:
           type: string
         targetDate:
-          type: string
+          type: ["string", "null"]
+        monthlyContribution:
+          type: ["number", "null"]
+          description: Only for open-ended goals — supplied directly instead of computed.
         sourceAccountId:
           type: integer
         destinationAccountId:
@@ -2601,13 +2695,16 @@ components:
           type: string
           enum: [spend, accumulation]
         targetAmount:
-          type: number
+          type: ["number", "null"]
         alreadySaved:
           type: number
         startDate:
           type: string
         targetDate:
-          type: string
+          type: ["string", "null"]
+        monthlyContribution:
+          type: ["number", "null"]
+          description: Only for open-ended goals — supplied directly instead of computed.
         sourceAccountId:
           type: integer
         destinationAccountId:
@@ -3369,7 +3466,7 @@ components:
     # ── Loans ─────────────────────────────────────────────────────────────────
     Loan:
       type: object
-      required: [id, loanName, lenderName, loanType, originalAmount, currentBalance, interestRate, monthlyPayment, startDate, termMonths, nextPaymentDate, createdAt, updatedAt]
+      required: [id, loanName, lenderName, loanType, originalAmount, currentBalance, accountId, interestRate, monthlyPayment, startDate, termMonths, nextPaymentDate, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -3379,10 +3476,14 @@ components:
           type: string
         loanType:
           type: string
+        accountId:
+          type: ["integer", "null"]
+          description: Connected Account tracking the same debt. When set, the account owns the balance and this loan contributes only the schedule.
         originalAmount:
           type: number
         currentBalance:
-          type: number
+          type: ["number", "null"]
+          description: NULL only when accountId is set (the account owns the balance).
         interestRate:
           type: number
         monthlyPayment:
@@ -3419,7 +3520,7 @@ components:
 
     LoanInput:
       type: object
-      required: [loanName, lenderName, loanType, originalAmount, currentBalance, interestRate, monthlyPayment, startDate, termMonths, nextPaymentDate]
+      required: [loanName, lenderName, loanType, originalAmount, interestRate, monthlyPayment, startDate, termMonths, nextPaymentDate]
       properties:
         loanName:
           type: string
@@ -3427,10 +3528,13 @@ components:
           type: string
         loanType:
           type: string
+        accountId:
+          type: ["integer", "null"]
         originalAmount:
           type: number
         currentBalance:
-          type: number
+          type: ["number", "null"]
+          description: Required unless accountId is set.
         interestRate:
           type: number
         monthlyPayment:
@@ -3453,10 +3557,12 @@ components:
           type: string
         loanType:
           type: string
+        accountId:
+          type: ["integer", "null"]
         originalAmount:
           type: number
         currentBalance:
-          type: number
+          type: ["number", "null"]
         interestRate:
           type: number
         monthlyPayment:
@@ -3469,6 +3575,17 @@ components:
           type: string
         notes:
           type: ["string", "null"]
+
+    LoanLinkInput:
+      type: object
+      required: [accountId]
+      properties:
+        accountId:
+          type: ["integer", "null"]
+          description: Liability account id to link, or null to unlink.
+        currentBalance:
+          type: ["number", "null"]
+          description: Only meaningful when unlinking — the balance the loan takes back. Defaults to the linked account's current balance.
 
     LoansSummary:
       type: object

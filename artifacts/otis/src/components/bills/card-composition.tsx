@@ -89,13 +89,14 @@ function fmtDate(iso: string): string {
  */
 export function CardCompositionSection() {
   const { data: comps } = useListCardCompositions({ dueStart: todayIso() });
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  // Default COLLAPSED: each card shows only its name + total until expanded.
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   const cards = nearestCyclePerCard(comps ?? []);
   if (cards.length === 0) return null;
 
   const toggle = (id: number) =>
-    setCollapsed((prev) => {
+    setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -124,13 +125,14 @@ export function CardCompositionSection() {
         </TableHeader>
         <TableBody>
           {cards.map((c) => {
-            const open = !collapsed.has(c.cycleId);
+            const open = expanded.has(c.cycleId);
             const envs = foldCarryover(c.envelopes);
             return (
               <Fragment key={c.cycleId}>
                 <TableRow
                   className="border-border cursor-pointer font-medium"
                   onClick={() => toggle(c.cycleId)}
+                  aria-expanded={open}
                   data-testid={`row-card-composition-${c.accountId}`}
                 >
                   <TableCell>

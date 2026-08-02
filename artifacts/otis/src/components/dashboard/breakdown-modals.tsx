@@ -8,7 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { monthlyFactor } from "@/lib/bill-math";
 import { accountTypeMeta } from "@/utils/categoryIcons";
-import type { Account, Asset, Loan, PaySchedule, Bill } from "@workspace/api-client-react";
+import type {
+  Account,
+  Asset,
+  Loan,
+  PaySchedule,
+  Bill,
+  LiabilitiesBreakdown,
+} from "@workspace/api-client-react";
 
 /* ── Shared helpers ───────────────────────────────────────────────────── */
 
@@ -19,20 +26,6 @@ const titleCase = (type: string) =>
     .join(" ");
 
 const accountTypeLabel = (type: string) => accountTypeMeta(type)?.label ?? titleCase(type);
-
-// Mirrors the server's dedup rule (financial-dedup.ts): a loan is a duplicate
-// if a liability account has the same name (case-insensitive) OR the same
-// monthly payment (account monthlyContribution).
-function dedupeLoans(loans: Loan[], liabilityAccounts: Account[]): Loan[] {
-  return loans.filter(
-    (l) =>
-      !liabilityAccounts.some((a) => {
-        if (a.accountName.trim().toLowerCase() === l.loanName.trim().toLowerCase()) return true;
-        const acctPayment = Number(a.monthlyContribution) || 0;
-        return acctPayment > 0 && Math.abs(acctPayment - l.monthlyPayment) < 0.005;
-      }),
-  );
-}
 
 function TypeBadge({ label }: { label: string }) {
   return (
@@ -83,14 +76,20 @@ export function NetWorthModal({
 }) {
   const assetAccounts = accounts.filter((a) => a.isAsset);
   const liabilityAccounts = accounts.filter((a) => !a.isAsset);
-  const dedupedLoans = dedupeLoans(loans, liabilityAccounts);
+  const manualAssets = assets.filter((a) => a.isAsset);
+  const manualLiabilities = assets.filter((a) => !a.isAsset);
+  // Loans linked to a liability account have their balance owned by that
+  // account (currentBalance is null); count only stand-alone loans here.
+  // Mirrors services/net-worth.ts exactly — the explicit link is the only dedupe.
+  const standaloneLoans = loans.filter((l) => l.accountId == null);
 
   const assetsTotal =
     assetAccounts.reduce((s, a) => s + a.currentBalance, 0) +
-    assets.reduce((s, a) => s + a.currentBalance, 0);
+    manualAssets.reduce((s, a) => s + a.currentBalance, 0);
   const liabilitiesTotal =
     liabilityAccounts.reduce((s, a) => s + Math.abs(a.currentBalance), 0) +
-    dedupedLoans.reduce((s, l) => s + l.currentBalance, 0);
+    manualLiabilities.reduce((s, a) => s + Math.abs(a.currentBalance), 0) +
+    standaloneLoans.reduce((s, l) => s + Math.abs(l.currentBalance ?? 0), 0);
   const netWorth = assetsTotal - liabilitiesTotal;
 
   return (
@@ -113,7 +112,7 @@ export function NetWorthModal({
                   amountClass="text-emerald-600"
                 />
               ))}
-              {assets.map((a) => (
+              {manualAssets.map((a) => (
                 <LineRow
                   key={`asset-${a.id}`}
                   name={a.assetName}
@@ -122,7 +121,7 @@ export function NetWorthModal({
                   amountClass="text-emerald-600"
                 />
               ))}
-              {assetAccounts.length === 0 && assets.length === 0 && (
+              {assetAccounts.length === 0 && manualAssets.length === 0 && (
                 <p className="text-sm text-muted-foreground py-1.5">No assets.</p>
               )}
             </div>
@@ -146,16 +145,25 @@ export function NetWorthModal({
                   amountClass="text-orange-600"
                 />
               ))}
-              {dedupedLoans.map((l) => (
+              {manualLiabilities.map((a) => (
+                <LineRow
+                  key={`mliab-${a.id}`}
+                  name={a.assetName}
+                  badge={titleCase(a.assetType)}
+                  amount={Math.abs(a.currentBalance)}
+                  amountClass="text-orange-600"
+                />
+              ))}
+              {standaloneLoans.map((l) => (
                 <LineRow
                   key={`loan-${l.id}`}
                   name={l.loanName}
                   badge={titleCase(l.loanType)}
-                  amount={l.currentBalance}
+                  amount={Math.abs(l.currentBalance ?? 0)}
                   amountClass="text-orange-600"
                 />
               ))}
-              {liabilityAccounts.length === 0 && dedupedLoans.length === 0 && (
+              {liabilityAccounts.length === 0 && standaloneLoans.length === 0 && manualLiabilities.length === 0 && (
                 <p className="text-sm text-muted-foreground py-1.5">No liabilities.</p>
               )}
             </div>
@@ -280,32 +288,30 @@ export function CashFlowModal({
 
 /* ── #16 Total Liabilities breakdown ──────────────────────────────────── */
 
+const SOURCE_LABELS: Record<string, string> = {
+  account: "Account",
+  loan: "Loan",
+  manual: "Manual",
+};
+
 export function LiabilitiesModal({
   open,
   onOpenChange,
-  accounts,
-  loans,
+  breakdown,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  accounts: Account[];
-  loans: Loan[];
+  /** Server-computed liabilities split from GET /dashboard/summary. */
+  breakdown?: LiabilitiesBreakdown;
 }) {
-  const liabilityAccounts = accounts.filter((a) => !a.isAsset);
-  const dedupedLoans = dedupeLoans(loans, liabilityAccounts);
+  const mortgages = breakdown?.mortgages ?? [];
+  const otherLoans = breakdown?.otherLoans ?? [];
+  const creditCards = breakdown?.creditCards ?? [];
 
-  const mortgages = dedupedLoans.filter((l) => l.loanType.toLowerCase() === "mortgage");
-  const otherLoans = dedupedLoans.filter((l) => l.loanType.toLowerCase() !== "mortgage");
-  const creditCards = liabilityAccounts.filter((a) => a.accountType === "credit_card");
-  // Liability accounts that aren't credit cards (e.g. loan/mortgage accounts)
-  // still count toward the total and are shown alongside loans.
-  const otherLiabilityAccounts = liabilityAccounts.filter((a) => a.accountType !== "credit_card");
-  const mortgageAccounts = otherLiabilityAccounts.filter((a) => a.accountType === "mortgage");
-  const loanAccounts = otherLiabilityAccounts.filter((a) => a.accountType !== "mortgage");
-
-  const total =
-    dedupedLoans.reduce((s, l) => s + l.currentBalance, 0) +
-    liabilityAccounts.reduce((s, a) => s + Math.abs(a.currentBalance), 0);
+  const total = [...mortgages, ...otherLoans, ...creditCards].reduce(
+    (s, item) => s + Math.abs(item.balance),
+    0,
+  );
 
   const Section = ({
     title,
@@ -344,45 +350,29 @@ export function LiabilitiesModal({
         <div className="space-y-4">
           <Section
             title="Mortgages"
-            rows={[
-              ...mortgages.map((l) => ({
-                key: `m-${l.id}`,
-                name: l.loanName,
-                badge: titleCase(l.loanType),
-                amount: l.currentBalance,
-              })),
-              ...mortgageAccounts.map((a) => ({
-                key: `ma-${a.id}`,
-                name: a.accountName,
-                badge: accountTypeLabel(a.accountType),
-                amount: Math.abs(a.currentBalance),
-              })),
-            ]}
+            rows={mortgages.map((item, i) => ({
+              key: `m-${i}-${item.name}`,
+              name: item.name,
+              badge: SOURCE_LABELS[item.source] ?? item.source,
+              amount: Math.abs(item.balance),
+            }))}
           />
           <Section
             title="Loans"
-            rows={[
-              ...otherLoans.map((l) => ({
-                key: `l-${l.id}`,
-                name: l.loanName,
-                badge: titleCase(l.loanType),
-                amount: l.currentBalance,
-              })),
-              ...loanAccounts.map((a) => ({
-                key: `la-${a.id}`,
-                name: a.accountName,
-                badge: accountTypeLabel(a.accountType),
-                amount: Math.abs(a.currentBalance),
-              })),
-            ]}
+            rows={otherLoans.map((item, i) => ({
+              key: `l-${i}-${item.name}`,
+              name: item.name,
+              badge: SOURCE_LABELS[item.source] ?? item.source,
+              amount: Math.abs(item.balance),
+            }))}
           />
           <Section
             title="Credit Cards"
-            rows={creditCards.map((a) => ({
-              key: `cc-${a.id}`,
-              name: a.accountName,
-              badge: accountTypeLabel(a.accountType),
-              amount: Math.abs(a.currentBalance),
+            rows={creditCards.map((item, i) => ({
+              key: `cc-${i}-${item.name}`,
+              name: item.name,
+              badge: SOURCE_LABELS[item.source] ?? item.source,
+              amount: Math.abs(item.balance),
             }))}
           />
 

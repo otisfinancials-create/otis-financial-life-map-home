@@ -98,8 +98,8 @@ export function ScenarioForm({ type, initialInputs, running, onRun, onCustomSubm
     const loanId = num("loanId", loans[0].id);
     const loan = loans.find((l) => l.id === loanId) ?? loans[0];
     const extra = num("extraMonthly", 100);
-    const base = simulatePayoff(loan.currentBalance, loan.interestRate, loan.monthlyPayment, 0);
-    const accel = simulatePayoff(loan.currentBalance, loan.interestRate, loan.monthlyPayment, extra);
+    const base = simulatePayoff(loan.currentBalance ?? 0, loan.interestRate, loan.monthlyPayment, 0);
+    const accel = simulatePayoff(loan.currentBalance ?? 0, loan.interestRate, loan.monthlyPayment, extra);
     return {
       monthsSaved: Math.max(0, base.months - accel.months),
       interestSaved: Math.max(0, base.interest - accel.interest),
@@ -232,7 +232,7 @@ export function ScenarioForm({ type, initialInputs, running, onRun, onCustomSubm
               <SelectContent>
                 {(loans ?? []).map((l) => (
                   <SelectItem key={l.id} value={String(l.id)}>
-                    {l.loanName} — {fmtMoney(l.currentBalance)} at {l.interestRate}%
+                    {l.loanName} — {fmtMoney(l.currentBalance ?? 0)} at {l.interestRate}%
                   </SelectItem>
                 ))}
               </SelectContent>

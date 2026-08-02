@@ -22,7 +22,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { monthlyFactor } from "@/lib/bill-math";
 import { isGoalContribution, GOAL_SAVINGS_LABEL } from "@/lib/bill-groups";
 import { getCategoryEmoji } from "@/utils/categoryIcons";
 
@@ -107,19 +106,27 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
   const data = useMemo(() => {
     const activeBills = bills.filter((b) => b.isActive && b.amountType !== "positive");
 
-    // Paid per bill: bill-linked forecast rows marked paid this month (not missed).
+    // Planned & paid come from the actual forecast occurrences in THIS month
+    // — no monthly normalization. A bill with no occurrence this month is not
+    // planned this month (dropped below); a quarterly bill whose occurrence
+    // lands here shows its full amount. Paid = occurrences marked actual
+    // (not missed). Planned = every non-missed occurrence's amount.
+    const plannedByBill = new Map<number, number>();
     const paidByBill = new Map<number, number>();
+    let incomePlanned = 0;
     let incomePaid = 0;
     for (const tx of txs) {
-      if (!tx.isActual || tx.status === "missed" || tx.isCcParent) continue;
+      if (tx.status === "missed" || tx.isCcParent) continue;
       if (tx.sourceBillId != null) {
-        paidByBill.set(tx.sourceBillId, (paidByBill.get(tx.sourceBillId) ?? 0) + Math.abs(tx.amount));
+        plannedByBill.set(tx.sourceBillId, (plannedByBill.get(tx.sourceBillId) ?? 0) + Math.abs(tx.amount));
+        if (tx.isActual) {
+          paidByBill.set(tx.sourceBillId, (paidByBill.get(tx.sourceBillId) ?? 0) + Math.abs(tx.amount));
+        }
       } else if (tx.sourcePayId != null) {
-        incomePaid += Math.abs(tx.amount);
+        incomePlanned += Math.abs(tx.amount);
+        if (tx.isActual) incomePaid += Math.abs(tx.amount);
       }
     }
-
-    const incomePlanned = paySchedules.reduce((s, p) => s + p.amount * monthlyFactor(p.frequency), 0);
 
     interface BillRow {
       bill: Bill;
@@ -132,9 +139,11 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
     const goalRows: BillRow[] = [];
     const byCategory = new Map<string, BillRow[]>();
     for (const b of activeBills) {
+      // Only bills with an actual forecast occurrence this month appear.
+      if (!plannedByBill.has(b.id)) continue;
       const row: BillRow = {
         bill: b,
-        planned: b.amount * monthlyFactor(b.frequency, b.customIntervalDays),
+        planned: plannedByBill.get(b.id) ?? 0,
         paid: paidByBill.get(b.id) ?? 0,
       };
       if (isGoalContribution(b)) {
@@ -183,7 +192,7 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
     const totalPaid = categories.reduce((s, c) => s + c.paid, 0) + envPaid + goalGroup.paid;
 
     return { incomePlanned, incomePaid, categories, goalGroup, cardGroups, totalPlanned, totalPaid };
-  }, [bills, txs, paySchedules, compositions]);
+  }, [bills, txs, compositions]);
 
   return (
     <div className="space-y-4">

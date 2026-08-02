@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, loansTable, billsTable } from "@workspace/db";
-import { loanMatchesBill } from "../lib/financial-dedup";
+import { db, loansTable, billsTable, accountsTable } from "@workspace/db";
+import { loanMatchesBill, loanRepresentedByAccount } from "../lib/financial-dedup";
 import {
   CreateLoanBody,
   UpdateLoanBody,
@@ -49,10 +49,27 @@ function addMonths(iso: string, months: number): string {
   return base.toISOString().slice(0, 10);
 }
 
+/**
+ * Effective balance for schedule math: a loan linked to an account has NO
+ * balance of its own — the account owns it (|account.currentBalance|).
+ */
+async function effectiveBalance(loan: LoanRow, userId: string): Promise<number> {
+  // Linked → the account ALWAYS owns the balance, even if a stale loan
+  // balance is still stored. Only unlinked loans use their own balance.
+  if (loan.accountId != null) {
+    const [acct] = await db
+      .select({ currentBalance: accountsTable.currentBalance })
+      .from(accountsTable)
+      .where(and(eq(accountsTable.id, loan.accountId), eq(accountsTable.userId, userId)));
+    if (acct) return Math.abs(parseFloat(String(acct.currentBalance)));
+  }
+  return loan.currentBalance != null ? parseFloat(String(loan.currentBalance)) : 0;
+}
+
 // Generates a full amortization schedule from today's remaining balance until payoff.
 // `extraPayment` supports the payoff simulator but the API endpoint always uses 0.
-function computeAmortization(loan: LoanRow, extraPayment = 0): AmortizationResult {
-  const balance = parseFloat(String(loan.currentBalance));
+function computeAmortization(loan: LoanRow, extraPayment = 0, balanceOverride?: number): AmortizationResult {
+  const balance = balanceOverride ?? parseFloat(String(loan.currentBalance ?? "0"));
   const annualRate = parseFloat(String(loan.interestRate));
   const monthlyPayment = parseFloat(String(loan.monthlyPayment)) + extraPayment;
   const monthlyRate = annualRate / 100 / 12;
@@ -133,6 +150,14 @@ async function syncLoanBill(req: Request, loan: LoanRow): Promise<BillSyncResult
   return { matched: false, billName };
 }
 
+async function isLinkableAccount(userId: string, accountId: number): Promise<boolean> {
+  const [acct] = await db
+    .select({ isAsset: accountsTable.isAsset })
+    .from(accountsTable)
+    .where(and(eq(accountsTable.id, accountId), eq(accountsTable.userId, userId)));
+  return !!acct && !acct.isAsset;
+}
+
 router.get("/loans", async (req, res): Promise<void> => {
   req.log.info("Fetching loans");
   const loans = await db
@@ -149,12 +174,22 @@ router.post("/loans", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { originalAmount, currentBalance, interestRate, monthlyPayment, ...rest } = parsed.data;
+  const { originalAmount, currentBalance, accountId, interestRate, monthlyPayment, ...rest } = parsed.data;
+  if (currentBalance == null && accountId == null) {
+    res.status(400).json({ error: "currentBalance is required unless the loan is linked to an account" });
+    return;
+  }
+  if (accountId != null && !(await isLinkableAccount(req.userId, accountId))) {
+    res.status(400).json({ error: "accountId must be one of your liability accounts" });
+    return;
+  }
   const [loan] = await db.insert(loansTable).values({
     ...rest,
     userId: req.userId,
+    accountId: accountId ?? null,
     originalAmount: String(originalAmount),
-    currentBalance: String(currentBalance),
+    // Linked → the account owns the balance; never store a shadow copy.
+    currentBalance: accountId == null && currentBalance != null ? String(currentBalance) : null,
     interestRate: String(interestRate),
     monthlyPayment: String(monthlyPayment),
   }).returning();
@@ -168,11 +203,12 @@ router.get("/loans/summary", async (req, res): Promise<void> => {
     .from(loansTable)
     .where(eq(loansTable.userId, req.userId));
 
-  const totalDebt = loans.reduce((sum, l) => sum + parseFloat(String(l.currentBalance)), 0);
+  const balances = await Promise.all(loans.map((l) => effectiveBalance(l, req.userId)));
+  const totalDebt = balances.reduce((sum, b) => sum + b, 0);
   const totalMonthlyPayments = loans.reduce((sum, l) => sum + parseFloat(String(l.monthlyPayment)), 0);
 
   const payoffDates = loans
-    .map((l) => computeAmortization(l).payoffDate)
+    .map((l, i) => computeAmortization(l, 0, balances[i]).payoffDate)
     .filter((d): d is string => d !== null)
     .sort();
 
@@ -186,6 +222,46 @@ router.get("/loans/summary", async (req, res): Promise<void> => {
     latestPayoffDate,
     loanCount: loans.length,
   }));
+});
+
+/**
+ * ONE-TIME heuristic pass over existing data: suggests account links for
+ * unlinked loans using the retired name/payment heuristic. Suggestion only —
+ * the user confirms via PATCH /loans/:id/link. The heuristic no longer
+ * participates in any liabilities calculation.
+ */
+router.get("/loans/link-suggestions", async (req, res): Promise<void> => {
+  const [loans, accounts] = await Promise.all([
+    db.select().from(loansTable).where(eq(loansTable.userId, req.userId)),
+    db.select().from(accountsTable).where(eq(accountsTable.userId, req.userId)),
+  ]);
+  const liabilityAccounts = accounts.filter((a) => !a.isAsset);
+  const linkedAccountIds = new Set(loans.map((l) => l.accountId).filter((id): id is number => id != null));
+  const norm = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9 ]/g, "");
+  const suggestions: Array<{ loanId: number; loanName: string; accountId: number; accountName: string; reason: string }> = [];
+  for (const loan of loans) {
+    if (loan.accountId != null) continue;
+    for (const acct of liabilityAccounts) {
+      if (linkedAccountIds.has(acct.id)) continue;
+      const ln = norm(loan.loanName);
+      const an = norm(acct.accountName);
+      const nameMatch = !!ln && !!an && (ln.includes(an) || an.includes(ln) || loanRepresentedByAccount(loan, [acct]));
+      const lb = loan.currentBalance != null ? parseFloat(String(loan.currentBalance)) : null;
+      const ab = Math.abs(parseFloat(String(acct.currentBalance)));
+      const balanceClose = lb != null && ab > 0 && Math.abs(lb - ab) / ab <= 0.05;
+      if (nameMatch || balanceClose) {
+        suggestions.push({
+          loanId: loan.id,
+          loanName: loan.loanName,
+          accountId: acct.id,
+          accountName: acct.accountName,
+          reason: nameMatch ? "Names look like the same debt" : "Balances are within 5%",
+        });
+        break;
+      }
+    }
+  }
+  res.json({ suggestions });
 });
 
 router.get("/loans/:id", async (req, res): Promise<void> => {
@@ -219,7 +295,7 @@ router.get("/loans/:id/amortization", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Loan not found" });
     return;
   }
-  const result = computeAmortization(loan);
+  const result = computeAmortization(loan, 0, await effectiveBalance(loan, req.userId));
   res.json(GetLoanAmortizationResponse.parse({ loanId: loan.id, ...result }));
 });
 
@@ -237,16 +313,40 @@ router.patch("/loans/:id", async (req, res): Promise<void> => {
   const {
     originalAmount,
     currentBalance,
+    accountId,
     interestRate,
     monthlyPayment,
     ...rest
   } = parsed.data;
+  const [existing] = await db
+    .select()
+    .from(loansTable)
+    .where(and(eq(loansTable.id, params.data.id), eq(loansTable.userId, req.userId)));
+  if (!existing) {
+    res.status(404).json({ error: "Loan not found" });
+    return;
+  }
+  const nextBalance = currentBalance !== undefined ? currentBalance : (existing.currentBalance != null ? parseFloat(String(existing.currentBalance)) : null);
+  const nextAccountId = accountId !== undefined ? accountId : existing.accountId;
+  if (nextBalance == null && nextAccountId == null) {
+    res.status(400).json({ error: "currentBalance is required unless the loan is linked to an account" });
+    return;
+  }
+  if (accountId != null && !(await isLinkableAccount(req.userId, accountId))) {
+    res.status(400).json({ error: "accountId must be one of your liability accounts" });
+    return;
+  }
   const [loan] = await db
     .update(loansTable)
     .set({
       ...rest,
       ...(originalAmount !== undefined && { originalAmount: String(originalAmount) }),
-      ...(currentBalance !== undefined && { currentBalance: String(currentBalance) }),
+      ...(accountId !== undefined && { accountId }),
+      // Linked → the account owns the balance; clear any stored copy so
+      // nothing can ever read a stale number.
+      ...(nextAccountId != null
+        ? { currentBalance: null }
+        : currentBalance !== undefined && { currentBalance: currentBalance != null ? String(currentBalance) : null }),
       ...(interestRate !== undefined && { interestRate: String(interestRate) }),
       ...(monthlyPayment !== undefined && { monthlyPayment: String(monthlyPayment) }),
       updatedAt: new Date(),
@@ -278,11 +378,68 @@ router.delete("/loans/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+router.patch("/loans/:id/link", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid loan id" });
+    return;
+  }
+  const accountId = req.body?.accountId;
+  if (accountId !== null && !Number.isInteger(accountId)) {
+    res.status(400).json({ error: "accountId must be an integer or null" });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(loansTable)
+    .where(and(eq(loansTable.id, id), eq(loansTable.userId, req.userId)));
+  if (!existing) {
+    res.status(404).json({ error: "Loan not found" });
+    return;
+  }
+  if (accountId != null && !(await isLinkableAccount(req.userId, accountId))) {
+    res.status(400).json({ error: "accountId must be one of your liability accounts" });
+    return;
+  }
+  // Unlinking: the loan needs a balance of its own again. Accept one in the
+  // body; default to the linked account's current |balance| so the number
+  // stays continuous at the moment of unlink.
+  let unlinkBalance: string | null = null;
+  if (accountId == null) {
+    const supplied = req.body?.currentBalance;
+    if (supplied !== undefined && supplied !== null && (typeof supplied !== "number" || !(supplied >= 0))) {
+      res.status(400).json({ error: "currentBalance must be a non-negative number" });
+      return;
+    }
+    if (typeof supplied === "number") {
+      unlinkBalance = String(supplied);
+    } else if (existing.currentBalance != null) {
+      unlinkBalance = String(existing.currentBalance);
+    } else if (existing.accountId != null) {
+      unlinkBalance = String(await effectiveBalance(existing, req.userId));
+    } else {
+      res.status(400).json({ error: "Provide a currentBalance to unlink this loan." });
+      return;
+    }
+  }
+  const [loan] = await db
+    .update(loansTable)
+    .set({
+      accountId,
+      // Linking clears the stored balance (account owns it); unlinking restores one.
+      currentBalance: accountId == null ? unlinkBalance : null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(loansTable.id, id), eq(loansTable.userId, req.userId)))
+    .returning();
+  res.json(GetLoanResponse.parse(serialize(loan)));
+});
+
 function serialize(l: LoanRow) {
   return {
     ...l,
     originalAmount: parseFloat(String(l.originalAmount)),
-    currentBalance: parseFloat(String(l.currentBalance)),
+    currentBalance: l.currentBalance != null ? parseFloat(String(l.currentBalance)) : null,
     interestRate: parseFloat(String(l.interestRate)),
     monthlyPayment: parseFloat(String(l.monthlyPayment)),
     createdAt: l.createdAt.toISOString(),

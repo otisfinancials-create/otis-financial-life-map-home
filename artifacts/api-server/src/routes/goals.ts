@@ -72,10 +72,14 @@ export function computeMonthlyContribution(targetAmount: number, alreadySaved: n
 }
 
 type GoalCore = {
-  targetAmount: number;
+  goalType: string;
+  // Both null = open-ended accumulation goal (no target, runs until stopped,
+  // user supplies monthlyContribution directly). Never one-null-one-set.
+  targetAmount: number | null;
+  targetDate: string | null;
+  suppliedMonthlyContribution?: number | null;
   alreadySaved: number;
   startDate: string;
-  targetDate: string;
   sourceAccountId: number;
   destinationAccountId: number;
   contributionDay: number;
@@ -83,15 +87,28 @@ type GoalCore = {
 
 /** Returns an error message or null. Also computes months/contribution. */
 async function validateGoalCore(userId: string, g: GoalCore): Promise<{ error: string | null; monthlyContribution: number }> {
-  if (g.targetDate <= g.startDate) {
-    return { error: "Target date must be after the start date.", monthlyContribution: 0 };
+  const openEnded = g.targetAmount == null && g.targetDate == null;
+  if ((g.targetAmount == null) !== (g.targetDate == null)) {
+    return { error: "Provide both a target amount and a target date, or neither (open-ended goal).", monthlyContribution: 0 };
+  }
+  if (openEnded && g.goalType !== "accumulation") {
+    return { error: "Only accumulation goals can be open-ended — a spend goal needs a target.", monthlyContribution: 0 };
+  }
+  if (openEnded && !(g.suppliedMonthlyContribution != null && g.suppliedMonthlyContribution > 0)) {
+    return { error: "An open-ended goal needs a monthly contribution amount.", monthlyContribution: 0 };
   }
   if (g.contributionDay < 1 || g.contributionDay > 31) {
     return { error: "Contribution day must be between 1 and 31.", monthlyContribution: 0 };
   }
-  const months = contributionOccurrenceCount(g.startDate, g.targetDate, g.contributionDay);
-  if (months < 1) {
-    return { error: "No contribution dates fall between the start date and the target date for that contribution day.", monthlyContribution: 0 };
+  let months = 0;
+  if (!openEnded) {
+    if (g.targetDate! <= g.startDate) {
+      return { error: "Target date must be after the start date.", monthlyContribution: 0 };
+    }
+    months = contributionOccurrenceCount(g.startDate, g.targetDate!, g.contributionDay);
+    if (months < 1) {
+      return { error: "No contribution dates fall between the start date and the target date for that contribution day.", monthlyContribution: 0 };
+    }
   }
   const ids = [g.sourceAccountId, g.destinationAccountId];
   const accounts = await db
@@ -119,7 +136,12 @@ async function validateGoalCore(userId: string, g: GoalCore): Promise<{ error: s
   if (g.sourceAccountId === g.destinationAccountId) {
     return { error: "Source and destination accounts must be different.", monthlyContribution: 0 };
   }
-  return { error: null, monthlyContribution: computeMonthlyContribution(g.targetAmount, g.alreadySaved, months) };
+  return {
+    error: null,
+    monthlyContribution: openEnded
+      ? Math.round(g.suppliedMonthlyContribution! * 100) / 100
+      : computeMonthlyContribution(g.targetAmount!, g.alreadySaved, months),
+  };
 }
 
 /** Monthly occurrence dates on contributionDay in [startIso, endIso] — same generator the forecast uses. */
@@ -129,6 +151,14 @@ function scheduledContributionDates(startIso: string, endIso: string, day: numbe
     startIso,
     endIso,
   );
+}
+
+function addMonthsToIso(iso: string, months: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const base = new Date(Date.UTC(y, m - 1 + months, 1));
+  const dim = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();
+  base.setUTCDate(Math.min(d, dim));
+  return base.toISOString().slice(0, 10);
 }
 
 type BucketInfo = {
@@ -148,7 +178,7 @@ type BucketInfo = {
  *     every read so a drift is visible, not a console warning.
  */
 async function computeBuckets(userId: string, goal: Goal): Promise<BucketInfo> {
-  const target = parseFloat(String(goal.targetAmount));
+  const target = goal.targetAmount != null ? parseFloat(String(goal.targetAmount)) : null;
 
   const breakdown = await deriveActualBucket(userId, goal);
   const derived = breakdown.derived;
@@ -165,11 +195,16 @@ async function computeBuckets(userId: string, goal: Goal): Promise<BucketInfo> {
   // today must actually exist, not just an open endDate window. Once the
   // bill is end-dated or inactive, the prompt goes away even though the goal
   // stays committed.
+  // Open-ended goals have no target to reach early — a two-month horizon
+  // covers "a future occurrence exists" for the bounded case below.
+  const horizonEnd = bill?.endDate ?? goal.targetDate ?? addMonthsToIso(todayStr, 2);
   const hasFutureContribution =
     bill != null &&
     bill.isActive &&
-    generateBillOccurrences(bill, todayStr, bill.endDate ?? goal.targetDate).some((d) => d > todayStr);
+    generateBillOccurrences(bill, todayStr, horizonEnd).some((d) => d > todayStr);
   const targetReachedEarly =
+    target != null &&
+    goal.targetDate != null &&
     hasFutureContribution &&
     derived >= target - 0.005 &&
     todayStr < goal.targetDate;
@@ -177,16 +212,21 @@ async function computeBuckets(userId: string, goal: Goal): Promise<BucketInfo> {
   if (goal.goalType !== "spend") {
     return { projectedBucketAtSpendDate: null, shortfall: null, targetReachedEarly, bucketInvariant: invariant };
   }
+  // Spend goals always have a target — enforced at validation.
+  if (target == null || goal.targetDate == null) {
+    return { projectedBucketAtSpendDate: null, shortfall: null, targetReachedEarly, bucketInvariant: invariant };
+  }
+  const spendDate = goal.targetDate;
   // Scheduled contributions ≤ spend date. Use the committed bill's terms when
   // one exists; otherwise the draft goal's own schedule.
   let contribution = parseFloat(String(goal.monthlyContribution));
   let schedStart = goal.startDate;
-  let schedEnd = goal.targetDate;
+  let schedEnd = spendDate;
   let schedDay = goal.contributionDay;
   if (bill) {
     contribution = parseFloat(String(bill.amount));
     schedStart = bill.startDate ?? schedStart;
-    schedEnd = bill.endDate && bill.endDate < goal.targetDate ? bill.endDate : goal.targetDate;
+    schedEnd = bill.endDate && bill.endDate < spendDate ? bill.endDate : spendDate;
     schedDay = bill.dueDay;
   }
   const dates = scheduledContributionDates(schedStart, schedEnd, schedDay);
@@ -195,8 +235,8 @@ async function computeBuckets(userId: string, goal: Goal): Promise<BucketInfo> {
   // lowers the projection ("missed two transfers → $X short at the spend
   // date"). Draft goals have no actuals; they project the pure plan.
   const projected = goal.billId != null
-    ? projectedAtSpendDate(derived, contribution, dates, toLocalIsoDate(new Date()), goal.targetDate)
-    : Math.round((parseFloat(String(goal.alreadySaved)) + contribution * dates.filter((d) => d <= goal.targetDate).length) * 100) / 100;
+    ? projectedAtSpendDate(derived, contribution, dates, toLocalIsoDate(new Date()), spendDate)
+    : Math.round((parseFloat(String(goal.alreadySaved)) + contribution * dates.filter((d) => d <= spendDate).length) * 100) / 100;
   const shortfall = Math.max(0, Math.round((target - Math.min(projected, target)) * 100) / 100);
   return { projectedBucketAtSpendDate: projected, shortfall, targetReachedEarly, bucketInvariant: invariant };
 }
@@ -204,7 +244,7 @@ async function computeBuckets(userId: string, goal: Goal): Promise<BucketInfo> {
 function serializeGoal(goal: Goal, buckets?: BucketInfo) {
   return {
     ...goal,
-    targetAmount: parseFloat(String(goal.targetAmount)),
+    targetAmount: goal.targetAmount != null ? parseFloat(String(goal.targetAmount)) : null,
     alreadySaved: parseFloat(String(goal.alreadySaved)),
     monthlyContribution: parseFloat(String(goal.monthlyContribution)),
     actualBucket: parseFloat(String(goal.actualBucket)),
@@ -368,10 +408,12 @@ router.post("/goals", async (req, res): Promise<void> => {
   }
   const b = parsed.data;
   const core: GoalCore = {
-    targetAmount: b.targetAmount,
+    goalType: b.goalType,
+    targetAmount: b.targetAmount ?? null,
+    targetDate: b.targetDate ?? null,
+    suppliedMonthlyContribution: b.monthlyContribution ?? null,
     alreadySaved: b.alreadySaved ?? 0,
     startDate: b.startDate,
-    targetDate: b.targetDate,
     sourceAccountId: b.sourceAccountId,
     destinationAccountId: b.destinationAccountId,
     contributionDay: b.contributionDay,
@@ -387,10 +429,10 @@ router.post("/goals", async (req, res): Promise<void> => {
       userId: req.userId,
       name: b.name,
       goalType: b.goalType,
-      targetAmount: String(b.targetAmount),
+      targetAmount: core.targetAmount != null ? String(core.targetAmount) : null,
       alreadySaved: String(core.alreadySaved),
       startDate: b.startDate,
-      targetDate: b.targetDate,
+      targetDate: core.targetDate,
       sourceAccountId: b.sourceAccountId,
       destinationAccountId: b.destinationAccountId,
       contributionDay: b.contributionDay,
@@ -420,11 +462,18 @@ router.patch("/goals/:id", async (req, res): Promise<void> => {
     return;
   }
   const b = parsed.data;
+  // `!== undefined` (not ??) — an explicit null converts the goal to open-ended.
   const core: GoalCore = {
-    targetAmount: b.targetAmount ?? parseFloat(String(existing.targetAmount)),
+    goalType: b.goalType ?? existing.goalType,
+    targetAmount: b.targetAmount !== undefined
+      ? b.targetAmount
+      : existing.targetAmount != null ? parseFloat(String(existing.targetAmount)) : null,
+    targetDate: b.targetDate !== undefined ? b.targetDate : existing.targetDate,
+    suppliedMonthlyContribution: b.monthlyContribution !== undefined
+      ? b.monthlyContribution
+      : parseFloat(String(existing.monthlyContribution)) || null,
     alreadySaved: b.alreadySaved ?? parseFloat(String(existing.alreadySaved)),
     startDate: b.startDate ?? existing.startDate,
-    targetDate: b.targetDate ?? existing.targetDate,
     sourceAccountId: b.sourceAccountId ?? existing.sourceAccountId,
     destinationAccountId: b.destinationAccountId ?? existing.destinationAccountId,
     contributionDay: b.contributionDay ?? existing.contributionDay,
@@ -439,7 +488,7 @@ router.patch("/goals/:id", async (req, res): Promise<void> => {
   // that's what makes an underfunded spend goal (shortfall) representable.
   // The amount only recomputes when the target itself changes
   // (targetAmount / alreadySaved). Draft goals always recompute.
-  const amountsChanged = b.targetAmount !== undefined || b.alreadySaved !== undefined;
+  const amountsChanged = b.targetAmount !== undefined || b.alreadySaved !== undefined || b.monthlyContribution !== undefined;
   const monthlyContribution =
     existing.status === "committed" && !amountsChanged
       ? parseFloat(String(existing.monthlyContribution))
@@ -452,7 +501,7 @@ router.patch("/goals/:id", async (req, res): Promise<void> => {
       .set({
         name: b.name ?? existing.name,
         goalType: b.goalType ?? existing.goalType,
-        targetAmount: String(core.targetAmount),
+        targetAmount: core.targetAmount != null ? String(core.targetAmount) : null,
         alreadySaved: String(core.alreadySaved),
         startDate: core.startDate,
         targetDate: core.targetDate,
@@ -549,10 +598,12 @@ router.post("/goals/:id/commit", async (req, res): Promise<void> => {
   }
   // Re-validate at commit time — pool membership may have changed since draft.
   const core: GoalCore = {
-    targetAmount: parseFloat(String(goal.targetAmount)),
+    goalType: goal.goalType,
+    targetAmount: goal.targetAmount != null ? parseFloat(String(goal.targetAmount)) : null,
+    targetDate: goal.targetDate,
+    suppliedMonthlyContribution: parseFloat(String(goal.monthlyContribution)) || null,
     alreadySaved: parseFloat(String(goal.alreadySaved)),
     startDate: goal.startDate,
-    targetDate: goal.targetDate,
     sourceAccountId: goal.sourceAccountId,
     destinationAccountId: goal.destinationAccountId,
     contributionDay: goal.contributionDay,

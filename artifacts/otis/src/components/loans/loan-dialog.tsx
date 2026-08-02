@@ -36,13 +36,17 @@ import { useToast } from "@/hooks/use-toast";
 import {
   useCreateLoan,
   useUpdateLoan,
+  useListAccounts,
   getListLoansQueryKey,
   getGetLoansSummaryQueryKey,
   getGetLoanAmortizationQueryKey,
   getGetDashboardSummaryQueryKey,
   getListBillsQueryKey,
+  getGetLoanLinkSuggestionsQueryKey,
 } from "@workspace/api-client-react";
 import type { Loan } from "@workspace/api-client-react";
+
+const NO_LINK = "__none__";
 
 export const LOAN_TYPE_OPTIONS = [
   { value: "mortgage", label: "Mortgage" },
@@ -58,8 +62,11 @@ const loanSchema = z.object({
   loanName: z.string().min(2, { message: "Name must be at least 2 characters." }),
   lenderName: z.string().min(1, { message: "Please provide a lender name." }),
   loanType: z.string().min(1, { message: "Please select a loan type." }),
+  // Empty string = no linked account.
+  accountId: z.string(),
   originalAmount: z.coerce.number().positive({ message: "Enter an amount greater than 0." }),
-  currentBalance: z.coerce.number().nonnegative({ message: "Balance cannot be negative." }),
+  // Optional string so the field can be blank when an account link is chosen.
+  currentBalance: z.string(),
   interestRate: z.coerce.number().min(0, { message: "Rate cannot be negative." }),
   monthlyPayment: z.coerce.number().positive({ message: "Enter a payment greater than 0." }),
   startDate: z.string().min(1, { message: "Please select a start date." }),
@@ -72,7 +79,18 @@ const loanSchema = z.object({
 }).refine((v) => !v.startDate || !v.nextPaymentDate || v.nextPaymentDate >= v.startDate, {
   message: "Next payment date must be on or after the loan start date.",
   path: ["nextPaymentDate"],
-});
+}).refine(
+  // Mirror the server: currentBalance required unless an account is linked.
+  (v) => (v.accountId && v.accountId !== NO_LINK) || v.currentBalance.trim() !== "",
+  {
+    message: "Enter a remaining balance, or link an account to track it.",
+    path: ["currentBalance"],
+  },
+).refine(
+  // When provided, balance must be a non-negative number.
+  (v) => v.currentBalance.trim() === "" || Number(v.currentBalance) >= 0,
+  { message: "Balance cannot be negative.", path: ["currentBalance"] },
+);
 
 type LoanFormValues = z.infer<typeof loanSchema>;
 
@@ -95,6 +113,8 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
   const queryClient = useQueryClient();
   const createLoan = useCreateLoan();
   const updateLoan = useUpdateLoan();
+  const { data: accounts } = useListAccounts();
+  const liabilityAccounts = (accounts ?? []).filter((a) => !a.isAsset);
   const isEditing = !!loan;
 
   // "Custom" loan term: when the saved term isn't one of the presets (or the
@@ -107,8 +127,9 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
     loanName: loan?.loanName || "",
     lenderName: loan?.lenderName || "",
     loanType: loan?.loanType || "",
+    accountId: loan?.accountId != null ? String(loan.accountId) : "",
     originalAmount: loan?.originalAmount ?? 0,
-    currentBalance: loan?.currentBalance ?? 0,
+    currentBalance: loan?.currentBalance != null ? String(loan.currentBalance) : "",
     interestRate: loan?.interestRate ?? 0,
     monthlyPayment: loan?.monthlyPayment ?? 0,
     startDate: loan?.startDate || today(),
@@ -122,6 +143,9 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
     defaultValues: defaults(),
   });
 
+  const watchedAccountId = form.watch("accountId");
+  const isLinked = !!watchedAccountId && watchedAccountId !== NO_LINK;
+
   useEffect(() => {
     if (isOpen) {
       form.reset(defaults());
@@ -131,12 +155,23 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
   }, [isOpen, loan?.id]);
 
   function onSubmit(values: LoanFormValues) {
+    const linkedAccountId =
+      values.accountId && values.accountId !== NO_LINK ? Number(values.accountId) : null;
+    // When linked, the account owns the balance → send null. Otherwise send the
+    // entered balance (guaranteed present by the schema refinement).
+    const balance =
+      linkedAccountId != null
+        ? values.currentBalance.trim() === ""
+          ? null
+          : Number(values.currentBalance)
+        : Number(values.currentBalance);
     const data = {
       loanName: values.loanName,
       lenderName: values.lenderName,
       loanType: values.loanType,
+      accountId: linkedAccountId,
       originalAmount: values.originalAmount,
-      currentBalance: values.currentBalance,
+      currentBalance: balance,
       interestRate: values.interestRate,
       monthlyPayment: values.monthlyPayment,
       startDate: values.startDate,
@@ -149,6 +184,7 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
       queryClient.invalidateQueries({ queryKey: getGetLoansSummaryQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetLoanLinkSuggestionsQueryKey() });
       if (isEditing) {
         queryClient.invalidateQueries({ queryKey: getGetLoanAmortizationQueryKey(loan.id) });
       }
@@ -312,6 +348,36 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
                 )}
               />
             </div>
+            {liabilityAccounts.length > 0 && (
+              <FormField
+                control={form.control}
+                name="accountId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Linked Account (optional)</FormLabel>
+                    <Select
+                      onValueChange={(v) => field.onChange(v === NO_LINK ? "" : v)}
+                      value={field.value ? field.value : NO_LINK}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-loan-account">
+                          <SelectValue placeholder="No linked account" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NO_LINK}>No linked account</SelectItem>
+                        {liabilityAccounts.map((a) => (
+                          <SelectItem key={a.id} value={String(a.id)}>
+                            {a.accountName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -331,9 +397,16 @@ export function LoanDialog({ loan, trigger, open, onOpenChange }: LoanDialogProp
                 name="currentBalance"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Remaining Balance</FormLabel>
+                    <FormLabel>
+                      Remaining Balance{isLinked ? " (tracked by account)" : ""}
+                    </FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" {...field} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder={isLinked ? "Tracked by linked account" : undefined}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

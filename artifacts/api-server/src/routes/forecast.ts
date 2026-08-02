@@ -966,8 +966,13 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     const goalBillById = new Map(goalBills.map((b) => [b.id, b]));
 
     for (const goal of spendGoals) {
+      // Spend goals always have a target (enforced at validation) — open-ended
+      // goals are accumulation-only and never emit a purchase pair.
+      const spendDate = goal.targetDate;
+      const targetAmt = goal.targetAmount;
+      if (spendDate == null || targetAmt == null) continue;
       // 3e: purchase date passed and the purchase was NOT removed → completed.
-      if (goal.status === "committed" && goal.targetDate < todayStr) {
+      if (goal.status === "committed" && spendDate < todayStr) {
         await db.update(goalsTable).set({ status: "completed" }).where(eq(goalsTable.id, goal.id));
       }
       if (goalsWithIntentionalRows.has(goal.id)) continue; // removed/reconciled pair survives as-is
@@ -975,7 +980,7 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
       // even when the spend date falls just past the rolling 12-month window
       // (e.g. start 08-01 → spend next 08-01, window ends 07-31). Only far-past
       // dates (before the regeneration boundary) are skipped.
-      if (goal.targetDate < genStartStr) continue;
+      if (spendDate < genStartStr) continue;
 
       // PROJECTED bucket at the spend date (§2b/§3c): actual bucket so far +
       // contributions still scheduled in the FUTURE. The purchase keeps
@@ -985,18 +990,18 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
       const bill = goal.billId != null ? goalBillById.get(goal.billId) : undefined;
       const contribution = bill ? parseFloat(String(bill.amount)) : parseFloat(String(goal.monthlyContribution));
       const occurrences = bill
-        ? generateBillOccurrences(bill, goal.startDate, goal.targetDate)
+        ? generateBillOccurrences(bill, goal.startDate, spendDate)
         : [];
-      const target = parseFloat(String(goal.targetAmount));
+      const target = parseFloat(String(targetAmt));
       const { derived: actualSoFar } = await deriveActualBucket(userId, goal);
-      const projectedBucket = projectedAtSpendDate(actualSoFar, contribution, occurrences, todayStr, goal.targetDate);
+      const projectedBucket = projectedAtSpendDate(actualSoFar, contribution, occurrences, todayStr, spendDate);
       const funded = Math.min(projectedBucket, target);
 
       // Row B first (sortOrder 0) — the purchase is the headline line; the
       // funding transfer renders as its expandable composition.
       toInsert.push({
         userId,
-        transactionDate: goal.targetDate,
+        transactionDate: spendDate,
         description: goal.name,
         amount: String(target),
         transactionType: "expense",
@@ -1008,7 +1013,7 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
       });
       toInsert.push({
         userId,
-        transactionDate: goal.targetDate,
+        transactionDate: spendDate,
         description: `Transfer from ${goal.name}`,
         amount: String(funded),
         transactionType: "income",

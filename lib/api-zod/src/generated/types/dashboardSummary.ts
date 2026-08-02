@@ -5,6 +5,7 @@
  * Otis Financial Life Map API
  * OpenAPI spec version: 0.1.0
  */
+import type { LiabilitiesBreakdown } from './liabilitiesBreakdown';
 
 export interface DashboardSummary {
   netWorth: number;
@@ -16,4 +17,5 @@ export interface DashboardSummary {
   upcomingBillsCount: number;
   upcomingBillsTotal: number;
   billsDueThisWeek: number;
+  liabilitiesBreakdown?: LiabilitiesBreakdown;
 }

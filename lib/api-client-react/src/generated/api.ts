@@ -62,6 +62,7 @@ import type {
   ForecastedTransactionUpdate,
   GetDetectedNewBillCount200,
   GetForecastCalendarParams,
+  GetLoanLinkSuggestions200,
   Goal,
   GoalInput,
   GoalSurplus,
@@ -74,6 +75,7 @@ import type {
   Loan,
   LoanAmortization,
   LoanInput,
+  LoanLinkInput,
   LoanMutationResult,
   LoanUpdate,
   LoansSummary,
@@ -4620,6 +4622,154 @@ export const useDeleteLoan = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteLoanMutationOptions(options));
+    }
+
+export const getGetLoanLinkSuggestionsUrl = () => {
+
+
+
+
+  return `/api/loans/link-suggestions`
+}
+
+/**
+ * @summary One-time heuristic pass suggesting account links for existing loans (never auto-links)
+ */
+export const getLoanLinkSuggestions = async ( options?: RequestInit): Promise<GetLoanLinkSuggestions200> => {
+
+  return customFetch<GetLoanLinkSuggestions200>(getGetLoanLinkSuggestionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLoanLinkSuggestionsQueryKey = () => {
+    return [
+    `/api/loans/link-suggestions`
+    ] as const;
+    }
+
+
+export const getGetLoanLinkSuggestionsQueryOptions = <TData = Awaited<ReturnType<typeof getLoanLinkSuggestions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLoanLinkSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLoanLinkSuggestionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLoanLinkSuggestions>>> = ({ signal }) => getLoanLinkSuggestions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLoanLinkSuggestions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLoanLinkSuggestionsQueryResult = NonNullable<Awaited<ReturnType<typeof getLoanLinkSuggestions>>>
+export type GetLoanLinkSuggestionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary One-time heuristic pass suggesting account links for existing loans (never auto-links)
+ */
+
+export function useGetLoanLinkSuggestions<TData = Awaited<ReturnType<typeof getLoanLinkSuggestions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLoanLinkSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLoanLinkSuggestionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateLoanLinkUrl = (id: number,) => {
+
+
+
+
+  return `/api/loans/${id}/link`
+}
+
+/**
+ * @summary Link or unlink a loan to the Connected Account tracking the same debt
+ */
+export const updateLoanLink = async (id: number,
+    loanLinkInput: LoanLinkInput, options?: RequestInit): Promise<Loan> => {
+
+  return customFetch<Loan>(getUpdateLoanLinkUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(loanLinkInput)
+  }
+);}
+
+
+
+
+export const getUpdateLoanLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLoanLink>>, TError,{id: number;data: BodyType<LoanLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLoanLink>>, TError,{id: number;data: BodyType<LoanLinkInput>}, TContext> => {
+
+const mutationKey = ['updateLoanLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLoanLink>>, {id: number;data: BodyType<LoanLinkInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateLoanLink(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLoanLinkMutationResult = NonNullable<Awaited<ReturnType<typeof updateLoanLink>>>
+    export type UpdateLoanLinkMutationBody = BodyType<LoanLinkInput>
+    export type UpdateLoanLinkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Link or unlink a loan to the Connected Account tracking the same debt
+ */
+export const useUpdateLoanLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLoanLink>>, TError,{id: number;data: BodyType<LoanLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLoanLink>>,
+        TError,
+        {id: number;data: BodyType<LoanLinkInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateLoanLinkMutationOptions(options));
     }
 
 export const getGetLoanAmortizationUrl = (id: number,) => {

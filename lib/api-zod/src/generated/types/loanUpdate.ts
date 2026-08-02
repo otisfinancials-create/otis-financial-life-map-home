@@ -10,8 +10,11 @@ export interface LoanUpdate {
   loanName?: string;
   lenderName?: string;
   loanType?: string;
+  /** @nullable */
+  accountId?: number | null;
   originalAmount?: number;
-  currentBalance?: number;
+  /** @nullable */
+  currentBalance?: number | null;
   interestRate?: number;
   monthlyPayment?: number;
   startDate?: string;

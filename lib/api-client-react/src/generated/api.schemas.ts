@@ -9,6 +9,30 @@ export interface HealthStatus {
   status: string;
 }
 
+export type LiabilityItemSource = typeof LiabilityItemSource[keyof typeof LiabilityItemSource];
+
+
+export const LiabilityItemSource = {
+  account: 'account',
+  loan: 'loan',
+  manual: 'manual',
+} as const;
+
+export interface LiabilityItem {
+  name: string;
+  balance: number;
+  source: LiabilityItemSource;
+}
+
+/**
+ * Server-computed liabilities split — the single source of truth consumed by the breakdown modal. Clients must not re-derive it.
+ */
+export interface LiabilitiesBreakdown {
+  creditCards: LiabilityItem[];
+  mortgages: LiabilityItem[];
+  otherLoans: LiabilityItem[];
+}
+
 export interface DashboardSummary {
   netWorth: number;
   totalAssets: number;
@@ -19,6 +43,7 @@ export interface DashboardSummary {
   upcomingBillsCount: number;
   upcomingBillsTotal: number;
   billsDueThisWeek: number;
+  liabilitiesBreakdown?: LiabilitiesBreakdown;
 }
 
 export type BillAmountType = typeof BillAmountType[keyof typeof BillAmountType];
@@ -262,10 +287,18 @@ export interface Goal {
   id: number;
   name: string;
   goalType: GoalGoalType;
-  targetAmount: number;
+  /**
+     * NULL = open-ended goal (no target to measure against).
+     * @nullable
+     */
+  targetAmount: number | null;
   alreadySaved: number;
   startDate: string;
-  targetDate: string;
+  /**
+     * NULL = open-ended goal; the contribution bill has no end date.
+     * @nullable
+     */
+  targetDate: string | null;
   sourceAccountId: number;
   destinationAccountId: number;
   contributionDay: number;
@@ -308,10 +341,20 @@ export const GoalInputGoalType = {
 export interface GoalInput {
   name: string;
   goalType: GoalInputGoalType;
-  targetAmount: number;
+  /**
+     * Omit/null (accumulation only) for an open-ended goal — monthlyContribution must then be supplied.
+     * @nullable
+     */
+  targetAmount?: number | null;
   alreadySaved?: number;
   startDate: string;
-  targetDate: string;
+  /** @nullable */
+  targetDate?: string | null;
+  /**
+     * Only for open-ended goals — supplied directly instead of computed.
+     * @nullable
+     */
+  monthlyContribution?: number | null;
   sourceAccountId: number;
   destinationAccountId: number;
   /**
@@ -362,10 +405,17 @@ export const GoalUpdateGoalType = {
 export interface GoalUpdate {
   name?: string;
   goalType?: GoalUpdateGoalType;
-  targetAmount?: number;
+  /** @nullable */
+  targetAmount?: number | null;
   alreadySaved?: number;
   startDate?: string;
-  targetDate?: string;
+  /** @nullable */
+  targetDate?: string | null;
+  /**
+     * Only for open-ended goals — supplied directly instead of computed.
+     * @nullable
+     */
+  monthlyContribution?: number | null;
   sourceAccountId?: number;
   destinationAccountId?: number;
   /**
@@ -1066,8 +1116,17 @@ export interface Loan {
   loanName: string;
   lenderName: string;
   loanType: string;
+  /**
+     * Connected Account tracking the same debt. When set, the account owns the balance and this loan contributes only the schedule.
+     * @nullable
+     */
+  accountId: number | null;
   originalAmount: number;
-  currentBalance: number;
+  /**
+     * NULL only when accountId is set (the account owns the balance).
+     * @nullable
+     */
+  currentBalance: number | null;
   interestRate: number;
   monthlyPayment: number;
   startDate: string;
@@ -1092,8 +1151,14 @@ export interface LoanInput {
   loanName: string;
   lenderName: string;
   loanType: string;
+  /** @nullable */
+  accountId?: number | null;
   originalAmount: number;
-  currentBalance: number;
+  /**
+     * Required unless accountId is set.
+     * @nullable
+     */
+  currentBalance?: number | null;
   interestRate: number;
   monthlyPayment: number;
   startDate: string;
@@ -1107,8 +1172,11 @@ export interface LoanUpdate {
   loanName?: string;
   lenderName?: string;
   loanType?: string;
+  /** @nullable */
+  accountId?: number | null;
   originalAmount?: number;
-  currentBalance?: number;
+  /** @nullable */
+  currentBalance?: number | null;
   interestRate?: number;
   monthlyPayment?: number;
   startDate?: string;
@@ -1116,6 +1184,19 @@ export interface LoanUpdate {
   nextPaymentDate?: string;
   /** @nullable */
   notes?: string | null;
+}
+
+export interface LoanLinkInput {
+  /**
+     * Liability account id to link, or null to unlink.
+     * @nullable
+     */
+  accountId: number | null;
+  /**
+     * Only meaningful when unlinking — the balance the loan takes back. Defaults to the linked account's current balance.
+     * @nullable
+     */
+  currentBalance?: number | null;
 }
 
 export interface LoansSummary {
@@ -1851,6 +1932,18 @@ dueStart?: string;
  * Include only cycles with dueDate <= this YYYY-MM-DD
  */
 dueEnd?: string;
+};
+
+export type GetLoanLinkSuggestions200SuggestionsItem = {
+  loanId: number;
+  loanName: string;
+  accountId: number;
+  accountName: string;
+  reason: string;
+};
+
+export type GetLoanLinkSuggestions200 = {
+  suggestions: GetLoanLinkSuggestions200SuggestionsItem[];
 };
 
 export type ListForecastParams = {

@@ -10,10 +10,17 @@ import type { GoalUpdateGoalType } from './goalUpdateGoalType';
 export interface GoalUpdate {
   name?: string;
   goalType?: GoalUpdateGoalType;
-  targetAmount?: number;
+  /** @nullable */
+  targetAmount?: number | null;
   alreadySaved?: number;
   startDate?: string;
-  targetDate?: string;
+  /** @nullable */
+  targetDate?: string | null;
+  /**
+     * Only for open-ended goals — supplied directly instead of computed.
+     * @nullable
+     */
+  monthlyContribution?: number | null;
   sourceAccountId?: number;
   destinationAccountId?: number;
   /**

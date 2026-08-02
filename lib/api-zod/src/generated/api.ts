@@ -28,7 +28,24 @@ export const GetDashboardSummaryResponse = zod.object({
   "monthlyCashFlow": zod.number(),
   "upcomingBillsCount": zod.number(),
   "upcomingBillsTotal": zod.number(),
-  "billsDueThisWeek": zod.number()
+  "billsDueThisWeek": zod.number(),
+  "liabilitiesBreakdown": zod.object({
+  "creditCards": zod.array(zod.object({
+  "name": zod.string(),
+  "balance": zod.number(),
+  "source": zod.enum(['account', 'loan', 'manual'])
+})),
+  "mortgages": zod.array(zod.object({
+  "name": zod.string(),
+  "balance": zod.number(),
+  "source": zod.enum(['account', 'loan', 'manual'])
+})),
+  "otherLoans": zod.array(zod.object({
+  "name": zod.string(),
+  "balance": zod.number(),
+  "source": zod.enum(['account', 'loan', 'manual'])
+}))
+}).optional().describe('Server-computed liabilities split — the single source of truth consumed by the breakdown modal. Clients must not re-derive it.')
 })
 
 
@@ -226,10 +243,10 @@ export const ListGoalsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "goalType": zod.enum(['spend', 'accumulation']),
-  "targetAmount": zod.number(),
+  "targetAmount": zod.number().nullable().describe('NULL = open-ended goal (no target to measure against).'),
   "alreadySaved": zod.number(),
   "startDate": zod.string(),
-  "targetDate": zod.string(),
+  "targetDate": zod.string().nullable().describe('NULL = open-ended goal; the contribution bill has no end date.'),
   "sourceAccountId": zod.number(),
   "destinationAccountId": zod.number(),
   "contributionDay": zod.number(),
@@ -262,10 +279,11 @@ export const createGoalBodyContributionDayMax = 31;
 export const CreateGoalBody = zod.object({
   "name": zod.string(),
   "goalType": zod.enum(['spend', 'accumulation']),
-  "targetAmount": zod.number(),
+  "targetAmount": zod.number().nullish().describe('Omit\/null (accumulation only) for an open-ended goal — monthlyContribution must then be supplied.'),
   "alreadySaved": zod.number().optional(),
   "startDate": zod.string(),
-  "targetDate": zod.string(),
+  "targetDate": zod.string().nullish(),
+  "monthlyContribution": zod.number().nullish().describe('Only for open-ended goals — supplied directly instead of computed.'),
   "sourceAccountId": zod.number(),
   "destinationAccountId": zod.number(),
   "contributionDay": zod.number().min(1).max(createGoalBodyContributionDayMax)
@@ -275,10 +293,10 @@ export const CreateGoalResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "goalType": zod.enum(['spend', 'accumulation']),
-  "targetAmount": zod.number(),
+  "targetAmount": zod.number().nullable().describe('NULL = open-ended goal (no target to measure against).'),
   "alreadySaved": zod.number(),
   "startDate": zod.string(),
-  "targetDate": zod.string(),
+  "targetDate": zod.string().nullable().describe('NULL = open-ended goal; the contribution bill has no end date.'),
   "sourceAccountId": zod.number(),
   "destinationAccountId": zod.number(),
   "contributionDay": zod.number(),
@@ -337,10 +355,11 @@ export const updateGoalBodyContributionDayMax = 31;
 export const UpdateGoalBody = zod.object({
   "name": zod.string().optional(),
   "goalType": zod.enum(['spend', 'accumulation']).optional(),
-  "targetAmount": zod.number().optional(),
+  "targetAmount": zod.number().nullish(),
   "alreadySaved": zod.number().optional(),
   "startDate": zod.string().optional(),
-  "targetDate": zod.string().optional(),
+  "targetDate": zod.string().nullish(),
+  "monthlyContribution": zod.number().nullish().describe('Only for open-ended goals — supplied directly instead of computed.'),
   "sourceAccountId": zod.number().optional(),
   "destinationAccountId": zod.number().optional(),
   "contributionDay": zod.number().min(1).max(updateGoalBodyContributionDayMax).optional(),
@@ -351,10 +370,10 @@ export const UpdateGoalResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "goalType": zod.enum(['spend', 'accumulation']),
-  "targetAmount": zod.number(),
+  "targetAmount": zod.number().nullable().describe('NULL = open-ended goal (no target to measure against).'),
   "alreadySaved": zod.number(),
   "startDate": zod.string(),
-  "targetDate": zod.string(),
+  "targetDate": zod.string().nullable().describe('NULL = open-ended goal; the contribution bill has no end date.'),
   "sourceAccountId": zod.number(),
   "destinationAccountId": zod.number(),
   "contributionDay": zod.number(),
@@ -397,10 +416,10 @@ export const CommitGoalResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "goalType": zod.enum(['spend', 'accumulation']),
-  "targetAmount": zod.number(),
+  "targetAmount": zod.number().nullable().describe('NULL = open-ended goal (no target to measure against).'),
   "alreadySaved": zod.number(),
   "startDate": zod.string(),
-  "targetDate": zod.string(),
+  "targetDate": zod.string().nullable().describe('NULL = open-ended goal; the contribution bill has no end date.'),
   "sourceAccountId": zod.number(),
   "destinationAccountId": zod.number(),
   "contributionDay": zod.number(),
@@ -433,10 +452,10 @@ export const UncommitGoalResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "goalType": zod.enum(['spend', 'accumulation']),
-  "targetAmount": zod.number(),
+  "targetAmount": zod.number().nullable().describe('NULL = open-ended goal (no target to measure against).'),
   "alreadySaved": zod.number(),
   "startDate": zod.string(),
-  "targetDate": zod.string(),
+  "targetDate": zod.string().nullable().describe('NULL = open-ended goal; the contribution bill has no end date.'),
   "sourceAccountId": zod.number(),
   "destinationAccountId": zod.number(),
   "contributionDay": zod.number(),
@@ -469,10 +488,10 @@ export const StopGoalContributionsResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "goalType": zod.enum(['spend', 'accumulation']),
-  "targetAmount": zod.number(),
+  "targetAmount": zod.number().nullable().describe('NULL = open-ended goal (no target to measure against).'),
   "alreadySaved": zod.number(),
   "startDate": zod.string(),
-  "targetDate": zod.string(),
+  "targetDate": zod.string().nullable().describe('NULL = open-ended goal; the contribution bill has no end date.'),
   "sourceAccountId": zod.number(),
   "destinationAccountId": zod.number(),
   "contributionDay": zod.number(),
@@ -505,10 +524,10 @@ export const RemoveGoalPurchaseResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "goalType": zod.enum(['spend', 'accumulation']),
-  "targetAmount": zod.number(),
+  "targetAmount": zod.number().nullable().describe('NULL = open-ended goal (no target to measure against).'),
   "alreadySaved": zod.number(),
   "startDate": zod.string(),
-  "targetDate": zod.string(),
+  "targetDate": zod.string().nullable().describe('NULL = open-ended goal; the contribution bill has no end date.'),
   "sourceAccountId": zod.number(),
   "destinationAccountId": zod.number(),
   "contributionDay": zod.number(),
@@ -1698,8 +1717,9 @@ export const ListLoansResponseItem = zod.object({
   "loanName": zod.string(),
   "lenderName": zod.string(),
   "loanType": zod.string(),
+  "accountId": zod.number().nullable().describe('Connected Account tracking the same debt. When set, the account owns the balance and this loan contributes only the schedule.'),
   "originalAmount": zod.number(),
-  "currentBalance": zod.number(),
+  "currentBalance": zod.number().nullable().describe('NULL only when accountId is set (the account owns the balance).'),
   "interestRate": zod.number(),
   "monthlyPayment": zod.number(),
   "startDate": zod.string(),
@@ -1719,8 +1739,9 @@ export const CreateLoanBody = zod.object({
   "loanName": zod.string(),
   "lenderName": zod.string(),
   "loanType": zod.string(),
+  "accountId": zod.number().nullish(),
   "originalAmount": zod.number(),
-  "currentBalance": zod.number(),
+  "currentBalance": zod.number().nullish().describe('Required unless accountId is set.'),
   "interestRate": zod.number(),
   "monthlyPayment": zod.number(),
   "startDate": zod.string(),
@@ -1734,8 +1755,9 @@ export const CreateLoanResponse = zod.object({
   "loanName": zod.string(),
   "lenderName": zod.string(),
   "loanType": zod.string(),
+  "accountId": zod.number().nullable().describe('Connected Account tracking the same debt. When set, the account owns the balance and this loan contributes only the schedule.'),
   "originalAmount": zod.number(),
-  "currentBalance": zod.number(),
+  "currentBalance": zod.number().nullable().describe('NULL only when accountId is set (the account owns the balance).'),
   "interestRate": zod.number(),
   "monthlyPayment": zod.number(),
   "startDate": zod.string(),
@@ -1776,8 +1798,9 @@ export const GetLoanResponse = zod.object({
   "loanName": zod.string(),
   "lenderName": zod.string(),
   "loanType": zod.string(),
+  "accountId": zod.number().nullable().describe('Connected Account tracking the same debt. When set, the account owns the balance and this loan contributes only the schedule.'),
   "originalAmount": zod.number(),
-  "currentBalance": zod.number(),
+  "currentBalance": zod.number().nullable().describe('NULL only when accountId is set (the account owns the balance).'),
   "interestRate": zod.number(),
   "monthlyPayment": zod.number(),
   "startDate": zod.string(),
@@ -1800,8 +1823,9 @@ export const UpdateLoanBody = zod.object({
   "loanName": zod.string().optional(),
   "lenderName": zod.string().optional(),
   "loanType": zod.string().optional(),
+  "accountId": zod.number().nullish(),
   "originalAmount": zod.number().optional(),
-  "currentBalance": zod.number().optional(),
+  "currentBalance": zod.number().nullish(),
   "interestRate": zod.number().optional(),
   "monthlyPayment": zod.number().optional(),
   "startDate": zod.string().optional(),
@@ -1815,8 +1839,9 @@ export const UpdateLoanResponse = zod.object({
   "loanName": zod.string(),
   "lenderName": zod.string(),
   "loanType": zod.string(),
+  "accountId": zod.number().nullable().describe('Connected Account tracking the same debt. When set, the account owns the balance and this loan contributes only the schedule.'),
   "originalAmount": zod.number(),
-  "currentBalance": zod.number(),
+  "currentBalance": zod.number().nullable().describe('NULL only when accountId is set (the account owns the balance).'),
   "interestRate": zod.number(),
   "monthlyPayment": zod.number(),
   "startDate": zod.string(),
@@ -1841,6 +1866,51 @@ export const DeleteLoanParams = zod.object({
 })
 
 export const DeleteLoanResponse = zod.void()
+
+
+/**
+ * @summary One-time heuristic pass suggesting account links for existing loans (never auto-links)
+ */
+export const GetLoanLinkSuggestionsResponse = zod.object({
+  "suggestions": zod.array(zod.object({
+  "loanId": zod.number(),
+  "loanName": zod.string(),
+  "accountId": zod.number(),
+  "accountName": zod.string(),
+  "reason": zod.string()
+}))
+})
+
+
+/**
+ * @summary Link or unlink a loan to the Connected Account tracking the same debt
+ */
+export const UpdateLoanLinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateLoanLinkBody = zod.object({
+  "accountId": zod.number().nullable().describe('Liability account id to link, or null to unlink.'),
+  "currentBalance": zod.number().nullish().describe('Only meaningful when unlinking — the balance the loan takes back. Defaults to the linked account\'s current balance.')
+})
+
+export const UpdateLoanLinkResponse = zod.object({
+  "id": zod.number(),
+  "loanName": zod.string(),
+  "lenderName": zod.string(),
+  "loanType": zod.string(),
+  "accountId": zod.number().nullable().describe('Connected Account tracking the same debt. When set, the account owns the balance and this loan contributes only the schedule.'),
+  "originalAmount": zod.number(),
+  "currentBalance": zod.number().nullable().describe('NULL only when accountId is set (the account owns the balance).'),
+  "interestRate": zod.number(),
+  "monthlyPayment": zod.number(),
+  "startDate": zod.string(),
+  "termMonths": zod.number(),
+  "nextPaymentDate": zod.string(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
 
 
 /**

@@ -10,8 +10,14 @@ export interface LoanInput {
   loanName: string;
   lenderName: string;
   loanType: string;
+  /** @nullable */
+  accountId?: number | null;
   originalAmount: number;
-  currentBalance: number;
+  /**
+     * Required unless accountId is set.
+     * @nullable
+     */
+  currentBalance?: number | null;
   interestRate: number;
   monthlyPayment: number;
   startDate: string;

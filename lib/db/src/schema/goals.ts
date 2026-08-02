@@ -18,12 +18,15 @@ export const goalsTable = pgTable("goals", {
   name: text("name").notNull(),
   // 'spend' | 'accumulation' — v1 delivers accumulation end-to-end.
   goalType: text("goal_type").notNull(),
-  targetAmount: numeric("target_amount", { precision: 12, scale: 2 }).notNull(),
+  // NULL = open-ended accumulation goal: no target to measure against, the
+  // user supplies monthlyContribution directly and it runs until stopped.
+  targetAmount: numeric("target_amount", { precision: 12, scale: 2 }),
   // Seeds progress only. Never creates a forecast row: that money left
   // checking in the past and is already reflected in the anchored balance.
   alreadySaved: numeric("already_saved", { precision: 12, scale: 2 }).notNull().default("0"),
   startDate: date("start_date", { mode: "string" }).notNull(),
-  targetDate: date("target_date", { mode: "string" }).notNull(),
+  // NULL for open-ended goals — the contribution bill gets NO end date.
+  targetDate: date("target_date", { mode: "string" }),
   // Checking account the money leaves from (must be in the forecast pool).
   sourceAccountId: integer("source_account_id")
     .notNull()

@@ -30,7 +30,7 @@ function addMonths(iso: string, months: number): string {
 // Mirrors the server-side amortization engine so the extra-payment simulator can
 // recompute payoff scenarios instantly in the browser without an extra request.
 export function computeAmortization(loan: Loan, extraPayment = 0): AmortizationResult {
-  const balance = loan.currentBalance;
+  const balance = loan.currentBalance ?? 0;
   const monthlyPayment = loan.monthlyPayment + extraPayment;
   const monthlyRate = loan.interestRate / 100 / 12;
 

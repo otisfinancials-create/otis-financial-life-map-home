@@ -12,7 +12,8 @@ import {
 } from "@workspace/db";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { SendOtisChatBody, RunOtisScenarioBody, RunOtisScenarioResponse } from "@workspace/api-zod";
-import { dedupedLoans, loanMatchesBill } from "../lib/financial-dedup";
+import { loanMatchesBill } from "../lib/financial-dedup";
+import { computeNetWorth } from "../services/net-worth";
 import { getOtisCachedResponse, setOtisCachedResponse, type OtisCacheKey } from "../lib/otis-cache";
 
 const MODEL = "claude-sonnet-4-6";
@@ -66,20 +67,9 @@ async function buildFinancialContext(userId: string): Promise<FinancialContext> 
     ]);
 
   const settings = settingsRows[0];
-  const holdings = [...accounts, ...assets];
-  const totalAssets = holdings
-    .filter((h) => h.isAsset)
-    .reduce((s, h) => s + num(h.currentBalance), 0);
-  const liabilityAccounts = accounts.filter((a) => !a.isAsset);
-  const accountLiabilities = holdings
-    .filter((h) => !h.isAsset)
-    .reduce((s, h) => s + Math.abs(num(h.currentBalance)), 0);
-  // Loans already represented as a liability Connected Account are not
-  // double-counted — the account balance is the source of truth.
-  const uniqueLoans = dedupedLoans(loans, liabilityAccounts);
-  const totalLiabilities =
-    accountLiabilities + uniqueLoans.reduce((s, l) => s + Math.abs(num(l.currentBalance)), 0);
-  const netWorth = totalAssets - totalLiabilities;
+  // Single shared net-worth computation (services/net-worth.ts) — the AI
+  // context must quote the same numbers the dashboard shows.
+  const { totalAssets, totalLiabilities, netWorth } = await computeNetWorth(userId);
 
   const monthlyIncome = paySchedules.reduce(
     (s, p) => s + num(p.amount) * (FREQ_TO_MONTHLY[p.frequency.toLowerCase()] ?? 1),

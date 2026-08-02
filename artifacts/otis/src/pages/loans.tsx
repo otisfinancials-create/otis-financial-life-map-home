@@ -11,6 +11,10 @@ import {
   Pencil,
   Trash2,
   ChevronDown,
+  Link2,
+  Link2Off,
+  Lightbulb,
+  X,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -19,11 +23,16 @@ import {
   useListLoans,
   useGetLoansSummary,
   useDeleteLoan,
+  useListAccounts,
+  useGetLoanLinkSuggestions,
+  useUpdateLoanLink,
   getListLoansQueryKey,
   getGetLoansSummaryQueryKey,
   getGetDashboardSummaryQueryKey,
+  getGetLoanLinkSuggestionsQueryKey,
+  getListAccountsQueryKey,
 } from "@workspace/api-client-react";
-import type { Loan } from "@workspace/api-client-react";
+import type { Loan, Account } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +45,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoanDialog } from "@/components/loans/loan-dialog";
 import { AmortizationSchedule } from "@/components/loans/amortization-schedule";
 import { computeAmortization } from "@/components/loans/amortization";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,12 +104,54 @@ export default function Loans() {
   const [loanToDelete, setLoanToDelete] = useState<Loan | undefined>(undefined);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
+  // Suggestions the user has dismissed this session (keyed by loanId).
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Record<number, boolean>>({});
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
   const { data: loans, isLoading: isLoadingLoans } = useListLoans();
   const { data: summary, isLoading: isLoadingSummary } = useGetLoansSummary();
+  const { data: accounts } = useListAccounts();
+  const { data: suggestionsData } = useGetLoanLinkSuggestions();
   const deleteLoan = useDeleteLoan();
+  const updateLoanLink = useUpdateLoanLink();
+
+  const liabilityAccounts = (accounts ?? []).filter((a) => !a.isAsset);
+  const accountsById = new Map<number, Account>(
+    (accounts ?? []).map((a) => [a.id, a]),
+  );
+  const suggestionByLoanId = new Map(
+    (suggestionsData?.suggestions ?? []).map((s) => [s.loanId, s]),
+  );
+
+  const invalidateLink = () => {
+    queryClient.invalidateQueries({ queryKey: getListLoansQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetLoansSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetLoanLinkSuggestionsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
+  };
+
+  const handleLink = (loan: Loan, accountId: number | null) => {
+    updateLoanLink.mutate(
+      { id: loan.id, data: { accountId } },
+      {
+        onSuccess: () => {
+          invalidateLink();
+          toast({
+            title: accountId === null ? "Loan unlinked" : "Loan linked to account",
+          });
+        },
+        onError: () => {
+          toast({
+            title: accountId === null ? "Failed to unlink loan" : "Failed to link loan",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
 
   const handleEdit = (loan: Loan) => {
     setLoanToEdit(loan);
@@ -215,12 +273,24 @@ export default function Loans() {
       ) : loans && loans.length > 0 ? (
         <div className="space-y-4">
           {loans.map((loan) => {
-            const paidOff = loan.originalAmount - loan.currentBalance;
+            const linkedAccount =
+              loan.accountId != null ? accountsById.get(loan.accountId) : undefined;
+            const isLinked = loan.accountId != null;
+            // Linked loans have their balance owned by the account; fall back to
+            // the account balance for display when the loan's own balance is null.
+            const displayBalance =
+              loan.currentBalance ??
+              (linkedAccount ? Math.abs(linkedAccount.currentBalance) : null);
+            const paidOff = loan.originalAmount - (displayBalance ?? 0);
             const pctPaid = loan.originalAmount > 0
               ? Math.min(100, Math.max(0, (paidOff / loan.originalAmount) * 100))
               : 0;
             const isExpanded = expandedId === loan.id;
-            const payoffDate = computeAmortization(loan).payoffDate;
+            // Linked loans amortize from the ACCOUNT's balance (server parity).
+            const payoffDate = computeAmortization({ ...loan, currentBalance: displayBalance }).payoffDate;
+            const suggestion = suggestionByLoanId.get(loan.id);
+            const showSuggestion =
+              !isLinked && !!suggestion && !dismissedSuggestions[loan.id];
             return (
               <Card key={loan.id} className="bg-card border-border overflow-hidden rounded-xl">
                 <CardContent className="p-5">
@@ -268,7 +338,17 @@ export default function Loans() {
                   <div className="mt-5">
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-mono font-medium text-foreground">
-                        <FormatCurrency amount={loan.currentBalance} /> remaining
+                        {displayBalance === null ? (
+                          <span className="text-muted-foreground font-sans font-normal">
+                            {linkedAccount
+                              ? `Tracked by ${linkedAccount.accountName}`
+                              : "Tracked by linked account"}
+                          </span>
+                        ) : (
+                          <>
+                            <FormatCurrency amount={displayBalance} /> remaining
+                          </>
+                        )}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         of <FormatCurrency amount={loan.originalAmount} /> original
@@ -279,6 +359,99 @@ export default function Loans() {
                       {pctPaid.toFixed(1)}% paid off
                     </div>
                   </div>
+
+                  {/* Link status / controls */}
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    {isLinked ? (
+                      <>
+                        <Badge variant="secondary" className="gap-1 font-normal">
+                          <Link2 className="h-3 w-3" />
+                          Linked to {linkedAccount?.accountName ?? "account"}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={updateLoanLink.isPending}
+                          onClick={() => handleLink(loan, null)}
+                          data-testid={`button-unlink-loan-${loan.id}`}
+                        >
+                          <Link2Off className="mr-1 h-3.5 w-3.5" />
+                          Unlink
+                        </Button>
+                      </>
+                    ) : liabilityAccounts.length > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Link to account:</span>
+                        <Select
+                          value=""
+                          onValueChange={(v) => handleLink(loan, Number(v))}
+                          disabled={updateLoanLink.isPending}
+                        >
+                          <SelectTrigger
+                            className="h-8 w-[200px] text-xs"
+                            data-testid={`button-link-loan-${loan.id}`}
+                          >
+                            <SelectValue placeholder="Select an account" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {liabilityAccounts.map((a) => (
+                              <SelectItem key={a.id} value={String(a.id)}>
+                                {a.accountName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        No liability accounts to link.
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Link suggestion prompt */}
+                  {showSuggestion && suggestion && (
+                    <div
+                      className="mt-3 flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between"
+                      data-testid={`suggestion-loan-${loan.id}`}
+                    >
+                      <div className="flex items-start gap-2 min-w-0">
+                        <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <p className="text-sm text-foreground">
+                          Looks like this loan matches account{" "}
+                          <span className="font-semibold">{suggestion.accountName}</span> — link it?
+                          {suggestion.reason ? (
+                            <span className="block text-xs text-muted-foreground mt-0.5">
+                              {suggestion.reason}
+                            </span>
+                          ) : null}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          className="h-7 px-3 text-xs"
+                          disabled={updateLoanLink.isPending}
+                          onClick={() => handleLink(loan, suggestion.accountId)}
+                          data-testid={`button-confirm-suggestion-loan-${loan.id}`}
+                        >
+                          Confirm
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() =>
+                            setDismissedSuggestions((prev) => ({ ...prev, [loan.id]: true }))
+                          }
+                          data-testid={`button-dismiss-suggestion-loan-${loan.id}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Stat row */}
                   <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">

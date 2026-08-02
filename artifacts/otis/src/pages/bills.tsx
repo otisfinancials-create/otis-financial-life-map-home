@@ -279,8 +279,6 @@ export default function Bills() {
 
       {view === "budget" && <BudgetTab />}
 
-      {view === "bills" && <CardCompositionSection />}
-
       {view === "bills" && !isLoading && (
         <BillsAnalytics
           bills={bills ?? []}
@@ -288,6 +286,8 @@ export default function Bills() {
           onSelectCategory={setSelectedCategory}
         />
       )}
+
+      {view === "bills" && <CardCompositionSection />}
 
       {view === "bills" && (
       <div className="flex flex-col lg:flex-row gap-4 items-start">
