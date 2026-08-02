@@ -21,6 +21,7 @@ import {
 import { plaidClient, mapPlaidAccountType, cleanPlaidName } from "../lib/plaid";
 import { syncAllItemsForUser } from "../services/plaid-sync";
 import { removePlaidItem, PlaidRemovalError } from "../services/plaid-item-removal";
+import { syncLiabilitiesForItem } from "../services/plaid-liabilities";
 
 const router: IRouter = Router();
 
@@ -165,6 +166,7 @@ router.post("/plaid/exchange-token", async (req, res): Promise<void> => {
         currentBalance: String(acct.balances.current ?? 0),
         availableBalance: acct.balances.available != null ? String(acct.balances.available) : null,
         accountNumberLast4: acct.mask ?? null,
+        plaidSubtype: acct.subtype ?? null,
         plaidAccountId: acct.account_id,
         plaidItemId: item.id,
         lastSyncedAt: now,
@@ -194,6 +196,12 @@ router.post("/plaid/exchange-token", async (req, res): Promise<void> => {
         if (inserted) accountsAdded++;
       }
     }
+
+    // Liabilities enrichment (best-effort inside the service — a bank that
+    // doesn't support the product must never fail the link): store card
+    // minimums/statement data and auto-configure unconfigured cards' cycle
+    // days so they enter the forecast without manual setup.
+    await syncLiabilitiesForItem({ id: item.id, userId: req.userId, accessToken });
 
     // Return this item's accounts so the client can show the connect-time
     // "Which accounts do you pay bills from?" selection step.
@@ -339,6 +347,7 @@ router.post("/plaid/items/:id/refresh-accounts", async (req, res): Promise<void>
         currentBalance: String(acct.balances.current ?? 0),
         availableBalance: acct.balances.available != null ? String(acct.balances.available) : null,
         accountNumberLast4: acct.mask ?? null,
+        plaidSubtype: acct.subtype ?? null,
         plaidAccountId: acct.account_id,
         plaidItemId: item.id,
         lastSyncedAt: now,
@@ -412,6 +421,10 @@ router.post("/plaid/items/:id/refresh-accounts", async (req, res): Promise<void>
           .from(accountsTable)
           .where(and(eq(accountsTable.userId, req.userId), inArray(accountsTable.id, newAccountIds)))
       : [];
+
+    // Liabilities enrichment for any newly added cards (best-effort inside
+    // the service; never fails the reconciliation).
+    await syncLiabilitiesForItem(item);
 
     req.log.info(
       { plaidItemRow: item.id, accountsAdded: newAccountIds.length, accountsUnlinked },

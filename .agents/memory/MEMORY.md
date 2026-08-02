@@ -1,8 +1,12 @@
+- [PWA-only architecture](pwa-only-architecture.md) — mobile = installed otis web PWA; otis-mobile deprecated; SW precaches shell only, never /api.
 - [Light mode theme](light-mode-theme.md) — app switched from dark to light; :root is light, .dark retains dark values for future toggle
 - [Otis light/dark theming](otis-theming.md) — class-based dark via @custom-variant; a stray `dark` class on Shell.tsx made the authenticated app dark while the sign-in page stayed light.
 - [Git ops from the agent](git-write-block.md) — local object writes (commit, tag) are blocked, but `git push` works; GitHub rejects pushes of repos with CI files unless token has `workflow` scope; create tags via the REST API.
 - [Clerk dev iframe 401s](clerk-dev-iframe-cookies.md) — preview-pane iframe blocks Clerk session cookie; signed-in app 401s with sessionStatus null. Fix: open app in own tab. Not data loss.
 - [E2E Clerk testing](e2e-clerk-testing.md) — runTest needs explicit programmatic sign-in step or Turnstile blocks it; test user has no data, create fixtures first; don't test mid-edit (HMR false failures).
+- [Upkeep bills](upkeep-bills.md) — upkeep items ARE bills (billKind='upkeep'); life events retired; merchant-link tier-1 detection dedupe; isVariable defaults true.
+- [Cycle membership occurrence-based](cycle-membership-occurrence-based.md) — bills join cycles only when a due date falls in the window; monthly special-cased to exactly 1.
+- [Bill frequency steppers](bill-frequency-steppers.md) — generateBillOccurrences is the authoritative bill cadence stepper; unknown frequency throws, never silently monthly; keep pricing/preview/validation in lockstep.
 - [Forecast date stepping](forecast-date-stepping.md) — recurring/spread generation must clamp month day (addMonthsIso) and compare YYYY-MM-DD strings, not Date objects.
 - [Life events timing normalization](life-events-timing-normalization.md) — server clears non-applicable date/frequency fields on create+update; PATCH merges existing then normalizes on final timingType.
 - [Artifact root routing swap](artifact-root-routing-swap.md) — to serve a different web artifact at `/`, swap previewPath+paths+BASE_PATH in both artifact.tomls; otis survives moving to /app/ (root-relative API + wouter base).
@@ -10,11 +14,16 @@
 - [Static HTML artifact](static-html-artifact.md) — to serve a plain HTML page, use react-vite but strip src/ + trim deps/tsconfig or typecheck fails; use relative asset hrefs under the mount path.
 - [Loans amortization parity](loans-amortization-parity.md) — amortization engine duplicated on server (routes/loans.ts) and client (components/loans/amortization.ts); change both in lockstep.
 - [Codegen transient reload errors](codegen-transient-errors.md) — Orval codegen briefly deletes generated files; ignore Vite/Metro reload errors in that window, restart Expo to clear Metro's cached failure.
+- [Forecast-accounts scoped save](forecast-accounts-scoped-save.md) — selection saves write only presented account ids (selected ⊆ presented, else 400); item-wide writes wiped existing selections.
+- [Forecast account boundary](forecast-account-boundary.md) — getForecastAccounts is the only membership decider; asset-movement transfers step balance but never count as spending; backfills live in lib/db/src/backfill.ts.
 - [Forecast cycle payments](forecast-cycle-payments.md) — derived rows need PATCH guards + survivor dedupe by source id, or mark-paid + regen double-counts; open cycles project $0 until processed.
 - [Forecast calendar view](forecast-calendar-view.md) — hybrid month calendar: server `today` is the actuals/plan seam; override days must step with forecast net, not plaid net.
 - [Forecast balance anchoring](forecast-balance-anchoring.md) — sync-adjustment rows must skip the past back-fill and survive regenerate/delete, or rebaselining silently breaks.
 - [pnpm @types/react hoist](pnpm-types-react-hoist.md) — duplicate @types/react (Expo pin vs catalog) breaks web typecheck via pnpm hidden hoist; align all pins to catalog:.
 - [Mobile AI tab dead endpoints](mobile-ai-dead-endpoints.md) — mobile ai.tsx targets /api/anthropic/* routes that never existed; typecheck patched with local hooks, real fix must retarget /api/otis SSE with auth plumbing.
+- [Plaid sandbox update-mode testing](plaid-sandbox-update-mode-testing.md) — Link selection pane is locked in sandbox; verify reconciliation server-side; user_custom regenerates all account IDs per login.
+- [Plaid Liabilities auto-config](plaid-liabilities-autoconfig.md) — best-effort card data sync; fills cycle days only when both NULL; statement-seam row has ccBasis set, legacy parents NULL.
+- [Plaid update mode](plaid-update-mode.md) — add accounts to an existing item: never exchange the token; reconcile by plaid_account_id under the (user, plaid_account_id) unique key; new-account history flows through the existing cursor.
 - [Plaid webhook verification](plaid-webhook-verification.md) — public webhooks must verify the Plaid JWT (raw-body sha256) and per-item debounce sync, or they are a DoS vector.
 - [Plaid initial sync historical wait](plaid-initial-sync-historical.md) — never persist an initial cursor before HISTORICAL_UPDATE_COMPLETE, or the item silently skips all history; fix by nulling the cursor.
 - [Plaid transactionsSync accounts array](plaid-sync-accounts-array.md) — accounts[] is empty on caught-up runs; balance snapshots only accrue when a sync has new transactions.
@@ -23,6 +32,8 @@
 - [Bank-paid bill reconciliation](bill-bank-reconciliation.md) — confirm moves row to posted date; always snapshot pre-confirm amount; regen needs forecastedDate keys + paid-early query or it double-counts.
 - [Bill→cycle real-time sync](bill-cycle-sync.md) — card_cycle_bills.bill_id has no cascade; delete must detach in-transaction, reconciled rows keep the actual + detach the plan, every touched cycle needs rollup refresh.
 - [Bill↔charge merchant matching](bill-merchant-matching.md) — match on bills.match_merchant, tiered strength; never gate strong matches or backfill on due_day ±7d (real charge dates lag due days by weeks).
+- [Goal contribution reconciliation](goal-contribution-reconciliation.md) — TRANSFER match class (±5%/±5d, category not merchant); mark-paid counts in actual bucket; dismiss before unreconcile or the roll re-matches.
+- [Goals plan/commit lifecycle](goals-lifecycle.md) — goal rides a billKind='goal_contribution' bill on commit; destination must be outside the pool; uncommit never uses the lossy bill delete.
 - [Bill categories source of truth](bill-categories.md) — canonical 15-category list + Plaid pre-fill mapping in shared api-zod pkg; rebuild its dist or api-server typecheck sees stale exports.
 - [New-detection notification](new-detection-notification.md) — seen_at is the "new" marker; upsert never touches it; per-user coalesced post-sync detection; review page snapshots drafts before mark-seen + invalidates caches.
 - [Detection sub-clustering](detection-subclustering.md) — amount splits are only trusted for ≥2 monthly+ sub-clusters, else whole-group fallback; prevents grocery/gas pseudo-bills and utility fragmentation.

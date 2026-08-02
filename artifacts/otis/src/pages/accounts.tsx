@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, MoreHorizontal, Landmark, CreditCard, PiggyBank, Briefcase, TrendingUp, Home, Banknote, Trash2, Pencil, Link2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, MoreHorizontal, Landmark, CreditCard, PiggyBank, Briefcase, TrendingUp, Home, Banknote, Trash2, Pencil, Link2, AlertTriangle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useListAccounts, useListAccountBalances, useDeleteAccount, useDisconnectPlaidAccount, useUpdateAccount, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
@@ -117,6 +117,40 @@ export default function Accounts() {
     setAccountToEdit(account);
     setIsEditDialogOpen(true);
   };
+
+  // Cards missing cycle config produce NO forecast rows — surface them.
+  const unconfiguredCards = (accounts ?? []).filter(
+    (a) => a.accountType === "credit_card" && (a.statementDay == null || a.dueDay == null),
+  );
+
+  // Post-link handoff for card-only institutions: once the refreshed account
+  // list arrives, open the config dialog for the first card the Liabilities
+  // sync could NOT auto-configure. If every new card came back configured,
+  // there is nothing to ask.
+  const [pendingCardSetupIds, setPendingCardSetupIds] = useState<number[] | null>(null);
+  useEffect(() => {
+    if (!pendingCardSetupIds || !accounts) return;
+    const pendingSet = new Set(pendingCardSetupIds);
+    const known = accounts.filter((a) => pendingSet.has(a.id));
+    if (known.length === 0) return; // list not refreshed yet
+    setPendingCardSetupIds(null);
+    const needsSetup = known.find(
+      (a) => a.accountType === "credit_card" && (a.statementDay == null || a.dueDay == null),
+    );
+    if (needsSetup) {
+      toast({
+        title: "Set up your card",
+        description: `Add ${needsSetup.accountName}'s statement and due days so it appears in your forecast.`,
+      });
+      handleEdit(needsSetup);
+    } else {
+      toast({
+        title: "Card cycle days imported",
+        description: "Statement and due days came from your bank — your card is in the forecast.",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCardSetupIds, accounts]);
 
   const handleDelete = () => {
     if (!accountToDelete) return;
@@ -300,7 +334,7 @@ export default function Accounts() {
                 onDone={() => setUpdateItem(null)}
               />
             )}
-            <PlaidConnectButton />
+            <PlaidConnectButton onLinkedCardsNeedSetup={setPendingCardSetupIds} />
             <AccountDialog
               trigger={
                 <Button>
@@ -311,6 +345,41 @@ export default function Accounts() {
             />
           </div>
         </div>
+
+        {/* Cards missing statement/due days generate no forecast rows — nudge setup. */}
+        {unconfiguredCards.length > 0 && (
+          <Card className="border-amber-500/40 bg-amber-500/5 rounded-xl" data-testid="banner-card-setup">
+            <CardContent className="py-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium">
+                    {unconfiguredCards.length === 1
+                      ? "1 credit card isn't in your forecast yet"
+                      : `${unconfiguredCards.length} credit cards aren't in your forecast yet`}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Set each card's statement and due days so its payments appear in your forecast.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 pl-8">
+                {unconfiguredCards.map((card) => (
+                  <Button
+                    key={card.id}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(card)}
+                    data-testid={`button-setup-card-${card.id}`}
+                  >
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Set up {card.accountName}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Account Lists */}
         {isLoadingAccounts ? (

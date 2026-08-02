@@ -19,7 +19,17 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { ForecastAccountsDialog, type LinkedAccountOption } from "@/components/accounts/forecast-accounts-dialog";
 
-export function PlaidConnectButton() {
+interface PlaidConnectButtonProps {
+  /**
+   * Called after a link that added ONLY credit cards (the forecast-accounts
+   * selection step is skipped for card-only institutions). Receives the new
+   * account ids so the parent can prompt cycle-day setup for any card the
+   * Liabilities sync couldn't auto-configure.
+   */
+  onLinkedCardsNeedSetup?: (accountIds: number[]) => void;
+}
+
+export function PlaidConnectButton({ onLinkedCardsNeedSetup }: PlaidConnectButtonProps = {}) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [selection, setSelection] = useState<{ itemId: number; accounts: LinkedAccountOption[] } | null>(null);
   const { toast } = useToast();
@@ -90,6 +100,11 @@ export function PlaidConnectButton() {
             // cards there is nothing to ask.
             if (result.accounts.some((a) => a.accountType !== "credit_card")) {
               setSelection({ itemId: result.itemId, accounts: result.accounts });
+            } else if (result.accounts.length > 0) {
+              // Card-only institution: no forecast-account selection applies,
+              // but the cards may still need statement/due-day setup to show
+              // up in the forecast. Let the parent take over.
+              onLinkedCardsNeedSetup?.(result.accounts.map((a) => a.id));
             }
             runDetection();
           },

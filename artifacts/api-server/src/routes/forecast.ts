@@ -719,6 +719,50 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     });
   }
 
+  // Plaid Liabilities statement seam: a freshly linked card's LAST statement
+  // (already closed, payment upcoming) predates the first generated cycle, so
+  // the cycle loop above emits nothing for it — yet it is a real, dated,
+  // known-amount obligation. Emit one payment row from the stored liability
+  // data when the due date is in range and no cycle row already covers it.
+  // Assumes paid-in-full, consistent with the cycle engine above.
+  const cycleDueDates = new Set(allCycles.map((c) => `${c.accountId}|${c.dueDate}`));
+  for (const card of ccAccounts) {
+    const stmtBalance = parseFloat(String(card.lastStatementBalance ?? "0")) || 0;
+    const stmtDue = card.nextPaymentDueDate;
+    if (stmtBalance <= 0 || !stmtDue || stmtDue < todayStr || stmtDue > endStr) continue;
+    if (cycleDueDates.has(`${card.id}|${stmtDue}`)) continue; // cycle row covers it
+    // A legacy grouped parent staged in THIS pass for the same card+date
+    // would collide with the seam row — the grouped payment wins.
+    if (ccGroups.has(`${card.id}|${stmtDue}`)) continue;
+    // A surviving row (user marked it paid / edited it) already covers this
+    // statement — don't insert a duplicate.
+    const [survivor] = await db
+      .select({ id: forecastedTransactionsTable.id })
+      .from(forecastedTransactionsTable)
+      .where(and(
+        eq(forecastedTransactionsTable.userId, userId),
+        eq(forecastedTransactionsTable.ccAccountId, card.id),
+        eq(forecastedTransactionsTable.isCcParent, true),
+        isNull(forecastedTransactionsTable.sourceCardCycleId),
+        eq(forecastedTransactionsTable.transactionDate, stmtDue),
+      ));
+    if (survivor) continue;
+    toInsert.push({
+      userId,
+      transactionDate: stmtDue,
+      description: `${card.accountName} statement payment`,
+      amount: String(Math.round(stmtBalance * 100) / 100),
+      transactionType: "expense",
+      category: "debt_payments",
+      ccAccountId: card.id,
+      isCcParent: true,
+      ccBasis: "actual",
+      isActual: false,
+      isCommitted: false,
+      sortOrder: 0,
+    });
+  }
+
   // Generate from pay schedules
   const paySchedules = await db
     .select()
@@ -1586,6 +1630,10 @@ async function recomputeCcParent(
       // Cycle-based payment rows get their amount from the cycle rollup,
       // never from child sums (they have no children).
       isNull(forecastedTransactionsTable.sourceCardCycleId),
+      // Statement-seam rows (ccBasis set, no cycle id) carry a fixed
+      // known amount from Plaid Liabilities — never child-sum derived.
+      // Legacy child-sum parents always have ccBasis NULL.
+      isNull(forecastedTransactionsTable.ccBasis),
       eq(forecastedTransactionsTable.transactionDate, dateStr),
     ));
 }

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, boolean, timestamp, integer, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, boolean, timestamp, integer, unique, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -29,6 +29,15 @@ export const accountsTable = pgTable("accounts", {
   plaidItemId: integer("plaid_item_id"),
   availableBalance: numeric("available_balance", { precision: 15, scale: 2 }),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  // Raw Plaid account subtype (e.g. "credit card", "checking") as transmitted
+  // at link/refresh time; informational, never used for type mapping.
+  plaidSubtype: text("plaid_subtype"),
+  // Plaid Liabilities data (credit cards): refreshed by syncLiabilitiesForItem.
+  minimumPayment: numeric("minimum_payment", { precision: 15, scale: 2 }),
+  lastStatementBalance: numeric("last_statement_balance", { precision: 15, scale: 2 }),
+  nextPaymentDueDate: date("next_payment_due_date", { mode: "string" }),
+  purchaseApr: numeric("purchase_apr", { precision: 6, scale: 3 }),
+  liabilitiesSyncedAt: timestamp("liabilities_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
@@ -38,6 +47,6 @@ export const accountsTable = pgTable("accounts", {
   unique("accounts_user_plaid_account_unique").on(t.userId, t.plaidAccountId),
 ]);
 
-export const insertAccountSchema = createInsertSchema(accountsTable).omit({ id: true, userId: true, createdAt: true, updatedAt: true, plaidAccountId: true, plaidItemId: true, availableBalance: true, lastSyncedAt: true });
+export const insertAccountSchema = createInsertSchema(accountsTable).omit({ id: true, userId: true, createdAt: true, updatedAt: true, plaidAccountId: true, plaidItemId: true, availableBalance: true, lastSyncedAt: true, plaidSubtype: true, minimumPayment: true, lastStatementBalance: true, nextPaymentDueDate: true, purchaseApr: true, liabilitiesSyncedAt: true });
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type Account = typeof accountsTable.$inferSelect;

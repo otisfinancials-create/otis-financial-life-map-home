@@ -3,6 +3,7 @@ import { db, plaidItemsTable, plaidTransactionsTable, balanceSnapshotsTable, for
 import type { Transaction, AccountBase } from "plaid";
 import { plaidClient } from "../lib/plaid";
 import { detectBills } from "./bill-detection";
+import { syncLiabilitiesForItem } from "./plaid-liabilities";
 import { rollActualsForUser } from "./actuals-roll";
 import { logger } from "../lib/logger";
 
@@ -108,6 +109,11 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
       "Failed to persist balance snapshots; continuing sync",
     );
   }
+
+  // Refresh Plaid Liabilities data (card minimums, statement balances, next
+  // due dates) so cycle days stay current cycle over cycle. Best-effort
+  // inside the service — unsupported institutions never fail the sync.
+  await syncLiabilitiesForItem(item);
 
   // Hard guard (all syncs, not just initial): never persist a cursor while
   // Plaid reports the historical backfill is still pending. Persisting one
