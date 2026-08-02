@@ -12,6 +12,5 @@ export interface MonthlyForecast {
   label: string;
   totalIncome: number;
   totalExpenses: number;
-  totalLifeEvents: number;
   netCashFlow: number;
 }

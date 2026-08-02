@@ -138,7 +138,10 @@ router.post("/bills", async (req, res): Promise<void> => {
     matchMerchant: normalizeMatchMerchant(data.matchMerchant),
     userId: req.userId,
     amount: String(data.amount),
-    isVariable: data.isVariable ?? false,
+    // Upkeep amounts are estimates by nature (vet visits, HVAC service vary),
+    // so upkeep defaults to variable — reconciliation then matches on
+    // merchant + account + date and ignores amount.
+    isVariable: data.isVariable ?? (data.billKind === "upkeep"),
     isActive: data.isActive ?? true,
   }).returning();
   // Real-time cycle sync: a new card bill must appear in its card's open

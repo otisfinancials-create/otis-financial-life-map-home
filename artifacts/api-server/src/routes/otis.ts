@@ -7,7 +7,6 @@ import {
   billsTable,
   paySchedulesTable,
   loansTable,
-  lifeEventsTable,
   userSettingsTable,
   otisConversationsTable,
 } from "@workspace/db";
@@ -56,14 +55,13 @@ interface FinancialContext {
 }
 
 async function buildFinancialContext(userId: string): Promise<FinancialContext> {
-  const [accounts, assets, bills, paySchedules, loans, lifeEvents, settingsRows] =
+  const [accounts, assets, bills, paySchedules, loans, settingsRows] =
     await Promise.all([
       db.select().from(accountsTable).where(eq(accountsTable.userId, userId)),
       db.select().from(assetsTable).where(eq(assetsTable.userId, userId)),
       db.select().from(billsTable).where(eq(billsTable.userId, userId)),
       db.select().from(paySchedulesTable).where(eq(paySchedulesTable.userId, userId)),
       db.select().from(loansTable).where(eq(loansTable.userId, userId)),
-      db.select().from(lifeEventsTable).where(eq(lifeEventsTable.userId, userId)),
       db.select().from(userSettingsTable).where(eq(userSettingsTable.userId, userId)).limit(1),
     ]);
 
@@ -178,14 +176,6 @@ async function buildFinancialContext(userId: string): Promise<FinancialContext> 
       readinessScore,
     },
     upcomingBills,
-    lifeEvents: lifeEvents
-      .filter((e) => e.isActive)
-      .map((e) => ({
-        name: e.eventName,
-        amount: num(e.amount),
-        date: e.eventDate || e.startDate || null,
-        priority: e.priority,
-      })),
   };
 
   const summaryText = JSON.stringify(contextObject);

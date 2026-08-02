@@ -48,7 +48,7 @@ import {
 import type { Bill, BillInputPaymentMethod } from "@workspace/api-client-react";
 import { useSyncForecast } from "@/hooks/use-sync-forecast";
 import { MerchantPicker } from "@/components/bills/merchant-picker";
-import { BILL_CATEGORIES } from "@workspace/api-zod";
+import { BILL_CATEGORIES, UPKEEP_CATEGORIES } from "@workspace/api-zod";
 
 const CATEGORIES = BILL_CATEGORIES;
 
@@ -291,11 +291,17 @@ interface BillFormProps {
   bill?: Bill;
   onSaved: () => void;
   onCancel: () => void;
+  /**
+   * Kind of bill this form creates. 'upkeep' switches the category list to
+   * the upkeep set and defaults isVariable on (upkeep amounts are estimates).
+   * Editing keeps the bill's existing kind; this only applies to creates.
+   */
+  billKind?: "regular" | "upkeep";
 }
 
 // Shared bill form — used by the Add Bill dialog and the inline edit panel on
 // the Bills page (split-panel layout).
-export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
+export function BillForm({ bill, onSaved, onCancel, billKind = "regular" }: BillFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createBill = useCreateBill();
@@ -304,6 +310,11 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
   const isEditing = !!bill;
 
   const { data: accounts } = useListAccounts();
+
+  // Editing keeps the bill's saved kind; creating uses the caller's kind.
+  const effectiveKind = (bill?.billKind as "regular" | "upkeep" | undefined) ?? billKind;
+  const activeCategories: readonly string[] =
+    effectiveKind === "upkeep" ? UPKEEP_CATEGORIES : CATEGORIES;
 
   const form = useForm<BillFormValues>({
     resolver: zodResolver(billSchema),
@@ -321,7 +332,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       companyUrl: bill?.companyUrl || "",
       startDate: bill?.startDate || "",
       endDate: bill?.endDate || "",
-      isVariable: bill?.isVariable || false,
+      isVariable: bill?.isVariable ?? (effectiveKind === "upkeep"),
       isActive: bill?.isActive ?? true,
       notes: bill?.notes || "",
       matchMerchant: bill?.matchMerchant || "",
@@ -343,7 +354,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       companyUrl: bill?.companyUrl || "",
       startDate: bill?.startDate || "",
       endDate: bill?.endDate || "",
-      isVariable: bill?.isVariable || false,
+      isVariable: bill?.isVariable ?? (effectiveKind === "upkeep"),
       isActive: bill?.isActive ?? true,
       notes: bill?.notes || "",
       matchMerchant: bill?.matchMerchant || "",
@@ -445,7 +456,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
         },
       });
     } else {
-      createBill.mutate({ data: { ...payload, endDate: data.endDate || undefined } }, {
+      createBill.mutate({ data: { ...payload, billKind: effectiveKind, endDate: data.endDate || undefined } }, {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetUpcomingBillsQueryKey() });
@@ -507,7 +518,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {CATEGORIES.map((cat) => (
+                        {activeCategories.map((cat) => (
                           <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                         ))}
                       </SelectContent>
@@ -938,9 +949,10 @@ interface BillDialogProps {
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  billKind?: "regular" | "upkeep";
 }
 
-export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProps) {
+export function BillDialog({ bill, trigger, open, onOpenChange, billKind = "regular" }: BillDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined && onOpenChange !== undefined;
   const isOpen = isControlled ? open : internalOpen;
@@ -952,16 +964,23 @@ export function BillDialog({ bill, trigger, open, onOpenChange }: BillDialogProp
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Bill" : "Add Bill"}</DialogTitle>
+          <DialogTitle>
+            {isEditing
+              ? billKind === "upkeep" || bill?.billKind === "upkeep" ? "Edit Upkeep Item" : "Edit Bill"
+              : billKind === "upkeep" ? "Add Upkeep Item" : "Add Bill"}
+          </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Make changes to your bill here."
+              ? "Make changes here."
+              : billKind === "upkeep"
+              ? "Add a recurring expected expense — vet visits, HVAC service, car maintenance."
               : "Add a new recurring bill to your forecast."}
           </DialogDescription>
         </DialogHeader>
         {isOpen && (
           <BillForm
             bill={bill}
+            billKind={billKind}
             onSaved={() => setIsOpen(false)}
             onCancel={() => setIsOpen(false)}
           />

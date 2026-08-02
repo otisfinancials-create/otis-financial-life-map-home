@@ -4,7 +4,7 @@ import {
   Receipt,
   Landmark,
   LineChart,
-  CalendarHeart,
+  Wrench,
   PiggyBank,
   Scale,
   CreditCard,
@@ -43,7 +43,7 @@ const sections: { label: string; items: NavItem[] }[] = [
   {
     label: "Life",
     items: [
-      { name: "Life events", href: "/life-events", icon: CalendarHeart },
+      { name: "Upkeep", href: "/upkeep", icon: Wrench },
       { name: "Goals", href: "/goals", icon: Target },
       { name: "Retirement", href: "/retirement", icon: PiggyBank },
     ],

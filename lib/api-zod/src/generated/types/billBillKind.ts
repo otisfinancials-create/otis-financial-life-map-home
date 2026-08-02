@@ -12,4 +12,5 @@ export type BillBillKind = typeof BillBillKind[keyof typeof BillBillKind];
 export const BillBillKind = {
   regular: 'regular',
   goal_contribution: 'goal_contribution',
+  upkeep: 'upkeep',
 } as const;

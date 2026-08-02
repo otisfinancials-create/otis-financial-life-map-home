@@ -5,7 +5,6 @@ import subscribeRouter from "./subscribe";
 import dashboardRouter from "./dashboard";
 import billsRouter from "./bills";
 import detectedBillsRouter from "./detected_bills";
-import lifeEventsRouter from "./life_events";
 import goalsRouter from "./goals";
 import paySchedulesRouter from "./pay_schedules";
 import accountsRouter from "./accounts";
@@ -45,7 +44,6 @@ router.use(dashboardRouter);
 // would otherwise be swallowed by billsRouter's /bills/:id param routes.
 router.use(detectedBillsRouter);
 router.use(billsRouter);
-router.use(lifeEventsRouter);
 router.use(goalsRouter);
 router.use(paySchedulesRouter);
 router.use(accountsRouter);

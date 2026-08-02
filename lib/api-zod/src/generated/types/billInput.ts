@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BillInputAmountType } from './billInputAmountType';
+import type { BillInputBillKind } from './billInputBillKind';
 import type { BillInputPaymentMethod } from './billInputPaymentMethod';
 
 export interface BillInput {
@@ -30,4 +31,5 @@ export interface BillInput {
   notes?: string;
   /** @nullable */
   matchMerchant?: string | null;
+  billKind?: BillInputBillKind;
 }

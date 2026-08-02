@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon, ArrowUp, ArrowDown, ChevronsUpDown, X, Link2, Sparkles, Target } from "lucide-react";
+import { Receipt, Plus, MoreHorizontal, Search, Pencil, Trash2, ExternalLink, Moon, ArrowUp, ArrowDown, ChevronsUpDown, X, Link2, Sparkles, Target, Wrench } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link as WouterLink } from "wouter";
 
@@ -363,6 +363,12 @@ export default function Bills() {
                           <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary shrink-0 flex items-center gap-0.5">
                             <Target className="h-2.5 w-2.5" />
                             Goal
+                          </Badge>
+                        )}
+                        {bill.billKind === "upkeep" && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 flex items-center gap-0.5">
+                            <Wrench className="h-2.5 w-2.5" />
+                            Upkeep
                           </Badge>
                         )}
                         {bill.isVariable && (

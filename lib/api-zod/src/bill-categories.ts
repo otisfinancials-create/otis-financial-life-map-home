@@ -28,6 +28,24 @@ export const BILL_CATEGORIES = [
 export type BillCategory = (typeof BILL_CATEGORIES)[number];
 
 /**
+ * Categories for upkeep bills (billKind = 'upkeep'): recurring expected
+ * expenses like vet visits, HVAC service, and car maintenance. Deliberately
+ * a separate list from BILL_CATEGORIES — upkeep groups by what is being
+ * maintained, not by household budget line.
+ */
+export const UPKEEP_CATEGORIES = [
+  "Pets & Vet",
+  "Home Maintenance",
+  "Auto Maintenance",
+  "Kids & Activities",
+  "Yard & Outdoor",
+  "Pool & Spa",
+  "Other Upkeep",
+] as const;
+
+export type UpkeepCategory = (typeof UPKEEP_CATEGORIES)[number];
+
+/**
  * Plaid personal_finance_category PRIMARY → Otis bill category.
  * Anything unmapped (or absent) defaults to "Other".
  * TRANSFER_* / INCOME / BANK_FEES never become bills in practice, but map to

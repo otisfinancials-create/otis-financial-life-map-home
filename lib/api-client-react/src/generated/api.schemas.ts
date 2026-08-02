@@ -49,6 +49,7 @@ export type BillBillKind = typeof BillBillKind[keyof typeof BillBillKind];
 export const BillBillKind = {
   regular: 'regular',
   goal_contribution: 'goal_contribution',
+  upkeep: 'upkeep',
 } as const;
 
 export interface Bill {
@@ -131,6 +132,14 @@ export const BillInputPaymentMethod = {
   cash: 'cash',
 } as const;
 
+export type BillInputBillKind = typeof BillInputBillKind[keyof typeof BillInputBillKind];
+
+
+export const BillInputBillKind = {
+  regular: 'regular',
+  upkeep: 'upkeep',
+} as const;
+
 export interface BillInput {
   billName: string;
   category: string;
@@ -153,6 +162,7 @@ export interface BillInput {
   notes?: string;
   /** @nullable */
   matchMerchant?: string | null;
+  billKind?: BillInputBillKind;
 }
 
 export type BillUpdateAmountType = typeof BillUpdateAmountType[keyof typeof BillUpdateAmountType];
@@ -218,32 +228,6 @@ export interface BillMerchantSuggestInput {
   paymentAccountId: number;
   /** @nullable */
   companyUrl?: string | null;
-}
-
-export interface LifeEvent {
-  id: number;
-  eventName: string;
-  category: string;
-  /** @nullable */
-  customCategory?: string | null;
-  amount: number;
-  timingType: string;
-  /** @nullable */
-  eventDate?: string | null;
-  /** @nullable */
-  startDate?: string | null;
-  /** @nullable */
-  endDate?: string | null;
-  /** @nullable */
-  frequency?: string | null;
-  /** @nullable */
-  customIntervalDays?: number | null;
-  priority: string;
-  /** @nullable */
-  notes?: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export type GoalGoalType = typeof GoalGoalType[keyof typeof GoalGoalType];
@@ -389,45 +373,6 @@ export interface GoalUpdate {
      * @maximum 31
      */
   contributionDay?: number;
-  isActive?: boolean;
-}
-
-export interface LifeEventInput {
-  eventName: string;
-  category: string;
-  customCategory?: string;
-  amount: number;
-  timingType: string;
-  eventDate?: string;
-  startDate?: string;
-  endDate?: string;
-  frequency?: string;
-  customIntervalDays?: number;
-  priority: string;
-  notes?: string;
-  isActive?: boolean;
-}
-
-export interface LifeEventUpdate {
-  eventName?: string;
-  category?: string;
-  /** @nullable */
-  customCategory?: string | null;
-  amount?: number;
-  timingType?: string;
-  /** @nullable */
-  eventDate?: string | null;
-  /** @nullable */
-  startDate?: string | null;
-  /** @nullable */
-  endDate?: string | null;
-  /** @nullable */
-  frequency?: string | null;
-  /** @nullable */
-  customIntervalDays?: number | null;
-  priority?: string;
-  /** @nullable */
-  notes?: string | null;
   isActive?: boolean;
 }
 
@@ -1298,7 +1243,6 @@ export interface MonthlyForecast {
   label: string;
   totalIncome: number;
   totalExpenses: number;
-  totalLifeEvents: number;
   netCashFlow: number;
 }
 

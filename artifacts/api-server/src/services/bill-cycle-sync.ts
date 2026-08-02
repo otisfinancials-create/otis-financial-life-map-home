@@ -7,7 +7,7 @@ import {
   envelopeAllocationsTable,
   billsTable,
 } from "@workspace/db";
-import { processCycle, recomputeEnvelopeSpent, rollupCycle } from "./cycle-processing";
+import { processCycle, recomputeEnvelopeSpent, rollupCycle, billOccurrencesInCycle } from "./cycle-processing";
 
 /**
  * Real-time bill → card-cycle sync (P5.6).
@@ -125,7 +125,15 @@ export async function syncBillWithCycles(opts: {
     const reconciledRowIds = new Set(allocRows.map((a) => a.cardCycleBillId));
 
     for (const cycle of openCycles) {
-      const belongs = !deleted && !!bill && bill.isActive === true && bill.paymentAccountId === cycle.accountId;
+      // Occurrence-based membership: the bill must be actively paid from
+      // this card AND have at least one due date inside the cycle window
+      // (same rule populateCycleBills applies in phase 2 — keep in lockstep).
+      const belongs =
+        !deleted &&
+        !!bill &&
+        bill.isActive === true &&
+        bill.paymentAccountId === cycle.accountId &&
+        billOccurrencesInCycle(bill, cycle.cycleStart, cycle.cycleEnd) > 0;
       const row = rowByCycle.get(cycle.id);
       if (belongs) continue; // membership added/refreshed by populateCycleBills in phase 2
       if (!row) continue;

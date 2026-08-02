@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq, ne, and, or, gte, lt, lte, gt, inArray, isNull, isNotNull, desc } from "drizzle-orm";
-import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, lifeEventsTable, userSettingsTable, balanceSyncsTable, accountsTable, cardCyclesTable, billMatchDismissalsTable, goalsTable } from "@workspace/db";
+import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, userSettingsTable, balanceSyncsTable, accountsTable, cardCyclesTable, billMatchDismissalsTable, goalsTable } from "@workspace/db";
+import { generateBillOccurrences, addMonthsIso, addDaysIso, clampDay } from "../services/bill-occurrences";
+export { generateBillOccurrences } from "../services/bill-occurrences";
 import { findReconcileSuggestions } from "../services/bill-reconciliation";
 import { rollActualsForUser } from "../services/actuals-roll";
 import { getForecastAccounts } from "../services/forecast-accounts";
@@ -96,7 +98,7 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
     .from(forecastedTransactionsTable)
     .where(eq(forecastedTransactionsTable.userId, req.userId));
 
-  const monthlyMap: Record<string, { month: number; year: number; label: string; totalIncome: number; totalExpenses: number; totalLifeEvents: number }> = {};
+  const monthlyMap: Record<string, { month: number; year: number; label: string; totalIncome: number; totalExpenses: number }> = {};
 
   for (let i = 0; i < 12; i++) {
     const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
@@ -107,7 +109,6 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
       label: d.toLocaleString("en-US", { month: "short", year: "numeric" }),
       totalIncome: 0,
       totalExpenses: 0,
-      totalLifeEvents: 0,
     };
   }
 
@@ -127,12 +128,7 @@ router.get("/forecast/monthly", async (req, res): Promise<void> => {
     if (row.transactionType === "income") {
       monthlyMap[key].totalIncome += amount;
     } else {
-      // Life-event costs remain part of totalExpenses (so netCashFlow is correct)
-      // but are also tracked separately so the UI can break them out.
       monthlyMap[key].totalExpenses += amount;
-      if (row.sourceLifeEventId != null) {
-        monthlyMap[key].totalLifeEvents += amount;
-      }
     }
   }
 
@@ -559,7 +555,6 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     } else {
       if (row.sourceBillId != null) preservedKeys.add(`bill|${row.sourceBillId}|${row.transactionDate}`);
       if (row.sourcePayId != null) preservedKeys.add(`pay|${row.sourcePayId}|${row.transactionDate}`);
-      if (row.sourceLifeEventId != null) preservedKeys.add(`life|${row.sourceLifeEventId}|${row.transactionDate}`);
       // A reconciled row was MOVED to the actual posted date; its planned
       // occurrence (forecastedDate) is covered by it too — don't re-emit it.
       if (row.sourceBillId != null && row.forecastedDate != null) {
@@ -752,63 +747,11 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     }
   }
 
-  // Generate from life events
-  const lifeEvents = await db
-    .select()
-    .from(lifeEventsTable)
-    .where(and(eq(lifeEventsTable.isActive, true), eq(lifeEventsTable.userId, userId)));
-
-  for (const ev of lifeEvents) {
-    const total = parseFloat(String(ev.amount));
-    const category = ev.category === "custom" && ev.customCategory ? ev.customCategory : ev.category;
-
-    const pushRow = (dateStr: string, amount: number, description: string) => {
-      if (preservedKeys.has(`life|${ev.id}|${dateStr}`)) return;
-      toInsert.push({
-        userId,
-        transactionDate: dateStr,
-        description,
-        amount: String(Math.round(amount * 100) / 100),
-        transactionType: "expense",
-        category,
-        sourceLifeEventId: ev.id,
-        isActual: false,
-        isCommitted: false,
-      });
-    };
-
-    if (ev.timingType === "one_time" && ev.eventDate) {
-      if (ev.eventDate >= todayStr && ev.eventDate <= endStr) {
-        pushRow(ev.eventDate, total, ev.eventName);
-      }
-    } else if (ev.timingType === "spread" && ev.startDate && ev.endDate) {
-      const [sy, sm] = ev.startDate.split("-").map(Number);
-      const [ey, em] = ev.endDate.split("-").map(Number);
-      const months = (ey - sy) * 12 + (em - sm) + 1;
-      if (months > 0) {
-        const perMonth = total / months;
-        let current = ev.startDate;
-        for (let i = 0; i < months; i++) {
-          if (current >= todayStr && current <= endStr) {
-            pushRow(current, perMonth, `${ev.eventName} (${i + 1}/${months})`);
-          }
-          current = addMonthsIso(current, 1);
-        }
-      }
-    } else if (ev.timingType === "recurring" && ev.startDate) {
-      const frequency = ev.frequency ?? "annually";
-      const recurEndStr = ev.endDate && ev.endDate < endStr ? ev.endDate : endStr;
-      let current = ev.startDate;
-      let guard = 0;
-      while (current <= recurEndStr && guard < 5000) {
-        if (current >= todayStr) {
-          pushRow(current, total, ev.eventName);
-        }
-        current = advanceIsoByFrequency(current, frequency, ev.customIntervalDays);
-        guard++;
-      }
-    }
-  }
+  // Life events retired (Upkeep task): recurring expected expenses are now
+  // ordinary bills with billKind='upkeep' and flow through the bill
+  // generation above — with merchant matching, mark-paid, and cycle
+  // membership that life events never had. The empty life_events table
+  // remains pending a separate drop.
 
   // ── Spend-goal purchase events (Goals part 2) ──────────────────────────
   // On the spend date, a committed spend goal emits TWO rows (never one
@@ -1701,159 +1644,6 @@ function advanceByFrequency(date: Date, frequency: string): Date {
 // Local YYYY-MM-DD (no timezone shift) for string-based date comparisons.
 function toLocalIso(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-// Adds months to a YYYY-MM-DD string, clamping the day to the target month's
-// length so month-end dates (e.g. Jan 31 + 1mo) never overflow into a later month.
-function addMonthsIso(iso: string, months: number): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  const base = new Date(Date.UTC(y, m - 1 + months, 1));
-  const daysInTarget = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();
-  base.setUTCDate(Math.min(d, daysInTarget));
-  return base.toISOString().slice(0, 10);
-}
-
-function advanceIsoByFrequency(iso: string, frequency: string, customIntervalDays?: number | null): string {
-  switch (frequency.toLowerCase()) {
-    case "monthly": return addMonthsIso(iso, 1);
-    case "quarterly": return addMonthsIso(iso, 3);
-    case "biannually": case "bi-annually": case "semi-annual": case "semiannual": case "biannual": return addMonthsIso(iso, 6);
-    case "annual": case "annually": case "yearly": return addMonthsIso(iso, 12);
-    case "custom": return addDaysIso(iso, customIntervalDays && customIntervalDays > 0 ? customIntervalDays : 30);
-    default:
-      throw new Error(`advanceIsoByFrequency: unknown life event frequency "${frequency}"`);
-  }
-}
-
-// Returns a YYYY-MM-DD string for the given year / 1-based month, clamping the
-// day to the month's length so e.g. day 31 in April becomes the 30th and day 31
-// in February becomes the 28th/29th (never skipped, never overflowed).
-function clampDay(year: number, month1: number, day: number): string {
-  const daysInMonth = new Date(Date.UTC(year, month1, 0)).getUTCDate();
-  const d = Math.min(Math.max(day, 1), daysInMonth);
-  return `${year}-${String(month1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
-
-// Adds n calendar days to a YYYY-MM-DD string (UTC, no timezone shift).
-function addDaysIso(iso: string, n: number): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
-}
-
-type BillLike = {
-  id?: number;
-  frequency: string;
-  dueDay: number;
-  startDate: string | null;
-  endDate: string | null;
-  customIntervalDays?: number | null;
-};
-
-// Semi-monthly anchor semantics: occurrences land on the 1st and the 15th —
-// identical to the pay schedule stepper (advanceByFrequency), NOT "add 15
-// days". From any date: day < 15 → the 15th of the same month; otherwise the
-// 1st of the next month.
-function stepSemiMonthlyIso(iso: string): string {
-  const y = Number(iso.slice(0, 4));
-  const m = Number(iso.slice(5, 7));
-  const d = Number(iso.slice(8, 10));
-  if (d < 15) return `${iso.slice(0, 8)}15`;
-  const ny = m === 12 ? y + 1 : y;
-  const nm = m === 12 ? 1 : m + 1;
-  return `${ny}-${String(nm).padStart(2, "0")}-01`;
-}
-
-// Produces every occurrence date (YYYY-MM-DD) for a bill within the forecast
-// window [todayStr, windowEndStr], honoring the bill's own start/end dates.
-//
-//   - monthly           → anchored on dueDay, clamped to each month's length
-//   - weekly / biweekly → stepped in days from the first bill date (startDate)
-//   - semi-monthly      → anchored to the 1st and 15th (pay schedule semantics)
-//   - quarterly         → stepped +3 months from the first bill date
-//   - semi-annual       → stepped +6 months from the first bill date
-//   - annual            → stepped +12 months from the first bill date
-//   - custom            → stepped +customIntervalDays days from the first bill date
-//
-// This is the AUTHORITATIVE bill stepper — the forecast engine, goal bucket
-// derivation, and the client-side form preview must all agree with it.
-// An unknown frequency THROWS; it must never silently fall back to monthly
-// (that failure mode produced a silent 6×/12× over-forecast).
-//
-// The same start/end-date clamping applies to every frequency, so a bill never
-// generates rows before its start date or after its end date.
-export function generateBillOccurrences(
-  bill: BillLike,
-  todayStr: string,
-  windowEndStr: string,
-): string[] {
-  const freq = bill.frequency.toLowerCase();
-
-  // Clamp the generation window to the bill's own start/end dates.
-  const startBoundary =
-    bill.startDate && bill.startDate > todayStr ? bill.startDate : todayStr;
-  const endBoundary =
-    bill.endDate && bill.endDate < windowEndStr ? bill.endDate : windowEndStr;
-  if (startBoundary > endBoundary) return [];
-
-  const out: string[] = [];
-  const MAX = 2000; // safety guard against pathological inputs
-
-  if (freq === "monthly") {
-    let y = Number(startBoundary.slice(0, 4));
-    let m = Number(startBoundary.slice(5, 7));
-    for (let i = 0; i < MAX; i++) {
-      const occ = clampDay(y, m, bill.dueDay);
-      if (occ > endBoundary) break;
-      if (occ >= startBoundary) out.push(occ);
-      m++;
-      if (m > 12) { m = 1; y++; }
-    }
-    return out;
-  }
-
-  // Date-driven frequencies. Seed from the first bill date when set; otherwise
-  // fall back to dueDay in today's month for legacy rows without a start date.
-  const seed =
-    bill.startDate ??
-    clampDay(Number(todayStr.slice(0, 4)), Number(todayStr.slice(5, 7)), bill.dueDay);
-
-  const step = (iso: string): string => {
-    switch (freq) {
-      case "weekly": return addDaysIso(iso, 7);
-      case "biweekly": case "bi-weekly": return addDaysIso(iso, 14);
-      case "semi-monthly": case "semimonthly": return stepSemiMonthlyIso(iso);
-      case "quarterly": return addMonthsIso(iso, 3);
-      case "semi-annual": case "semiannual": case "biannual": return addMonthsIso(iso, 6);
-      case "annual": case "annually": case "yearly": return addMonthsIso(iso, 12);
-      case "custom": {
-        const days = bill.customIntervalDays;
-        if (days == null || days < 1) {
-          throw new Error(`generateBillOccurrences: bill ${bill.id ?? "?"} has frequency "custom" but no valid customIntervalDays (${days})`);
-        }
-        return addDaysIso(iso, days);
-      }
-      default:
-        throw new Error(`generateBillOccurrences: unknown frequency "${bill.frequency}" on bill ${bill.id ?? "?"} — refusing to guess a cadence`);
-    }
-  };
-
-  let current = seed;
-  let guard = 0;
-  while (current < startBoundary && guard++ < MAX) current = step(current);
-  if (guard >= MAX) {
-    // Loud, never silent: a tripped guard means truncated emission (e.g. a
-    // year-0026 start-date typo). The rows that fit are still returned.
-    console.error(`generateBillOccurrences: loop guard tripped catching up bill ${bill.id ?? "?"} (freq=${bill.frequency}, start=${bill.startDate}) to ${startBoundary} — emission may be truncated`);
-  }
-  guard = 0;
-  while (current <= endBoundary && guard++ < MAX) {
-    out.push(current);
-    current = step(current);
-  }
-  if (guard >= MAX && current <= endBoundary) {
-    console.error(`generateBillOccurrences: loop guard tripped emitting bill ${bill.id ?? "?"} (freq=${bill.frequency}) — emission truncated at ${out[out.length - 1]} before window end ${endBoundary}`);
-  }
-  return out;
 }
 
 function serialize(tx: typeof forecastedTransactionsTable.$inferSelect) {

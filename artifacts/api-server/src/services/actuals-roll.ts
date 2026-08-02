@@ -289,7 +289,6 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
       or(
         isNotNull(forecastedTransactionsTable.sourceBillId),
         isNotNull(forecastedTransactionsTable.sourcePayId),
-        isNotNull(forecastedTransactionsTable.sourceLifeEventId),
       ),
     ))
     .returning({ id: forecastedTransactionsTable.id });

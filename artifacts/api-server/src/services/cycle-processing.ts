@@ -13,6 +13,7 @@ import {
   type CardCycleBill,
   type PlaidTransaction,
 } from "@workspace/db";
+import { generateBillOccurrences } from "./bill-occurrences";
 
 /**
  * P5 Stage 3a — the core cycle engine: bill population, transaction
@@ -28,8 +29,36 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
 /* ---------------------------------------------------------------- STEP 1 */
 
 /**
+ * How many times a bill falls due inside a cycle window, per the
+ * authoritative stepper. Monthly bills have exactly one occurrence per
+ * monthly cycle window (the historical behavior); non-monthly cadences
+ * (quarterly, semi-annual, annual, custom …) belong only to the cycles that
+ * actually contain a due date — a $50 semi-annual bill must NOT be expected
+ * in all 12 cycles a year.
+ */
+export function billOccurrencesInCycle(
+  bill: { id: number; frequency: string; dueDay: number; startDate: string | null; endDate: string | null; customIntervalDays?: number | null },
+  cycleStart: string,
+  cycleEnd: string,
+): number {
+  // Monthly is special-cased to preserve the historical invariant: exactly
+  // ONE occurrence per monthly cycle window while the bill is live. Counting
+  // calendar due dates inside an irregular window (statement-day clamping can
+  // produce e.g. Jan 29 → Feb 28) would sometimes yield 0 or 2 for a monthly
+  // bill — never acceptable. Membership only needs the bill's own start/end
+  // range to overlap the window.
+  if (bill.frequency.toLowerCase() === "monthly") {
+    const started = !bill.startDate || bill.startDate <= cycleEnd;
+    const notEnded = !bill.endDate || bill.endDate >= cycleStart;
+    return started && notEnded ? 1 : 0;
+  }
+  return generateBillOccurrences(bill, cycleStart, cycleEnd).length;
+}
+
+/**
  * Upsert a card_cycle_bills row for every active bill paid from the cycle's
- * card. Idempotent on (card_cycle_id, bill_id).
+ * card that has at least one due date inside the cycle window; remove stale
+ * pending rows for bills with none. Idempotent on (card_cycle_id, bill_id).
  */
 export async function populateCycleBills(cardCycleId: number): Promise<CardCycleBill[]> {
   const [cycle] = await db.select().from(cardCyclesTable).where(eq(cardCyclesTable.id, cardCycleId));
@@ -43,19 +72,26 @@ export async function populateCycleBills(cardCycleId: number): Promise<CardCycle
         eq(billsTable.paymentAccountId, cycle.accountId),
         eq(billsTable.isActive, true),
         // Goal contribution bills are savings transfers — never card-paid,
-        // never part of a card cycle (Goals addendum §3b).
-        eq(billsTable.billKind, "regular"),
+        // never part of a card cycle (Goals addendum §3b). Regular and
+        // upkeep bills both belong to their paying card's cycles.
+        inArray(billsTable.billKind, ["regular", "upkeep"]),
       ),
     );
 
+  const belongingIds: number[] = [];
   for (const bill of bills) {
+    const occurrences = billOccurrencesInCycle(bill, cycle.cycleStart, cycle.cycleEnd);
+    if (occurrences === 0) continue;
+    belongingIds.push(bill.id);
+    // A weekly bill can fall due several times in one cycle — expect the sum.
+    const expected = round2(parseFloat(String(bill.amount)) * occurrences);
     await db
       .insert(cardCycleBillsTable)
       .values({
         userId: cycle.userId,
         cardCycleId,
         billId: bill.id,
-        expectedAmount: String(bill.amount),
+        expectedAmount: String(expected),
         actualAmount: null,
         status: "pending",
       })
@@ -63,9 +99,24 @@ export async function populateCycleBills(cardCycleId: number): Promise<CardCycle
       // but only for rows still pending; reconciled rows keep their history.
       .onConflictDoUpdate({
         target: [cardCycleBillsTable.cardCycleId, cardCycleBillsTable.billId],
-        set: { expectedAmount: String(bill.amount) },
+        set: { expectedAmount: String(expected) },
         setWhere: sql`${cardCycleBillsTable.status} = 'pending'`,
       });
+  }
+
+  // Drop stale PENDING rows whose bill no longer has a due date in this
+  // window (e.g. a cadence or start-date edit moved the occurrence out).
+  // Reconciled/non-pending rows are history and are never touched here.
+  const candidateIds = bills.map((b) => b.id).filter((id) => !belongingIds.includes(id));
+  if (candidateIds.length > 0) {
+    await db
+      .delete(cardCycleBillsTable)
+      .where(and(
+        eq(cardCycleBillsTable.cardCycleId, cardCycleId),
+        inArray(cardCycleBillsTable.billId, candidateIds),
+        eq(cardCycleBillsTable.status, "pending"),
+        sql`not exists (select 1 from ${envelopeAllocationsTable} where ${envelopeAllocationsTable.cardCycleBillId} = ${cardCycleBillsTable.id})`,
+      ));
   }
 
   return db.select().from(cardCycleBillsTable).where(eq(cardCycleBillsTable.cardCycleId, cardCycleId));

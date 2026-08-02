@@ -1,4 +1,4 @@
-import { and, eq, gte, gt, sql, notInArray } from "drizzle-orm";
+import { and, eq, gte, gt, sql, notInArray, inArray } from "drizzle-orm";
 import { db, plaidTransactionsTable, detectedBillsTable, billsTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 
@@ -651,15 +651,34 @@ async function reconcileAgainstBills(userId: string): Promise<number> {
     .select()
     .from(detectedBillsTable)
     .where(and(eq(detectedBillsTable.userId, userId), eq(detectedBillsTable.status, "pending")));
-  // Only compare against regular bills: goal contribution bills are savings
-  // transfers, and detection must never treat a detected pattern as a
-  // duplicate of one (or otherwise reason about them).
+  // Compare against regular AND upkeep bills: goal contribution bills are
+  // savings transfers, and detection must never treat a detected pattern as
+  // a duplicate of one (or otherwise reason about them). Upkeep bills are
+  // never auto-created by detection, but they MUST participate in dedupe —
+  // an existing "annual vet visit" upkeep bill should mark a matching
+  // detected pattern as duplicate, not let it surface as a new proposal.
   const bills = await db
     .select()
     .from(billsTable)
-    .where(and(eq(billsTable.userId, userId), eq(billsTable.billKind, "regular")));
+    .where(and(eq(billsTable.userId, userId), inArray(billsTable.billKind, ["regular", "upkeep"])));
   let duplicates = 0;
   for (const det of pendingRows) {
+    // Tier 1 — explicit merchant link: the user tied this merchant to a bill
+    // via match_merchant, so a detected pattern for the same merchant key is
+    // that bill's charges regardless of the cadence/amount detection guessed
+    // (an upkeep vet bill's charges can cluster as "monthly" and still be it).
+    const linked = bills.find(
+      (b) => b.matchMerchant && normalizeMerchant(b.matchMerchant) === det.merchantKey,
+    );
+    if (linked) {
+      await db
+        .update(detectedBillsTable)
+        .set({ status: "duplicate", duplicateOf: linked.id, updatedAt: new Date() })
+        .where(eq(detectedBillsTable.id, det.id));
+      duplicates++;
+      continue;
+    }
+    // Tier 2 — heuristic: same cadence + close amount + similar name.
     for (const bill of bills) {
       if (bill.frequency !== det.frequency) continue;
       const billAmount = Math.abs(parseFloat(String(bill.amount)));

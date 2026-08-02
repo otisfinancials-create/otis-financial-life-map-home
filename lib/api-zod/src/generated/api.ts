@@ -54,7 +54,7 @@ export const ListBillsResponseItem = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
-  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
+  "billKind": zod.enum(['regular', 'goal_contribution', 'upkeep']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -81,7 +81,8 @@ export const CreateBillBody = zod.object({
   "isVariable": zod.boolean().optional(),
   "isActive": zod.boolean().optional(),
   "notes": zod.string().optional(),
-  "matchMerchant": zod.string().nullish()
+  "matchMerchant": zod.string().nullish(),
+  "billKind": zod.enum(['regular', 'upkeep']).optional()
 })
 
 export const CreateBillResponse = zod.object({
@@ -103,7 +104,7 @@ export const CreateBillResponse = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
-  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
+  "billKind": zod.enum(['regular', 'goal_contribution', 'upkeep']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -150,7 +151,7 @@ export const GetBillResponse = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
-  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
+  "billKind": zod.enum(['regular', 'goal_contribution', 'upkeep']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -202,7 +203,7 @@ export const UpdateBillResponse = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
-  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
+  "billKind": zod.enum(['regular', 'goal_contribution', 'upkeep']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -216,122 +217,6 @@ export const DeleteBillParams = zod.object({
 })
 
 export const DeleteBillResponse = zod.void()
-
-
-/**
- * @summary List all life events
- */
-export const ListLifeEventsResponseItem = zod.object({
-  "id": zod.number(),
-  "eventName": zod.string(),
-  "category": zod.string(),
-  "customCategory": zod.string().nullish(),
-  "amount": zod.number(),
-  "timingType": zod.string(),
-  "eventDate": zod.string().nullish(),
-  "startDate": zod.string().nullish(),
-  "endDate": zod.string().nullish(),
-  "frequency": zod.string().nullish(),
-  "customIntervalDays": zod.number().nullish(),
-  "priority": zod.string(),
-  "notes": zod.string().nullish(),
-  "isActive": zod.boolean(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-export const ListLifeEventsResponse = zod.array(ListLifeEventsResponseItem)
-
-
-/**
- * @summary Create a life event
- */
-export const CreateLifeEventBody = zod.object({
-  "eventName": zod.string(),
-  "category": zod.string(),
-  "customCategory": zod.string().optional(),
-  "amount": zod.number(),
-  "timingType": zod.string(),
-  "eventDate": zod.string().optional(),
-  "startDate": zod.string().optional(),
-  "endDate": zod.string().optional(),
-  "frequency": zod.string().optional(),
-  "customIntervalDays": zod.number().optional(),
-  "priority": zod.string(),
-  "notes": zod.string().optional(),
-  "isActive": zod.boolean().optional()
-})
-
-export const CreateLifeEventResponse = zod.object({
-  "id": zod.number(),
-  "eventName": zod.string(),
-  "category": zod.string(),
-  "customCategory": zod.string().nullish(),
-  "amount": zod.number(),
-  "timingType": zod.string(),
-  "eventDate": zod.string().nullish(),
-  "startDate": zod.string().nullish(),
-  "endDate": zod.string().nullish(),
-  "frequency": zod.string().nullish(),
-  "customIntervalDays": zod.number().nullish(),
-  "priority": zod.string(),
-  "notes": zod.string().nullish(),
-  "isActive": zod.boolean(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-
-
-/**
- * @summary Update a life event
- */
-export const UpdateLifeEventParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-export const UpdateLifeEventBody = zod.object({
-  "eventName": zod.string().optional(),
-  "category": zod.string().optional(),
-  "customCategory": zod.string().nullish(),
-  "amount": zod.number().optional(),
-  "timingType": zod.string().optional(),
-  "eventDate": zod.string().nullish(),
-  "startDate": zod.string().nullish(),
-  "endDate": zod.string().nullish(),
-  "frequency": zod.string().nullish(),
-  "customIntervalDays": zod.number().nullish(),
-  "priority": zod.string().optional(),
-  "notes": zod.string().nullish(),
-  "isActive": zod.boolean().optional()
-})
-
-export const UpdateLifeEventResponse = zod.object({
-  "id": zod.number(),
-  "eventName": zod.string(),
-  "category": zod.string(),
-  "customCategory": zod.string().nullish(),
-  "amount": zod.number(),
-  "timingType": zod.string(),
-  "eventDate": zod.string().nullish(),
-  "startDate": zod.string().nullish(),
-  "endDate": zod.string().nullish(),
-  "frequency": zod.string().nullish(),
-  "customIntervalDays": zod.number().nullish(),
-  "priority": zod.string(),
-  "notes": zod.string().nullish(),
-  "isActive": zod.boolean(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-
-
-/**
- * @summary Delete a life event
- */
-export const DeleteLifeEventParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-export const DeleteLifeEventResponse = zod.void()
 
 
 /**
@@ -1883,7 +1768,6 @@ export const GetMonthlyForecastResponseItem = zod.object({
   "label": zod.string(),
   "totalIncome": zod.number(),
   "totalExpenses": zod.number(),
-  "totalLifeEvents": zod.number(),
   "netCashFlow": zod.number()
 })
 export const GetMonthlyForecastResponse = zod.array(GetMonthlyForecastResponseItem)
@@ -2448,7 +2332,7 @@ export const GetBillLinkReviewResponseItem = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
-  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
+  "billKind": zod.enum(['regular', 'goal_contribution', 'upkeep']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 }),
@@ -2500,7 +2384,7 @@ export const LinkBillMerchantResponse = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
-  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
+  "billKind": zod.enum(['regular', 'goal_contribution', 'upkeep']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -2688,7 +2572,7 @@ export const ConfirmDetectedBillResponse = zod.object({
   "isActive": zod.boolean(),
   "notes": zod.string().nullish(),
   "matchMerchant": zod.string().nullish(),
-  "billKind": zod.enum(['regular', 'goal_contribution']).optional(),
+  "billKind": zod.enum(['regular', 'goal_contribution', 'upkeep']).optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
