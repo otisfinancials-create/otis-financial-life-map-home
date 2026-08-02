@@ -208,7 +208,7 @@ export function CashFlowModal({
   const byCategory = bills
     .filter((b) => b.isActive)
     .reduce<Record<string, number>>((acc, b) => {
-      acc[b.category] = (acc[b.category] ?? 0) + b.amount * monthlyFactor(b.frequency);
+      acc[b.category] = (acc[b.category] ?? 0) + b.amount * monthlyFactor(b.frequency, b.customIntervalDays);
       return acc;
     }, {});
   const outRows = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);

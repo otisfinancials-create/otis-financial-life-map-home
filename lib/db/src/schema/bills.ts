@@ -10,6 +10,9 @@ export const billsTable = pgTable("bills", {
   category: text("category").notNull(),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   frequency: text("frequency").notNull(),
+  // Interval in days for frequency='custom' (e.g. 548 for an 18-month service
+  // cycle). NULL for every other frequency; required (>=1) when custom.
+  customIntervalDays: integer("custom_interval_days"),
   dueDay: integer("due_day").notNull(),
   // Constrained set: 'credit-card' | 'debit-card' | 'bank-transfer' | 'check' | 'cash'
   // (enforced at the API layer; null = unknown/pending manual review).

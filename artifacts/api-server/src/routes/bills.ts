@@ -49,6 +49,42 @@ function canonicalizeDueDay<T extends { frequency?: string | null; startDate?: s
   return data;
 }
 
+// The full cadence set bills support. Anything else is rejected at the API
+// boundary — the forecast stepper THROWS on unknown frequencies (no silent
+// monthly fallback), so bad values must never reach the table.
+const BILL_FREQUENCIES = new Set([
+  "weekly", "biweekly", "semi-monthly", "monthly", "quarterly", "semi-annual", "annual", "annually", "custom",
+]);
+// Sane lower bound on bill start dates — a year-0026 typo once burned 5000
+// stepper iterations per regeneration.
+const MIN_BILL_START_DATE = "2000-01-01";
+
+/**
+ * Validate cadence-related fields on create/update. Returns an error string
+ * or null. `existing` supplies current values for partial updates.
+ */
+export function validateBillCadence(
+  data: { frequency?: string | null; customIntervalDays?: number | null; startDate?: string | null },
+  existing?: { frequency: string; customIntervalDays: number | null },
+): string | null {
+  const frequency = data.frequency ?? existing?.frequency;
+  if (data.frequency != null && !BILL_FREQUENCIES.has(data.frequency.toLowerCase())) {
+    return `Unknown frequency "${data.frequency}". Supported: weekly, biweekly, semi-monthly, monthly, quarterly, semi-annual, annual, custom.`;
+  }
+  const interval = data.customIntervalDays !== undefined ? data.customIntervalDays : existing?.customIntervalDays ?? null;
+  if (frequency?.toLowerCase() === "custom") {
+    if (interval == null || !Number.isInteger(interval) || interval < 1 || interval > 3650) {
+      return "A custom frequency requires customIntervalDays between 1 and 3650.";
+    }
+  } else if (data.customIntervalDays != null) {
+    return "customIntervalDays is only allowed when frequency is 'custom'.";
+  }
+  if (data.startDate != null && data.startDate < MIN_BILL_START_DATE) {
+    return `Start date ${data.startDate} is before ${MIN_BILL_START_DATE} — check for a year typo.`;
+  }
+  return null;
+}
+
 /**
  * Normalize a user-supplied match merchant the same way the matcher
  * normalizes transaction names, so stored keys and match-time keys line up.
@@ -88,6 +124,11 @@ router.post("/bills", async (req, res): Promise<void> => {
     return;
   }
   const data = canonicalizeDueDay(parsed.data);
+  const cadenceError = validateBillCadence(data);
+  if (cadenceError) {
+    res.status(400).json({ error: cadenceError });
+    return;
+  }
   if (!(await paymentAccountBelongsToUser(req.userId, data.paymentAccountId))) {
     res.status(400).json({ error: "Invalid paying account" });
     return;
@@ -303,14 +344,24 @@ router.patch("/bills/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid paying account" });
     return;
   }
-  const { amount: rawBillAmount, matchMerchant: rawMatchMerchant, ...restBillData } = canonicalized;
-  const matchMerchant = normalizeMatchMerchant(rawMatchMerchant);
   // Capture the pre-update paying account so a moved bill leaves the old
   // card's cycles as part of the sync.
   const [before] = await db
-    .select({ paymentAccountId: billsTable.paymentAccountId, billKind: billsTable.billKind })
+    .select({
+      paymentAccountId: billsTable.paymentAccountId,
+      billKind: billsTable.billKind,
+      frequency: billsTable.frequency,
+      customIntervalDays: billsTable.customIntervalDays,
+    })
     .from(billsTable)
     .where(and(eq(billsTable.id, params.data.id), eq(billsTable.userId, req.userId)));
+  if (before) {
+    const cadenceError = validateBillCadence(canonicalized, before);
+    if (cadenceError) {
+      res.status(400).json({ error: cadenceError });
+      return;
+    }
+  }
   // Goal contribution bills are managed exclusively by the goal lifecycle
   // (commit/uncommit/edit-goal) — generic bill edits could make them
   // card-paid or break the goal↔bill linkage.
@@ -318,6 +369,16 @@ router.patch("/bills/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "This is a goal contribution — edit it from the Goals page instead." });
     return;
   }
+  // Server-authoritative cadence transition: switching to a non-custom
+  // frequency clears the interval even when the client omits the field, so a
+  // stale interval can never be silently reused on a later switch back.
+  const effectiveFrequency = canonicalized.frequency ?? before?.frequency;
+  const cadenceNormalized =
+    effectiveFrequency != null && effectiveFrequency.toLowerCase() !== "custom"
+      ? { ...canonicalized, customIntervalDays: null }
+      : canonicalized;
+  const { amount: rawBillAmount, matchMerchant: rawMatchMerchant, ...restBillData } = cadenceNormalized;
+  const matchMerchant = normalizeMatchMerchant(rawMatchMerchant);
   const [bill] = await db
     .update(billsTable)
     .set({

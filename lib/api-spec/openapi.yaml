@@ -2256,6 +2256,8 @@ components:
           type: number
         frequency:
           type: string
+        customIntervalDays:
+          type: ["integer", "null"]
         dueDay:
           type: integer
         amountType:
@@ -2351,6 +2353,8 @@ components:
           type: number
         frequency:
           type: string
+        customIntervalDays:
+          type: ["integer", "null"]
         dueDay:
           type: integer
         amountType:
@@ -2389,6 +2393,8 @@ components:
           type: number
         frequency:
           type: string
+        customIntervalDays:
+          type: ["integer", "null"]
         dueDay:
           type: integer
         amountType:

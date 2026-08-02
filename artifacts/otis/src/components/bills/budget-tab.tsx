@@ -319,13 +319,13 @@ export function BudgetTab() {
                                 saving={updateBill.isPending}
                               />
                               <span className="font-mono text-sm text-muted-foreground w-24 text-right">
-                                <FormatCurrency amount={bill.amount * monthlyFactor(bill.frequency)} />
+                                <FormatCurrency amount={bill.amount * monthlyFactor(bill.frequency, bill.customIntervalDays)} />
                                 <span className="text-[10px]"> / mo</span>
                               </span>
                             </span>
                           </TableCell>
                           <TableCell className={`${moneyCell} text-sm text-muted-foreground`}>
-                            {pctOfIncome(bill.amount * monthlyFactor(bill.frequency))}
+                            {pctOfIncome(bill.amount * monthlyFactor(bill.frequency, bill.customIntervalDays))}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -399,10 +399,10 @@ export function BudgetTab() {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">goal contribution</TableCell>
                   <TableCell className={moneyCell}>
-                    <FormatCurrency amount={bill.amount * monthlyFactor(bill.frequency)} />
+                    <FormatCurrency amount={bill.amount * monthlyFactor(bill.frequency, bill.customIntervalDays)} />
                   </TableCell>
                   <TableCell className={`${moneyCell} text-sm text-muted-foreground`}>
-                    {pctOfIncome(bill.amount * monthlyFactor(bill.frequency))}
+                    {pctOfIncome(bill.amount * monthlyFactor(bill.frequency, bill.customIntervalDays))}
                   </TableCell>
                 </TableRow>
               ))}

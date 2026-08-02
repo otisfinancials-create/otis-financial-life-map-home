@@ -286,7 +286,7 @@ export default function Dashboard() {
   );
   const activeBills = (bills ?? []).filter((b) => b.isActive);
   const billsByCategory = activeBills.reduce<Record<string, number>>((acc, b) => {
-    acc[b.category] = (acc[b.category] ?? 0) + b.amount * monthlyFactor(b.frequency);
+    acc[b.category] = (acc[b.category] ?? 0) + b.amount * monthlyFactor(b.frequency, b.customIntervalDays);
     return acc;
   }, {});
   const billsMonthlyTotal = Object.values(billsByCategory).reduce((s, v) => s + v, 0);

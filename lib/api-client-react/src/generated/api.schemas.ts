@@ -57,6 +57,8 @@ export interface Bill {
   category: string;
   amount: number;
   frequency: string;
+  /** @nullable */
+  customIntervalDays?: number | null;
   dueDay: number;
   amountType: BillAmountType;
   /** @nullable */
@@ -134,6 +136,8 @@ export interface BillInput {
   category: string;
   amount: number;
   frequency: string;
+  /** @nullable */
+  customIntervalDays?: number | null;
   dueDay: number;
   amountType?: BillInputAmountType;
   /** @nullable */
@@ -178,6 +182,8 @@ export interface BillUpdate {
   category?: string;
   amount?: number;
   frequency?: string;
+  /** @nullable */
+  customIntervalDays?: number | null;
   dueDay?: number;
   amountType?: BillUpdateAmountType;
   /** @nullable */

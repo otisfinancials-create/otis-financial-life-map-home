@@ -44,7 +44,7 @@ export function BillsAnalytics({ bills, selectedCategory = null, onSelectCategor
     const byCategory: Record<string, number> = {};
     for (const bill of bills) {
       if (!bill.isActive) continue;
-      const monthly = bill.amount * monthlyFactor(bill.frequency);
+      const monthly = bill.amount * monthlyFactor(bill.frequency, bill.customIntervalDays);
       // Kind-based grouping (shared concept, lib/bill-groups.ts): goal
       // contributions form their own slice, never their free-text category.
       const key = isGoalContribution(bill) ? GOAL_SAVINGS_LABEL : bill.category;

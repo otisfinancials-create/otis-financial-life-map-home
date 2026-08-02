@@ -134,7 +134,7 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
     for (const b of activeBills) {
       const row: BillRow = {
         bill: b,
-        planned: b.amount * monthlyFactor(b.frequency),
+        planned: b.amount * monthlyFactor(b.frequency, b.customIntervalDays),
         paid: paidByBill.get(b.id) ?? 0,
       };
       if (isGoalContribution(b)) {

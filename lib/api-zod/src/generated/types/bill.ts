@@ -15,6 +15,8 @@ export interface Bill {
   category: string;
   amount: number;
   frequency: string;
+  /** @nullable */
+  customIntervalDays?: number | null;
   dueDay: number;
   amountType: BillAmountType;
   /** @nullable */

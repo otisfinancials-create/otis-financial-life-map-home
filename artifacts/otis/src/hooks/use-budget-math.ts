@@ -40,7 +40,7 @@ export function useBudgetMath() {
     [bills],
   );
   const totalGoalSavings = useMemo(
-    () => goalBills.reduce((s, b) => s + b.amount * monthlyFactor(b.frequency), 0),
+    () => goalBills.reduce((s, b) => s + b.amount * monthlyFactor(b.frequency, b.customIntervalDays), 0),
     [goalBills],
   );
 
@@ -54,9 +54,9 @@ export function useBudgetMath() {
       .map(([category, list]) => ({
         category,
         bills: list.sort(
-          (a, b) => b.amount * monthlyFactor(b.frequency) - a.amount * monthlyFactor(a.frequency),
+          (a, b) => b.amount * monthlyFactor(b.frequency, b.customIntervalDays) - a.amount * monthlyFactor(a.frequency, a.customIntervalDays),
         ),
-        monthlyTotal: list.reduce((s, b) => s + b.amount * monthlyFactor(b.frequency), 0),
+        monthlyTotal: list.reduce((s, b) => s + b.amount * monthlyFactor(b.frequency, b.customIntervalDays), 0),
       }))
       .sort((a, b) => b.monthlyTotal - a.monthlyTotal);
   }, [bills]);

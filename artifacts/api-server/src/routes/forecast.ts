@@ -1690,7 +1690,10 @@ function advanceByFrequency(date: Date, frequency: string): Date {
     case "quarterly": d.setMonth(d.getMonth() + 3); break;
     case "semi-annual": case "semiannual": case "biannual": d.setMonth(d.getMonth() + 6); break;
     case "annual": case "annually": case "yearly": d.setFullYear(d.getFullYear() + 1); break;
-    default: d.setMonth(d.getMonth() + 1);
+    default:
+      // Never default silently on a financial cadence — a wrong-but-plausible
+      // schedule is worse than a loud failure.
+      throw new Error(`advanceByFrequency: unknown pay schedule frequency "${frequency}"`);
   }
   return d;
 }
@@ -1717,7 +1720,8 @@ function advanceIsoByFrequency(iso: string, frequency: string, customIntervalDay
     case "biannually": case "bi-annually": case "semi-annual": case "semiannual": case "biannual": return addMonthsIso(iso, 6);
     case "annual": case "annually": case "yearly": return addMonthsIso(iso, 12);
     case "custom": return addDaysIso(iso, customIntervalDays && customIntervalDays > 0 ? customIntervalDays : 30);
-    default: return addMonthsIso(iso, 12);
+    default:
+      throw new Error(`advanceIsoByFrequency: unknown life event frequency "${frequency}"`);
   }
 }
 
@@ -1737,19 +1741,43 @@ function addDaysIso(iso: string, n: number): string {
 }
 
 type BillLike = {
+  id?: number;
   frequency: string;
   dueDay: number;
   startDate: string | null;
   endDate: string | null;
+  customIntervalDays?: number | null;
 };
+
+// Semi-monthly anchor semantics: occurrences land on the 1st and the 15th —
+// identical to the pay schedule stepper (advanceByFrequency), NOT "add 15
+// days". From any date: day < 15 → the 15th of the same month; otherwise the
+// 1st of the next month.
+function stepSemiMonthlyIso(iso: string): string {
+  const y = Number(iso.slice(0, 4));
+  const m = Number(iso.slice(5, 7));
+  const d = Number(iso.slice(8, 10));
+  if (d < 15) return `${iso.slice(0, 8)}15`;
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  return `${ny}-${String(nm).padStart(2, "0")}-01`;
+}
 
 // Produces every occurrence date (YYYY-MM-DD) for a bill within the forecast
 // window [todayStr, windowEndStr], honoring the bill's own start/end dates.
 //
 //   - monthly           → anchored on dueDay, clamped to each month's length
 //   - weekly / biweekly → stepped in days from the first bill date (startDate)
+//   - semi-monthly      → anchored to the 1st and 15th (pay schedule semantics)
 //   - quarterly         → stepped +3 months from the first bill date
+//   - semi-annual       → stepped +6 months from the first bill date
 //   - annual            → stepped +12 months from the first bill date
+//   - custom            → stepped +customIntervalDays days from the first bill date
+//
+// This is the AUTHORITATIVE bill stepper — the forecast engine, goal bucket
+// derivation, and the client-side form preview must all agree with it.
+// An unknown frequency THROWS; it must never silently fall back to monthly
+// (that failure mode produced a silent 6×/12× over-forecast).
 //
 // The same start/end-date clamping applies to every frequency, so a bill never
 // generates rows before its start date or after its end date.
@@ -1793,19 +1821,37 @@ export function generateBillOccurrences(
     switch (freq) {
       case "weekly": return addDaysIso(iso, 7);
       case "biweekly": case "bi-weekly": return addDaysIso(iso, 14);
+      case "semi-monthly": case "semimonthly": return stepSemiMonthlyIso(iso);
       case "quarterly": return addMonthsIso(iso, 3);
+      case "semi-annual": case "semiannual": case "biannual": return addMonthsIso(iso, 6);
       case "annual": case "annually": case "yearly": return addMonthsIso(iso, 12);
-      default: return addMonthsIso(iso, 1);
+      case "custom": {
+        const days = bill.customIntervalDays;
+        if (days == null || days < 1) {
+          throw new Error(`generateBillOccurrences: bill ${bill.id ?? "?"} has frequency "custom" but no valid customIntervalDays (${days})`);
+        }
+        return addDaysIso(iso, days);
+      }
+      default:
+        throw new Error(`generateBillOccurrences: unknown frequency "${bill.frequency}" on bill ${bill.id ?? "?"} — refusing to guess a cadence`);
     }
   };
 
   let current = seed;
   let guard = 0;
   while (current < startBoundary && guard++ < MAX) current = step(current);
+  if (guard >= MAX) {
+    // Loud, never silent: a tripped guard means truncated emission (e.g. a
+    // year-0026 start-date typo). The rows that fit are still returned.
+    console.error(`generateBillOccurrences: loop guard tripped catching up bill ${bill.id ?? "?"} (freq=${bill.frequency}, start=${bill.startDate}) to ${startBoundary} — emission may be truncated`);
+  }
   guard = 0;
   while (current <= endBoundary && guard++ < MAX) {
     out.push(current);
     current = step(current);
+  }
+  if (guard >= MAX && current <= endBoundary) {
+    console.error(`generateBillOccurrences: loop guard tripped emitting bill ${bill.id ?? "?"} (freq=${bill.frequency}) — emission truncated at ${out[out.length - 1]} before window end ${endBoundary}`);
   }
   return out;
 }

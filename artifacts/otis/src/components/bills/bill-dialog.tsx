@@ -55,10 +55,17 @@ const CATEGORIES = BILL_CATEGORIES;
 const FREQUENCIES = [
   { value: "weekly", label: "Weekly" },
   { value: "biweekly", label: "Bi-weekly" },
+  { value: "semi-monthly", label: "Semi-monthly (1st & 15th)" },
   { value: "monthly", label: "Monthly" },
   { value: "quarterly", label: "Quarterly" },
+  { value: "semi-annual", label: "Semi-annual (every 6 months)" },
   { value: "annually", label: "Annually" },
+  { value: "custom", label: "Custom interval (days)" },
 ];
+
+// Sane lower bound on start dates — a year-0026 typo once slipped through a
+// date form and burned thousands of stepper iterations per regeneration.
+const MIN_START_DATE = "2000-01-01";
 
 const PAYMENT_METHODS = [
   { value: "credit-card", label: "Credit Card" },
@@ -89,6 +96,13 @@ const billSchema = z
         message: "Amount is limited to 9 digits before the decimal point and 2 decimal places.",
       }),
     frequency: z.string().min(1, { message: "Please select a frequency." }),
+    customIntervalDays: z.preprocess(
+      (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
+      z.number().int({ message: "Interval must be a whole number of days." })
+        .min(1, { message: "Interval must be at least 1 day." })
+        .max(3650, { message: "Interval must be 3650 days or fewer." })
+        .optional(),
+    ),
     amountType: z.enum(["positive", "negative"]).default("negative"),
     dueDay: z.preprocess(
       (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
@@ -141,6 +155,16 @@ const billSchema = z
         code: "custom",
         message: "Please enter a valid URL (e.g. netflix.com)",
       });
+    }
+
+    // Custom cadence requires an interval.
+    if (data.frequency === "custom" && data.customIntervalDays == null) {
+      ctx.addIssue({ path: ["customIntervalDays"], code: "custom", message: "Please enter the interval in days." });
+    }
+
+    // Sane lower bound — catches year typos like 0026.
+    if (data.startDate && data.startDate < MIN_START_DATE) {
+      ctx.addIssue({ path: ["startDate"], code: "custom", message: `Start date must be on or after ${MIN_START_DATE}.` });
     }
 
     // End date must be on or after the start date.
@@ -207,7 +231,17 @@ function formatMonthDay(iso: string): string {
   return `${MONTHS[m - 1]} ${d}`;
 }
 
-function previewOccurrences(frequency: string, dueDay?: number, startDate?: string): string[] {
+// Semi-monthly anchor semantics — identical to the server stepper: day < 15 →
+// the 15th of the same month; otherwise the 1st of the next month.
+function stepSemiMonthlyIso(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (d < 15) return `${iso.slice(0, 8)}15`;
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  return `${ny}-${String(nm).padStart(2, "0")}-01`;
+}
+
+function previewOccurrences(frequency: string, dueDay?: number, startDate?: string, customIntervalDays?: number): string[] {
   const today = todayIso();
   const out: string[] = [];
   const freq = frequency.toLowerCase();
@@ -226,15 +260,22 @@ function previewOccurrences(frequency: string, dueDay?: number, startDate?: stri
   }
 
   if (!startDate) return [];
+  if (freq === "custom" && (!customIntervalDays || customIntervalDays < 1)) return [];
+  // Mirrors the server's generateBillOccurrences step exactly. Unknown
+  // frequencies produce no preview (the server rejects them outright).
   const step = (iso: string): string => {
     switch (freq) {
       case "weekly": return addDaysIso(iso, 7);
       case "biweekly": case "bi-weekly": return addDaysIso(iso, 14);
+      case "semi-monthly": case "semimonthly": return stepSemiMonthlyIso(iso);
       case "quarterly": return addMonthsIso(iso, 3);
+      case "semi-annual": case "semiannual": case "biannual": return addMonthsIso(iso, 6);
       case "annual": case "annually": case "yearly": return addMonthsIso(iso, 12);
-      default: return addMonthsIso(iso, 1);
+      case "custom": return addDaysIso(iso, customIntervalDays!);
+      default: return iso;
     }
   };
+  if (step(startDate) === startDate) return [];
   let current = startDate;
   let guard = 0;
   while (current < today && guard++ < 500) current = step(current);
@@ -271,6 +312,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       category: bill?.category || "",
       amount: bill?.amount || 0,
       frequency: bill?.frequency || "monthly",
+      customIntervalDays: bill?.customIntervalDays ?? undefined,
       amountType: (bill?.amountType as "positive" | "negative") || "negative",
       dueDay: bill?.dueDay,
       paymentMethod: parsePaymentMethod(bill?.paymentMethod),
@@ -292,6 +334,7 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       category: bill?.category || "",
       amount: bill?.amount || 0,
       frequency: bill?.frequency || "monthly",
+      customIntervalDays: bill?.customIntervalDays ?? undefined,
       amountType: (bill?.amountType as "positive" | "negative") || "negative",
       dueDay: bill?.dueDay,
       paymentMethod: parsePaymentMethod(bill?.paymentMethod),
@@ -329,10 +372,13 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
   const isMonthly = watchedFrequency === "monthly";
   const isAnnual = watchedFrequency === "annually" || watchedFrequency === "annual";
 
+  const watchedCustomInterval = form.watch("customIntervalDays");
+
   const preview = previewOccurrences(
     watchedFrequency,
     typeof watchedDueDay === "number" ? watchedDueDay : watchedDueDay ? Number(watchedDueDay) : undefined,
     watchedStartDate || undefined,
+    typeof watchedCustomInterval === "number" ? watchedCustomInterval : watchedCustomInterval ? Number(watchedCustomInterval) : undefined,
   );
 
   // Paying-account choices, narrowed by method to prevent contradictions
@@ -362,6 +408,8 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
       category: data.category,
       amount: data.amount,
       frequency: data.frequency,
+      // Server rejects an interval on non-custom frequencies; null clears it.
+      customIntervalDays: data.frequency === "custom" ? data.customIntervalDays ?? null : null,
       amountType: data.amountType,
       dueDay: dueDay ?? 1,
       paymentMethod: (data.paymentMethod || null) as BillInputPaymentMethod | null,
@@ -491,6 +539,31 @@ export function BillForm({ bill, onSaved, onCancel }: BillFormProps) {
                 )}
               />
             </div>
+
+            {watchedFrequency === "custom" && (
+              <FormField
+                control={form.control}
+                name="customIntervalDays"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Repeat every (days)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 548 for every 18 months"
+                        {...field}
+                        value={field.value ?? ""}
+                        data-testid="input-custom-interval-days"
+                      />
+                    </FormControl>
+                    <FormDescription className="text-[10px]">
+                      The bill repeats this many days after the first bill date.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
