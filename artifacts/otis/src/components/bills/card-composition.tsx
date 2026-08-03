@@ -155,9 +155,26 @@ export function CardCompositionSection() {
                 {open && c.bills.map((b) => (
                   <TableRow key={`cb-${b.id}`} className="border-border bg-muted/20 hover:bg-muted/20">
                     <TableCell className="pl-12 text-sm text-muted-foreground">↳ {b.billName}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-[10px]">bill</Badge></TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center gap-1">
+                        <Badge variant="outline" className="text-[10px]">bill</Badge>
+                        {b.status === "hit" ? (
+                          <Badge className="text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-transparent" data-testid={`badge-cycle-bill-paid-${b.id}`}>
+                            paid
+                          </Badge>
+                        ) : b.status === "missed" ? (
+                          <Badge variant="destructive" className="text-[10px]" data-testid={`badge-cycle-bill-missed-${b.id}`}>missed</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-[10px] text-muted-foreground" data-testid={`badge-cycle-bill-pending-${b.id}`}>not yet charged</Badge>
+                        )}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                      <FormatCurrency amount={b.expectedAmount} />
+                      {b.status === "hit" && b.actualAmount != null ? (
+                        <FormatCurrency amount={b.actualAmount} />
+                      ) : (
+                        <FormatCurrency amount={b.expectedAmount} />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

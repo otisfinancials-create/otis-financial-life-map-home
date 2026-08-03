@@ -6,6 +6,7 @@
 - [E2E Clerk testing](e2e-clerk-testing.md) — runTest needs explicit programmatic sign-in step or Turnstile blocks it; test user has no data, create fixtures first; don't test mid-edit (HMR false failures).
 - [Upkeep bills](upkeep-bills.md) — upkeep items ARE bills (billKind='upkeep'); life events retired; merchant-link tier-1 detection dedupe; isVariable defaults true.
 - [Cycle membership occurrence-based](cycle-membership-occurrence-based.md) — bills join cycles only when a due date falls in the window; monthly special-cased to exactly 1.
+- [Detected bill start_date](detected-bill-start-date.md) — confirm path must stamp first_seen (or NULL), never next_expected_date, or in-flight cycles exclude the bill and its charges hide in Misc.
 - [Bill frequency steppers](bill-frequency-steppers.md) — generateBillOccurrences is the authoritative bill cadence stepper; unknown frequency throws, never silently monthly; keep pricing/preview/validation in lockstep.
 - [Forecast date stepping](forecast-date-stepping.md) — recurring/spread generation must clamp month day (addMonthsIso) and compare YYYY-MM-DD strings, not Date objects.
 - [Life events timing normalization](life-events-timing-normalization.md) — server clears non-applicable date/frequency fields on create+update; PATCH merges existing then normalizes on final timingType.

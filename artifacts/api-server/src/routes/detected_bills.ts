@@ -363,7 +363,12 @@ router.post("/bills/detected/:id/confirm", async (req, res): Promise<void> => {
         isVariable: det.isVariable,
         isActive: true,
         notes: "Auto-detected from transactions",
-        startDate: det.nextExpectedDate,
+        // The bill has been recurring throughout its observed history — its
+        // start date is the FIRST OBSERVED occurrence, never the next
+        // expected one. A future start date would wrongly exclude the bill
+        // from in-flight card cycles (occurrence-based membership) even
+        // though its charges are already posting.
+        startDate: det.firstSeen ?? null,
       })
       .returning();
     await tx
