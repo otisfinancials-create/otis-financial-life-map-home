@@ -5,6 +5,7 @@ import { useGetOtisHistory } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OtisAvatar, type OtisAvatarState } from "@/components/OtisAvatar";
+import { CitationChip, type Citation } from "@/components/otis/CitationChip";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -12,6 +13,30 @@ interface ChatMessage {
   streaming?: boolean;
   createdAt?: string;
   cachedAsOf?: string;
+  citations?: Citation[];
+}
+
+// Anchor-shaped tokens: [n15], [a8], [b42]… — matched loosely (any letter) so
+// even a malformed/hallucinated id is stripped rather than rendered literally.
+const ANCHOR_RE = /\s?\[([a-z]{1,2}\d{1,4})\]/gi;
+// A partially streamed anchor at the tail of the text ("[n1" / "[") — must
+// never flicker or render literally while markdown re-parses each chunk.
+const PARTIAL_ANCHOR_TAIL_RE = /\s?\[[a-z]{0,2}\d{0,4}$/i;
+
+/**
+ * Turn valid anchors into markdown links (#cite-<id>) the renderer resolves
+ * to chips; strip unmatched/malformed anchors silently so the answer reads
+ * normally even with no citations at all. While streaming (before the
+ * citation table arrives), all anchors are hidden.
+ */
+function prepareContent(content: string, citations: Citation[] | undefined, streaming: boolean | undefined): string {
+  if (streaming || !citations || citations.length === 0) {
+    return content.replace(ANCHOR_RE, "").replace(PARTIAL_ANCHOR_TAIL_RE, "");
+  }
+  const known = new Set(citations.map((c) => c.cite));
+  return content.replace(ANCHOR_RE, (_m, id: string) =>
+    known.has(id) ? `\u00a0[†](#cite-${id})` : "",
+  );
 }
 
 export interface ChatDirective {
@@ -70,7 +95,9 @@ function DotsThinking() {
   );
 }
 
-function AssistantMarkdown({ content }: { content: string }) {
+function AssistantMarkdown({ content, citations, streaming }: { content: string; citations?: Citation[]; streaming?: boolean }) {
+  const citationMap = new Map((citations ?? []).map((c) => [c.cite, c]));
+  const prepared = prepareContent(content, citations, streaming);
   return (
     <div className="otis-markdown space-y-2">
       <ReactMarkdown
@@ -85,11 +112,18 @@ function AssistantMarkdown({ content }: { content: string }) {
           h2: ({ children }) => <h2 className="text-sm font-semibold">{children}</h2>,
           h3: ({ children }) => <h3 className="text-sm font-semibold">{children}</h3>,
           hr: () => <hr className="my-2 border-white/30" />,
-          a: ({ children, href }) => (
-            <a href={href} target="_blank" rel="noreferrer" className="underline underline-offset-2">
-              {children}
-            </a>
-          ),
+          a: ({ children, href }) => {
+            if (href?.startsWith("#cite-")) {
+              const citation = citationMap.get(href.slice(6));
+              // Unresolvable anchor → render nothing (graceful degradation).
+              return citation ? <CitationChip citation={citation} /> : null;
+            }
+            return (
+              <a href={href} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                {children}
+              </a>
+            );
+          },
           code: ({ children }) => (
             <code className="rounded bg-white/20 px-1 py-0.5 font-mono text-[0.85em]">{children}</code>
           ),
@@ -104,13 +138,13 @@ function AssistantMarkdown({ content }: { content: string }) {
           td: ({ children }) => <td className="border border-white/25 px-2 py-1 text-left">{children}</td>,
         }}
       >
-        {content}
+        {prepared}
       </ReactMarkdown>
     </div>
   );
 }
 
-function MessageBubble({ role, content, streaming, cachedAsOf }: ChatMessage) {
+function MessageBubble({ role, content, streaming, cachedAsOf, citations }: ChatMessage) {
   const isOtis = role === "assistant";
   return (
     <div className={`flex items-start gap-3 ${isOtis ? "" : "flex-row-reverse"}`}>
@@ -130,7 +164,7 @@ function MessageBubble({ role, content, streaming, cachedAsOf }: ChatMessage) {
           }`}
         >
           {isOtis ? (
-            <AssistantMarkdown content={content} />
+            <AssistantMarkdown content={content} citations={citations} streaming={streaming} />
           ) : (
             content
           )}
@@ -236,12 +270,13 @@ export function OtisChat({ directive, onDirectiveConsumed }: OtisChatProps) {
         const decoder = new TextDecoder();
         let assistantContent = "";
         let cachedAsOf: string | undefined;
+        let citations: Citation[] | undefined;
         let buffer = "";
 
         const updateLast = (content: string, streaming: boolean) =>
           setMessages((prev) => {
             const updated = [...prev];
-            updated[updated.length - 1] = { role: "assistant", content, streaming, cachedAsOf };
+            updated[updated.length - 1] = { role: "assistant", content, streaming, cachedAsOf, citations };
             return updated;
           });
 
@@ -255,7 +290,12 @@ export function OtisChat({ directive, onDirectiveConsumed }: OtisChatProps) {
             if (!line.startsWith("data: ")) continue;
             try {
               const parsed = JSON.parse(line.slice(6));
-              if (parsed.cachedAsOf) {
+              if (parsed.citations) {
+                // Arrives after the content stream completes — full text is
+                // in hand before anchors resolve to chips.
+                citations = parsed.citations as Citation[];
+                updateLast(assistantContent, true);
+              } else if (parsed.cachedAsOf) {
                 cachedAsOf = parsed.cachedAsOf;
                 updateLast(assistantContent, true);
               } else if (parsed.content) {
@@ -379,6 +419,7 @@ export function OtisChat({ directive, onDirectiveConsumed }: OtisChatProps) {
                     content={m.content}
                     streaming={m.streaming}
                     cachedAsOf={m.cachedAsOf}
+                    citations={m.citations}
                   />
                 )}
               </div>

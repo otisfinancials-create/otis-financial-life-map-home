@@ -53,6 +53,25 @@ interface FinancialContext {
     monthlyPayment: number;
   }[];
   summaryText: string;
+  /** cite id → display metadata; the server-side registry the citation table is built from. */
+  citations: Record<string, CitationMeta>;
+}
+
+export interface CitationMeta {
+  label: string;
+  kind: "sourced" | "calculated" | "estimated";
+  origin?: "live" | "manual";
+  lastSyncedAt?: string | null;
+}
+
+/** Anchors the model may emit: [a8], [n15], [b42] — prefix + sequence number. */
+const ANCHOR_RE = /\[([naigrlb]\d{1,3})\]/g;
+
+/** Extract the cite ids actually referenced in a response, in order of first appearance. */
+export function extractAnchors(text: string): string[] {
+  const seen = new Set<string>();
+  for (const m of text.matchAll(ANCHOR_RE)) if (m[1]) seen.add(m[1]);
+  return [...seen];
 }
 
 export async function buildFinancialContext(userId: string): Promise<FinancialContext> {
@@ -153,7 +172,12 @@ export async function buildFinancialContext(userId: string): Promise<FinancialCo
   // the model must reference them, never invent them.
   const SOURCE_CAP = 8; // top N sources by |balance| per figure; rest → "other" bucket
   let citeSeq = 0;
-  const cite = (prefix: string) => `${prefix}${++citeSeq}`;
+  const citations: Record<string, CitationMeta> = {};
+  const cite = (prefix: string, meta: CitationMeta) => {
+    const id = `${prefix}${++citeSeq}`;
+    citations[id] = meta;
+    return id;
+  };
 
   const maxSync = (rows: { lastSyncedAt: string | null }[]) =>
     rows.reduce<string | null>((m, r) => (r.lastSyncedAt && (!m || r.lastSyncedAt > m) ? r.lastSyncedAt : m), null);
@@ -170,19 +194,22 @@ export async function buildFinancialContext(userId: string): Promise<FinancialCo
       lastSyncedAt: s.lastSyncedAt,
       origin: s.origin,
       kind: "sourced" as const,
-      cite: cite("a"),
+      cite: cite("a", { label: s.name, kind: "sourced", origin: s.origin, lastSyncedAt: s.lastSyncedAt }),
     }));
     const rest = sorted.slice(SOURCE_CAP);
     if (rest.length > 0) {
       // Provenance of the bucket reflects what it aggregates: live if any
       // member is live, freshness = the freshest member's sync time.
+      const restLabel = `${rest.length} smaller sources`;
+      const restSync = maxSync(rest);
+      const restOrigin = rest.some((r) => r.origin === "live") ? ("live" as const) : ("manual" as const);
       top.push({
-        account: `other (${rest.length} smaller sources)`,
+        account: `other (${restLabel})`,
         balance: Math.round(rest.reduce((s, r) => s + r.balance, 0)),
-        lastSyncedAt: maxSync(rest),
-        origin: rest.some((r) => r.origin === "live") ? "live" : "manual",
+        lastSyncedAt: restSync,
+        origin: restOrigin,
         kind: "sourced",
-        cite: cite("a"),
+        cite: cite("a", { label: restLabel, kind: "sourced", origin: restOrigin, lastSyncedAt: restSync }),
       });
     }
     return top;
@@ -207,57 +234,61 @@ export async function buildFinancialContext(userId: string): Promise<FinancialCo
       netWorth: {
         value: Math.round(netWorth),
         kind: "calculated",
-        cite: cite("n"),
+        cite: cite("n", { label: "Net worth", kind: "calculated", lastSyncedAt: netWorthAsOf }),
         asOf: netWorthAsOf,
         sources: allSources.map((s) => s.cite),
       },
       totalAssets: {
         value: Math.round(totalAssets),
         kind: "calculated",
-        cite: cite("n"),
+        cite: cite("n", { label: "Total assets", kind: "calculated", lastSyncedAt: assetsAsOf }),
         asOf: assetsAsOf,
         sources: assetSources,
       },
       totalLiabilities: {
         value: Math.round(totalLiabilities),
         kind: "calculated",
-        cite: cite("n"),
+        cite: cite("n", { label: "Total liabilities", kind: "calculated", lastSyncedAt: liabilitiesAsOf }),
         asOf: liabilitiesAsOf,
         sources: liabilitySources,
       },
-      monthlyCashFlow: { value: Math.round(monthlyCashFlow), kind: "calculated", cite: cite("n") },
-      monthlyIncome: { value: Math.round(monthlyIncome), kind: "calculated", cite: cite("n") },
-      monthlyExpenses: { value: Math.round(monthlyExpenses), kind: "calculated", cite: cite("n") },
+      monthlyCashFlow: { value: Math.round(monthlyCashFlow), kind: "calculated", cite: cite("n", { label: "Monthly cash flow", kind: "calculated" }) },
+      monthlyIncome: { value: Math.round(monthlyIncome), kind: "calculated", cite: cite("n", { label: "Monthly income", kind: "calculated" }) },
+      monthlyExpenses: { value: Math.round(monthlyExpenses), kind: "calculated", cite: cite("n", { label: "Monthly expenses", kind: "calculated" }) },
     },
     income: [...paySchedules].sort((a, b) => a.employerName.localeCompare(b.employerName)).map((p) => ({
       name: p.employerName,
       monthlyAmount: Math.round(num(p.amount) * (FREQ_TO_MONTHLY[p.frequency.toLowerCase()] ?? 1)),
       kind: "calculated", // frequency-normalized from the user's pay schedule
-      cite: cite("i"),
+      cite: cite("i", { label: `${p.employerName} income`, kind: "calculated" }),
     })),
     billsByCategory: [...billsByCategoryMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([category, monthlyTotal]) => ({
       category,
       monthlyTotal: Math.round(monthlyTotal),
       kind: "calculated",
-      cite: cite("g"),
+      cite: cite("g", { label: `${category} bills`, kind: "calculated" }),
     })),
     loans: [...loans].sort((a, b) => a.loanName.localeCompare(b.loanName)).map((l) => ({
       name: l.loanName,
-      balance: { value: num(l.currentBalance), kind: "sourced", cite: cite("l") },
+      balance: { value: num(l.currentBalance), kind: "sourced", cite: cite("l", { label: l.loanName, kind: "sourced", origin: "manual" }) },
       rate: num(l.interestRate),
       monthlyPayment: num(l.monthlyPayment),
-      payoffDate: { value: payoffDate(l), kind: "calculated", cite: cite("l") },
+      payoffDate: { value: payoffDate(l), kind: "calculated", cite: cite("l", { label: `${l.loanName} payoff date`, kind: "calculated" }) },
     })),
     retirement: {
-      currentSavings: { value: Math.round(investedBalance), kind: "calculated", cite: cite("r") },
-      monthlyContribution: { value: Math.round(monthlyContribution), kind: "sourced", cite: cite("r") },
-      projectedValue: { value: Math.round(projectedValue), kind: "estimated", cite: cite("r") },
-      readinessScore: { value: readinessScore, kind: "estimated", cite: cite("r") },
+      currentSavings: { value: Math.round(investedBalance), kind: "calculated", cite: cite("r", { label: "Retirement savings", kind: "calculated" }) },
+      monthlyContribution: { value: Math.round(monthlyContribution), kind: "sourced", cite: cite("r", { label: "Monthly contribution", kind: "sourced", origin: "manual" }) },
+      projectedValue: { value: Math.round(projectedValue), kind: "estimated", cite: cite("r", { label: "Projected retirement value", kind: "estimated" }) },
+      readinessScore: { value: readinessScore, kind: "estimated", cite: cite("r", { label: "Retirement readiness score", kind: "estimated" }) },
     },
     upcomingBills: upcomingBills.map((b) => ({
       ...b,
       kind: b.isVariable ? "estimated" : "sourced",
-      cite: cite("b"),
+      cite: cite("b", {
+        label: b.name,
+        kind: b.isVariable ? "estimated" : "sourced",
+        origin: "manual",
+      }),
     })),
   };
 
@@ -285,6 +316,7 @@ export async function buildFinancialContext(userId: string): Promise<FinancialCo
       monthlyPayment: num(l.monthlyPayment),
     })),
     summaryText,
+    citations,
   };
 }
 
@@ -309,7 +341,13 @@ Provenance (the JSON annotates figures with kind/cite/lastSyncedAt):
 - Use the annotated values exactly as given — never recompute, re-derive, or estimate a number that is already in the JSON.
 - Never invent or state a timestamp, sync time, "as of" date, or any freshness claim (e.g. "synced 3 hours ago"). Freshness is rendered by the app from data — you never write it.
 - When you quote a figure whose kind is "estimated" (variable bills, projections), say it is an estimate in plain language.
-- Ignore cite ids and lastSyncedAt fields when writing prose — they are internal metadata, never to be shown to the user.`;
+- Ignore lastSyncedAt fields when writing prose — they are internal metadata, never to be shown to the user.
+
+Citation anchors:
+- When you quote a figure the answer RESTS ON, append its cite id right after the figure as a short bracketed anchor: "**$1,517,303** [n15]". Nothing else — the app turns anchors into citations.
+- Anchor only load-bearing figures: the one to three numbers the answer depends on. Supporting or incidental numbers get no anchor. Never more than 3 anchors per response.
+- Only use cite ids that appear in the JSON. Never invent, alter, or guess an id.
+- Never write citation content yourself: no account names as attribution, no timestamps, no "synced", no "as of", no "(source: ...)". The anchor is the entire citation.`;
 
 /** Detect a simple cacheable question ("what's my net worth / cash flow"). */
 function detectCacheableQuestion(text: string): OtisCacheKey | null {
@@ -379,6 +417,23 @@ async function loadHistory(userId: string) {
   return rows.reverse();
 }
 
+/** Resolve the anchors actually referenced in a response against the citation registry. */
+export function buildCitationTable(text: string, registry: Record<string, CitationMeta>) {
+  return extractAnchors(text)
+    .filter((id) => registry[id] != null)
+    .map((id) => {
+      const m = registry[id]!;
+      return {
+        cite: id,
+        label: m.label,
+        kind: m.kind,
+        ...(m.origin ? { origin: m.origin } : {}),
+        // ISO or null — freshness is ALWAYS rendered client-side at render time.
+        lastSyncedAt: m.lastSyncedAt ?? null,
+      };
+    });
+}
+
 /** Merge consecutive same-role messages (Anthropic requires alternation). */
 function normalizeMessages(msgs: { role: "user" | "assistant"; content: string }[]) {
   const out: { role: "user" | "assistant"; content: string }[] = [];
@@ -437,6 +492,17 @@ router.post("/otis/chat", async (req, res): Promise<void> => {
       }
       res.write(`data: ${JSON.stringify({ content: cached.content })}\n\n`);
       res.write(`data: ${JSON.stringify({ cachedAsOf: cached.lastUpdated.toISOString() })}\n\n`);
+      // Citations are resolved against a FRESH context, never stored with the
+      // response — a cached answer replayed days later must carry the current
+      // lastSyncedAt so the client renders current freshness (no fossilization).
+      // Cite ids are deterministic for unchanged data; if the data shifted so
+      // an anchor no longer resolves, the client strips it silently.
+      try {
+        const freshCtx = await buildFinancialContext(req.userId);
+        res.write(`data: ${JSON.stringify({ citations: buildCitationTable(cached.content, freshCtx.citations) })}\n\n`);
+      } catch (err) {
+        req.log.error({ err }, "Failed to build citations for cached Otis response");
+      }
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
       return;
@@ -486,6 +552,8 @@ router.post("/otis/chat", async (req, res): Promise<void> => {
 
     if (userText && assistantText) {
       try {
+        // The cache stores the text WITH anchors; citations are re-resolved
+        // fresh on every replay so freshness is never baked in.
         await db.insert(otisConversationsTable).values([
           { userId: req.userId, role: "user", content: userText },
           { userId: req.userId, role: "assistant", content: assistantText },
@@ -496,6 +564,9 @@ router.post("/otis/chat", async (req, res): Promise<void> => {
       }
     }
 
+    // Emit the citation table AFTER the content stream completes (client needs
+    // the full text before resolving anchors), and only entries actually cited.
+    res.write(`data: ${JSON.stringify({ citations: buildCitationTable(assistantText, ctx.citations) })}\n\n`);
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   } catch (err) {
