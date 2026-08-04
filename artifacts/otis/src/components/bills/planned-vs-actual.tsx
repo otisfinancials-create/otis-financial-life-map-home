@@ -41,6 +41,21 @@ function boundsFor(year: number, month: number): { start: string; end: string; l
   };
 }
 
+/** Explicit cycle status marker for card-paid bills (pending / hit / missed). */
+function CycleStatusBadge({ status }: { status: "pending" | "hit" | "missed" }) {
+  const map = {
+    hit: { icon: "✅", title: "Posted to the card" },
+    pending: { icon: "⏳", title: "Not posted yet this cycle" },
+    missed: { icon: "🔴", title: "Missed — no matching charge this cycle" },
+  } as const;
+  const { icon, title } = map[status];
+  return (
+    <span title={title} aria-label={title} style={{ fontSize: 13, lineHeight: 1 }}>
+      {icon}
+    </span>
+  );
+}
+
 function StatusIcon({ planned, paid }: { planned: number; paid: number }) {
   const remaining = planned - paid;
   let icon = "🔴";
@@ -86,9 +101,24 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
     { query: { queryKey: getListForecastQueryKey({ startDate: start, endDate: end }) } },
   );
   const { data: paySchedules = [], isLoading: payLoading } = useListPaySchedules();
-  // A cycle's envelopes belong to the month its payment lands in the
-  // forecast — the month containing the cycle's due date.
-  const { data: compositions = [] } = useListCardCompositions({ dueStart: start, dueEnd: end });
+  // MONTH ATTRIBUTION: a cycle's bills and envelopes belong to the month the
+  // CYCLE CLOSES. That matches the Bills tab, which shows you the mid-flight
+  // cycle today — the spending happens during the cycle, so a mid-cycle user
+  // sees what has posted and what hasn't in the current month, not shifted a
+  // month out to when the card payment is due. (The payment itself still
+  // lands in the forecast on the due date — one aggregate, shown once.)
+  // The endpoint filters by DUE date, which trails cycle end by up to ~2
+  // months, so fetch a wider due window and filter by cycle end here.
+  const dueWindowEnd = useMemo(() => {
+    const d = new Date(`${end}T00:00:00`);
+    d.setDate(d.getDate() + 70);
+    return d.toISOString().slice(0, 10);
+  }, [end]);
+  const { data: allCompositions = [] } = useListCardCompositions({ dueStart: start, dueEnd: dueWindowEnd });
+  const compositions = useMemo(
+    () => allCompositions.filter((c) => c.cycleEnd >= start && c.cycleEnd <= end),
+    [allCompositions, start, end],
+  );
 
   const isLoading = txLoading || payLoading;
 
@@ -131,10 +161,32 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
       }
     }
 
+    // Card-paid bills have NO forecast rows of their own — they exist only as
+    // card_cycle_bills composition rows, and their money reaches the forecast
+    // through the is_cc_parent aggregate (which we skip above). Read them
+    // directly from the cycle compositions instead, attributed to the month
+    // the cycle's payment is due — the same convention that already places
+    // the envelope groups (and the payment itself) in a month. Amounts are
+    // the real per-cycle expected/actual values — never normalized, so a
+    // quarterly bill appears only in cycles containing an occurrence.
+    const cardBillAgg = new Map<number, { planned: number; paid: number; statuses: string[] }>();
+    for (const c of compositions) {
+      for (const cb of c.bills) {
+        if (cb.billId == null) continue;
+        const agg = cardBillAgg.get(cb.billId) ?? { planned: 0, paid: 0, statuses: [] };
+        agg.planned += cb.expectedAmount;
+        agg.paid += cb.actualAmount ?? 0;
+        agg.statuses.push(cb.status);
+        cardBillAgg.set(cb.billId, agg);
+      }
+    }
+
     interface BillRow {
       bill: Bill;
       planned: number;
       paid: number;
+      /** Explicit cycle status for card-paid bills (pending / hit / missed). */
+      cycleStatus?: "pending" | "hit" | "missed";
     }
     // Goal contributions group under their own "Goal Savings" heading —
     // kind-based (billKind), never by their free-text category. Same shared
@@ -142,13 +194,30 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
     const goalRows: BillRow[] = [];
     const byCategory = new Map<string, BillRow[]>();
     for (const b of activeBills) {
-      // Only bills with an actual forecast occurrence this month appear.
-      if (!plannedByBill.has(b.id)) continue;
-      const row: BillRow = {
-        bill: b,
-        planned: plannedByBill.get(b.id) ?? 0,
-        paid: paidByBill.get(b.id) ?? 0,
-      };
+      const fromForecast = plannedByBill.has(b.id);
+      const fromCycle = !fromForecast && cardBillAgg.has(b.id);
+      // Only bills with a forecast occurrence OR a card-cycle allocation this
+      // month appear. A bill is counted from exactly ONE source — forecast
+      // rows win, so nothing can appear both as a bank-paid occurrence and a
+      // cycle child.
+      if (!fromForecast && !fromCycle) continue;
+      const agg = fromCycle ? cardBillAgg.get(b.id)! : undefined;
+      const row: BillRow = agg
+        ? {
+            bill: b,
+            planned: agg.planned,
+            paid: agg.paid,
+            cycleStatus: agg.statuses.every((s) => s === "hit")
+              ? "hit"
+              : agg.statuses.includes("pending")
+                ? "pending"
+                : "missed",
+          }
+        : {
+            bill: b,
+            planned: plannedByBill.get(b.id) ?? 0,
+            paid: paidByBill.get(b.id) ?? 0,
+          };
       if (isGoalContribution(b)) {
         goalRows.push(row);
         continue;
@@ -323,7 +392,11 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
                             <FormatCurrency amount={r.planned - r.paid} />
                           </TableCell>
                           <TableCell className="text-center">
-                            <StatusIcon planned={r.planned} paid={r.paid} />
+                            {r.cycleStatus ? (
+                              <CycleStatusBadge status={r.cycleStatus} />
+                            ) : (
+                              <StatusIcon planned={r.planned} paid={r.paid} />
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
