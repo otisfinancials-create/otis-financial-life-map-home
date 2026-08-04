@@ -55,7 +55,7 @@ interface FinancialContext {
   summaryText: string;
 }
 
-async function buildFinancialContext(userId: string): Promise<FinancialContext> {
+export async function buildFinancialContext(userId: string): Promise<FinancialContext> {
   const [accounts, assets, bills, paySchedules, loans, settingsRows] =
     await Promise.all([
       db.select().from(accountsTable).where(eq(accountsTable.userId, userId)),
@@ -69,7 +69,8 @@ async function buildFinancialContext(userId: string): Promise<FinancialContext> 
   const settings = settingsRows[0];
   // Single shared net-worth computation (services/net-worth.ts) — the AI
   // context must quote the same numbers the dashboard shows.
-  const { totalAssets, totalLiabilities, netWorth } = await computeNetWorth(userId);
+  const netWorthCtx = await computeNetWorth(userId);
+  const { totalAssets, totalLiabilities, netWorth } = netWorthCtx;
 
   const monthlyIncome = paySchedules.reduce(
     (s, p) => s + num(p.amount) * (FREQ_TO_MONTHLY[p.frequency.toLowerCase()] ?? 1),
@@ -99,10 +100,16 @@ async function buildFinancialContext(userId: string): Promise<FinancialContext> 
     .map((b) => {
       let due = new Date(today.getFullYear(), today.getMonth(), b.dueDay);
       if (due < today) due = new Date(today.getFullYear(), today.getMonth() + 1, b.dueDay);
-      return { name: b.billName, amount: num(b.amount), dueDate: due.toISOString().slice(0, 10) };
+      return {
+        name: b.billName,
+        amount: num(b.amount),
+        dueDate: due.toISOString().slice(0, 10),
+        // A variable bill's amount is our estimate from recent charges, not a fixed price.
+        isVariable: b.isVariable === true,
+      };
     })
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-    .slice(0, 5);
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.name.localeCompare(b.name))
+    .slice(0, 12);
 
   const billsByCategoryMap = new Map<string, number>();
   for (const b of activeBills) {
@@ -135,37 +142,123 @@ async function buildFinancialContext(userId: string): Promise<FinancialContext> 
     return d.toISOString().slice(0, 7);
   };
 
+  // ── Provenance annotation ─────────────────────────────────────────────────
+  // Every provenanced figure carries a short server-assigned cite id and a
+  // three-way classification:
+  //   sourced    — from a connected account (carries lastSyncedAt) or entered
+  //                verbatim by the user (origin tells them apart)
+  //   calculated — derived deterministically from user data by our engines
+  //   estimated  — genuine uncertainty (variable bills, projections)
+  // Cite ids are the enumerated vocabulary a later citation layer will parse —
+  // the model must reference them, never invent them.
+  const SOURCE_CAP = 8; // top N sources by |balance| per figure; rest → "other" bucket
+  let citeSeq = 0;
+  const cite = (prefix: string) => `${prefix}${++citeSeq}`;
+
+  const maxSync = (rows: { lastSyncedAt: string | null }[]) =>
+    rows.reduce<string | null>((m, r) => (r.lastSyncedAt && (!m || r.lastSyncedAt > m) ? r.lastSyncedAt : m), null);
+
+  const annotateSources = (sources: typeof netWorthCtx.assetSources) => {
+    // Deterministic order: |balance| desc, then name — so cite ids are stable
+    // across runs for unchanged data (DB row order is not deterministic).
+    const sorted = [...sources].sort(
+      (a, b) => Math.abs(b.balance) - Math.abs(a.balance) || a.name.localeCompare(b.name),
+    );
+    const top = sorted.slice(0, SOURCE_CAP).map((s) => ({
+      account: s.name,
+      balance: s.balance,
+      lastSyncedAt: s.lastSyncedAt,
+      origin: s.origin,
+      kind: "sourced" as const,
+      cite: cite("a"),
+    }));
+    const rest = sorted.slice(SOURCE_CAP);
+    if (rest.length > 0) {
+      // Provenance of the bucket reflects what it aggregates: live if any
+      // member is live, freshness = the freshest member's sync time.
+      top.push({
+        account: `other (${rest.length} smaller sources)`,
+        balance: Math.round(rest.reduce((s, r) => s + r.balance, 0)),
+        lastSyncedAt: maxSync(rest),
+        origin: rest.some((r) => r.origin === "live") ? "live" : "manual",
+        kind: "sourced",
+        cite: cite("a"),
+      });
+    }
+    return top;
+  };
+
+  const assetSources = annotateSources(netWorthCtx.assetSources);
+  const liabilitySources = annotateSources(netWorthCtx.liabilitySources);
+  const allSources = [...assetSources, ...liabilitySources];
+  // Freshness is computed from the FULL raw source sets — capping must never
+  // hide the freshest account from asOf.
+  const assetsAsOf = maxSync(netWorthCtx.assetSources);
+  const liabilitiesAsOf = maxSync(netWorthCtx.liabilitySources);
+  const netWorthAsOf =
+    assetsAsOf && liabilitiesAsOf
+      ? (assetsAsOf > liabilitiesAsOf ? assetsAsOf : liabilitiesAsOf)
+      : (assetsAsOf ?? liabilitiesAsOf);
+
   const contextObject = {
+    citationRules:
+      "Each figure carries: kind (sourced=real balance from a connected account or entered by the user; calculated=derived by our engines; estimated=our best guess with genuine uncertainty), a cite id, and for live sources a lastSyncedAt. Quote values exactly. Call estimated figures estimates. Never state timestamps.",
     summary: {
-      netWorth: Math.round(netWorth),
-      totalAssets: Math.round(totalAssets),
-      totalLiabilities: Math.round(totalLiabilities),
-      monthlyCashFlow: Math.round(monthlyCashFlow),
-      monthlyIncome: Math.round(monthlyIncome),
-      monthlyExpenses: Math.round(monthlyExpenses),
+      netWorth: {
+        value: Math.round(netWorth),
+        kind: "calculated",
+        cite: cite("n"),
+        asOf: netWorthAsOf,
+        sources: allSources.map((s) => s.cite),
+      },
+      totalAssets: {
+        value: Math.round(totalAssets),
+        kind: "calculated",
+        cite: cite("n"),
+        asOf: assetsAsOf,
+        sources: assetSources,
+      },
+      totalLiabilities: {
+        value: Math.round(totalLiabilities),
+        kind: "calculated",
+        cite: cite("n"),
+        asOf: liabilitiesAsOf,
+        sources: liabilitySources,
+      },
+      monthlyCashFlow: { value: Math.round(monthlyCashFlow), kind: "calculated", cite: cite("n") },
+      monthlyIncome: { value: Math.round(monthlyIncome), kind: "calculated", cite: cite("n") },
+      monthlyExpenses: { value: Math.round(monthlyExpenses), kind: "calculated", cite: cite("n") },
     },
-    income: paySchedules.map((p) => ({
+    income: [...paySchedules].sort((a, b) => a.employerName.localeCompare(b.employerName)).map((p) => ({
       name: p.employerName,
       monthlyAmount: Math.round(num(p.amount) * (FREQ_TO_MONTHLY[p.frequency.toLowerCase()] ?? 1)),
+      kind: "calculated", // frequency-normalized from the user's pay schedule
+      cite: cite("i"),
     })),
-    billsByCategory: [...billsByCategoryMap.entries()].map(([category, monthlyTotal]) => ({
+    billsByCategory: [...billsByCategoryMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([category, monthlyTotal]) => ({
       category,
       monthlyTotal: Math.round(monthlyTotal),
+      kind: "calculated",
+      cite: cite("g"),
     })),
-    loans: loans.map((l) => ({
+    loans: [...loans].sort((a, b) => a.loanName.localeCompare(b.loanName)).map((l) => ({
       name: l.loanName,
-      balance: num(l.currentBalance),
+      balance: { value: num(l.currentBalance), kind: "sourced", cite: cite("l") },
       rate: num(l.interestRate),
       monthlyPayment: num(l.monthlyPayment),
-      payoffDate: payoffDate(l),
+      payoffDate: { value: payoffDate(l), kind: "calculated", cite: cite("l") },
     })),
     retirement: {
-      currentSavings: Math.round(investedBalance),
-      monthlyContribution: Math.round(monthlyContribution),
-      projectedValue: Math.round(projectedValue),
-      readinessScore,
+      currentSavings: { value: Math.round(investedBalance), kind: "calculated", cite: cite("r") },
+      monthlyContribution: { value: Math.round(monthlyContribution), kind: "sourced", cite: cite("r") },
+      projectedValue: { value: Math.round(projectedValue), kind: "estimated", cite: cite("r") },
+      readinessScore: { value: readinessScore, kind: "estimated", cite: cite("r") },
     },
-    upcomingBills,
+    upcomingBills: upcomingBills.map((b) => ({
+      ...b,
+      kind: b.isVariable ? "estimated" : "sourced",
+      cite: cite("b"),
+    })),
   };
 
   const summaryText = JSON.stringify(contextObject);
@@ -210,7 +303,13 @@ Formatting:
 - Health scores: bold number, then a simple two-column strengths vs opportunities table.
 - No filler phrases like "genuinely strong", "That's not catastrophic", "I want to make sure", "I'm all ears".
 - End every comprehensive response with exactly one follow-up question or offer — never a list of options.
-- When a "Computed facts" block is provided, use those exact numbers — never recompute or estimate loan math.`;
+- When a "Computed facts" block is provided, use those exact numbers — never recompute or estimate loan math.
+
+Provenance (the JSON annotates figures with kind/cite/lastSyncedAt):
+- Use the annotated values exactly as given — never recompute, re-derive, or estimate a number that is already in the JSON.
+- Never invent or state a timestamp, sync time, "as of" date, or any freshness claim (e.g. "synced 3 hours ago"). Freshness is rendered by the app from data — you never write it.
+- When you quote a figure whose kind is "estimated" (variable bills, projections), say it is an estimate in plain language.
+- Ignore cite ids and lastSyncedAt fields when writing prose — they are internal metadata, never to be shown to the user.`;
 
 /** Detect a simple cacheable question ("what's my net worth / cash flow"). */
 function detectCacheableQuestion(text: string): OtisCacheKey | null {
