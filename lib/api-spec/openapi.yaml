@@ -3182,6 +3182,9 @@ components:
           type: ["number", "null"]
         isCarryover:
           type: boolean
+        isOverride:
+          type: boolean
+          description: This cycle's amount was set individually and is skipped by recurring-amount propagation
         matchCategories:
           type: ["array", "null"]
           items:
@@ -3243,6 +3246,14 @@ components:
           type: ["array", "null"]
           items:
             type: string
+        scope:
+          type: string
+          enum: [this-cycle, all-future]
+          description: >-
+            When the planned amount / weekly rate changes: "this-cycle" marks the
+            envelope as a per-cycle override (recurring updates skip it);
+            "all-future" makes this the recurring amount and propagates it to
+            every future cycle that has not been individually overridden.
 
     AccountInput:
       type: object

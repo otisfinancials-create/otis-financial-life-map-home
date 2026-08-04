@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EnvelopeUpdateCadence } from './envelopeUpdateCadence';
+import type { EnvelopeUpdateScope } from './envelopeUpdateScope';
 
 export interface EnvelopeUpdate {
   /** @minLength 1 */
@@ -21,4 +22,6 @@ export interface EnvelopeUpdate {
   note?: string | null;
   /** @nullable */
   matchCategories?: string[] | null;
+  /** When the planned amount / weekly rate changes: "this-cycle" marks the envelope as a per-cycle override (recurring updates skip it); "all-future" makes this the recurring amount and propagates it to every future cycle that has not been individually overridden. */
+  scope?: EnvelopeUpdateScope;
 }

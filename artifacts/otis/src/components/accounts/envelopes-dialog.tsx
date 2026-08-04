@@ -151,7 +151,7 @@ export function EnvelopesDialog({ account, open, onOpenChange }: {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editValues, setEditValues] = useState<{ name: string; plannedAmount: string; weeklyRate: string }>({ name: "", plannedAmount: "", weeklyRate: "" });
+  const [editValues, setEditValues] = useState<{ name: string; plannedAmount: string; weeklyRate: string; scope: string }>({ name: "", plannedAmount: "", weeklyRate: "", scope: "all-future" });
 
   // Manual charge entry state.
   const [addingCharge, setAddingCharge] = useState(false);
@@ -171,6 +171,7 @@ export function EnvelopesDialog({ account, open, onOpenChange }: {
       name: e.name,
       plannedAmount: String(e.plannedAmount),
       weeklyRate: e.weeklyRate != null ? String(e.weeklyRate) : "0",
+      scope: "all-future",
     });
   };
 
@@ -181,6 +182,7 @@ export function EnvelopesDialog({ account, open, onOpenChange }: {
     } else {
       data.plannedAmount = parseFloat(editValues.plannedAmount) || 0;
     }
+    if (e.recurring && !e.isCarryover) data.scope = editValues.scope;
     updateEnvelope.mutate({ id: e.id, data }, { onSuccess: () => setEditingId(null) });
   };
 
@@ -415,6 +417,22 @@ export function EnvelopesDialog({ account, open, onOpenChange }: {
                             {mondays} weeks in this cycle × <FormatCurrency amount={parseFloat(editValues.weeklyRate) || 0} /> ={" "}
                             <span className="font-medium"><FormatCurrency amount={mondays * (parseFloat(editValues.weeklyRate) || 0)} /></span> for the cycle
                           </p>
+                        )}
+                        {e.recurring && !e.isCarryover && (
+                          <RadioGroup
+                            value={editValues.scope}
+                            onValueChange={(v) => setEditValues((vals) => ({ ...vals, scope: v }))}
+                            className="flex gap-4"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <RadioGroupItem value="all-future" id={`scope-future-${e.id}`} data-testid={`radio-scope-future-${e.id}`} />
+                              <Label htmlFor={`scope-future-${e.id}`} className="text-xs font-normal">This & future cycles</Label>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <RadioGroupItem value="this-cycle" id={`scope-cycle-${e.id}`} data-testid={`radio-scope-cycle-${e.id}`} />
+                              <Label htmlFor={`scope-cycle-${e.id}`} className="text-xs font-normal">This cycle only</Label>
+                            </div>
+                          </RadioGroup>
                         )}
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>Cancel</Button>

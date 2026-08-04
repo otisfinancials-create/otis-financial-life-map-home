@@ -12,7 +12,7 @@ import {
   UpdateEnvelopeResponse,
   DeleteEnvelopeParams,
 } from "@workspace/api-zod";
-import { foodPlannedAmount } from "../services/envelopes";
+import { foodPlannedAmount, propagateRecurringAmount } from "../services/envelopes";
 import { processCycle, closeCycle, rollupCycle, recomputeEnvelopeSpent } from "../services/cycle-processing";
 import { regenerateForecastForUser } from "./forecast";
 import {
@@ -42,6 +42,7 @@ function serializeEnvelope(e: Envelope) {
     recurring: e.recurring ?? false,
     weeklyRate: e.weeklyRate != null ? parseFloat(String(e.weeklyRate)) : null,
     isCarryover: e.isCarryover ?? false,
+    isOverride: e.isOverride ?? false,
     matchCategories: e.matchCategories ?? null,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
@@ -555,7 +556,15 @@ router.patch("/envelopes/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const { plannedAmount, weeklyRate, ...rest } = body.data;
+  const { plannedAmount, weeklyRate, scope, ...rest } = body.data;
+  // Value-based change detection: clients may resend the current amount on a
+  // name-only edit. Override/propagation semantics must only kick in when the
+  // number actually changed, or a cosmetic edit could silently clear a
+  // deliberate per-cycle override (or overwrite future cycles).
+  const num = (v: unknown): number | null => (v == null ? null : parseFloat(String(v)));
+  const amountChanged =
+    (plannedAmount !== undefined && num(plannedAmount) !== num(envelope.plannedAmount)) ||
+    (weeklyRate !== undefined && num(weeklyRate) !== num(envelope.weeklyRate));
   const set: Partial<typeof envelopesTable.$inferInsert> = {
     ...rest,
     updatedAt: new Date(),
@@ -569,6 +578,18 @@ router.patch("/envelopes/:id", async (req, res): Promise<void> => {
     if (cycle) set.plannedAmount = String(foodPlannedAmount(cycle, weeklyRate));
   }
 
+  // Recurrence semantics (recurring, non-carryover envelopes only):
+  //  - "this-cycle": a deliberate per-cycle override — flag the row so
+  //    recurring-amount changes and new-cycle generation skip it.
+  //  - "all-future": this becomes the recurring amount — clear any override
+  //    on this row and push the amount into every future cycle that has not
+  //    been individually overridden.
+  const recurringEligible = (envelope.recurring ?? false) && !(envelope.isCarryover ?? false);
+  const effectiveScope = scope ?? "this-cycle";
+  if (amountChanged && recurringEligible) {
+    set.isOverride = effectiveScope === "this-cycle";
+  }
+
   const [updated] = await db
     .update(envelopesTable)
     .set(set)
@@ -577,8 +598,12 @@ router.patch("/envelopes/:id", async (req, res): Promise<void> => {
 
   // Planned totals may have changed: recompute the cycle rollup and the
   // forecast's projected payment so the UI reflects the edit immediately.
-  if (plannedAmount !== undefined || weeklyRate !== undefined) {
-    await rollupCycle(envelope.cardCycleId);
+  if (amountChanged) {
+    const touchedCycles = new Set<number>([envelope.cardCycleId]);
+    if (recurringEligible && effectiveScope === "all-future") {
+      for (const id of await propagateRecurringAmount(updated)) touchedCycles.add(id);
+    }
+    for (const id of touchedCycles) await rollupCycle(id);
     await regenerateForecastForUser(req.userId);
   }
   res.json(UpdateEnvelopeResponse.parse(serializeEnvelope(updated)));

@@ -74,6 +74,7 @@ export * from './envelopeInputEnvelopeType';
 export * from './envelopeInputScope';
 export * from './envelopeUpdate';
 export * from './envelopeUpdateCadence';
+export * from './envelopeUpdateScope';
 export * from './forecastCalendarDay';
 export * from './forecastCalendarEvent';
 export * from './forecastCalendarEventChargesItem';

@@ -26,6 +26,8 @@ export interface Envelope {
   /** @nullable */
   weeklyRate?: number | null;
   isCarryover: boolean;
+  /** This cycle's amount was set individually and is skipped by recurring-amount propagation */
+  isOverride?: boolean;
   /**
      * Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)
      * @nullable

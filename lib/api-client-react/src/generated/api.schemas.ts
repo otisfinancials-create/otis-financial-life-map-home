@@ -699,6 +699,8 @@ export interface Envelope {
   /** @nullable */
   weeklyRate?: number | null;
   isCarryover: boolean;
+  /** This cycle's amount was set individually and is skipped by recurring-amount propagation */
+  isOverride?: boolean;
   /**
      * Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)
      * @nullable
@@ -900,6 +902,17 @@ export const EnvelopeUpdateCadence = {
   'one-time': 'one-time',
 } as const;
 
+/**
+ * When the planned amount / weekly rate changes: "this-cycle" marks the envelope as a per-cycle override (recurring updates skip it); "all-future" makes this the recurring amount and propagates it to every future cycle that has not been individually overridden.
+ */
+export type EnvelopeUpdateScope = typeof EnvelopeUpdateScope[keyof typeof EnvelopeUpdateScope];
+
+
+export const EnvelopeUpdateScope = {
+  'this-cycle': 'this-cycle',
+  'all-future': 'all-future',
+} as const;
+
 export interface EnvelopeUpdate {
   /** @minLength 1 */
   name?: string;
@@ -914,6 +927,8 @@ export interface EnvelopeUpdate {
   note?: string | null;
   /** @nullable */
   matchCategories?: string[] | null;
+  /** When the planned amount / weekly rate changes: "this-cycle" marks the envelope as a per-cycle override (recurring updates skip it); "all-future" makes this the recurring amount and propagates it to every future cycle that has not been individually overridden. */
+  scope?: EnvelopeUpdateScope;
 }
 
 /**

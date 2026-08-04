@@ -1255,6 +1255,7 @@ export const ListCycleEnvelopesResponseItem = zod.object({
   "recurring": zod.boolean(),
   "weeklyRate": zod.number().nullish(),
   "isCarryover": zod.boolean(),
+  "isOverride": zod.boolean().optional().describe('This cycle\'s amount was set individually and is skipped by recurring-amount propagation'),
   "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1298,6 +1299,7 @@ export const CreateCycleEnvelopeResponse = zod.object({
   "recurring": zod.boolean(),
   "weeklyRate": zod.number().nullish(),
   "isCarryover": zod.boolean(),
+  "isOverride": zod.boolean().optional().describe('This cycle\'s amount was set individually and is skipped by recurring-amount propagation'),
   "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1348,6 +1350,7 @@ export const CloseCycleResponse = zod.object({
   "recurring": zod.boolean(),
   "weeklyRate": zod.number().nullish(),
   "isCarryover": zod.boolean(),
+  "isOverride": zod.boolean().optional().describe('This cycle\'s amount was set individually and is skipped by recurring-amount propagation'),
   "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1389,6 +1392,7 @@ export const ListCardCompositionsResponseItem = zod.object({
   "recurring": zod.boolean(),
   "weeklyRate": zod.number().nullish(),
   "isCarryover": zod.boolean(),
+  "isOverride": zod.boolean().optional().describe('This cycle\'s amount was set individually and is skipped by recurring-amount propagation'),
   "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1434,6 +1438,7 @@ export const GetCycleBreakdownResponse = zod.object({
   "recurring": zod.boolean(),
   "weeklyRate": zod.number().nullish(),
   "isCarryover": zod.boolean(),
+  "isOverride": zod.boolean().optional().describe('This cycle\'s amount was set individually and is skipped by recurring-amount propagation'),
   "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1560,7 +1565,8 @@ export const UpdateEnvelopeBody = zod.object({
   "weeklyRate": zod.number().nullish(),
   "cadence": zod.union([zod.literal('weekly'),zod.literal('one-time'),zod.literal(null)]).nullish(),
   "note": zod.string().nullish(),
-  "matchCategories": zod.array(zod.string()).nullish()
+  "matchCategories": zod.array(zod.string()).nullish(),
+  "scope": zod.enum(['this-cycle', 'all-future']).optional().describe('When the planned amount \/ weekly rate changes: \"this-cycle\" marks the envelope as a per-cycle override (recurring updates skip it); \"all-future\" makes this the recurring amount and propagates it to every future cycle that has not been individually overridden.')
 })
 
 export const UpdateEnvelopeResponse = zod.object({
@@ -1577,6 +1583,7 @@ export const UpdateEnvelopeResponse = zod.object({
   "recurring": zod.boolean(),
   "weeklyRate": zod.number().nullish(),
   "isCarryover": zod.boolean(),
+  "isOverride": zod.boolean().optional().describe('This cycle\'s amount was set individually and is skipped by recurring-amount propagation'),
   "matchCategories": zod.array(zod.string()).nullish().describe('Plaid DETAILED category codes this envelope catches (takes precedence over free-text category)'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()

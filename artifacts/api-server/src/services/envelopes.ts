@@ -1,4 +1,4 @@
-import { and, eq, lt, desc } from "drizzle-orm";
+import { and, eq, lt, gt, desc, asc } from "drizzle-orm";
 import { db, cardCyclesTable, envelopesTable, type CardCycle, type Envelope } from "@workspace/db";
 
 /** Number of Mondays between two YYYY-MM-DD dates, inclusive. */
@@ -98,10 +98,30 @@ export async function populateNewCycle(cycle: CardCycle): Promise<void> {
     .limit(1);
 
   if (prior) {
-    const priorEnvelopes = await db
-      .select()
+    // The recurring DEFAULT for each envelope name is the most recent prior
+    // NON-OVERRIDDEN row: a per-cycle override applies to its cycle only and
+    // must never leak into newly generated cycles. Scan all prior cycles
+    // (newest first) so an override in the immediately-previous cycle falls
+    // through to the last recurring default behind it.
+    const priorRows = await db
+      .select({ env: envelopesTable })
       .from(envelopesTable)
-      .where(eq(envelopesTable.cardCycleId, prior.id));
+      .innerJoin(cardCyclesTable, eq(envelopesTable.cardCycleId, cardCyclesTable.id))
+      .where(and(
+        eq(cardCyclesTable.accountId, cycle.accountId),
+        lt(cardCyclesTable.cycleStart, cycle.cycleStart),
+      ))
+      .orderBy(desc(cardCyclesTable.cycleStart));
+    const byName = new Map<string, Envelope>();
+    for (const { env } of priorRows) {
+      const key = env.name.trim().toLowerCase();
+      const current = byName.get(key);
+      // Prefer the newest non-override; keep the newest override only as a
+      // fallback when every prior occurrence is an override.
+      if (!current) byName.set(key, env);
+      else if (current.isOverride && !env.isOverride) byName.set(key, env);
+    }
+    const priorEnvelopes = [...byName.values()];
     const existing = await db
       .select()
       .from(envelopesTable)
@@ -135,4 +155,46 @@ export async function populateNewCycle(cycle: CardCycle): Promise<void> {
   }
 
   await seedDefaultEnvelopes(cycle.id);
+}
+
+/**
+ * Propagate a recurring envelope's amount forward: update the same-named
+ * envelope in every FUTURE cycle of the same account that has not been
+ * individually overridden (is_override = false). Food envelopes propagate the
+ * weekly rate and recompute planned_amount per cycle (Mondays × rate); other
+ * types copy planned_amount as-is. Carryover envelopes are never touched.
+ * Returns the ids of every cycle whose planned total changed (callers must
+ * refresh rollups + the forecast).
+ */
+export async function propagateRecurringAmount(source: Envelope): Promise<number[]> {
+  const [cycle] = await db.select().from(cardCyclesTable).where(eq(cardCyclesTable.id, source.cardCycleId));
+  if (!cycle) return [];
+  const futureCycles = await db
+    .select()
+    .from(cardCyclesTable)
+    .where(and(
+      eq(cardCyclesTable.accountId, cycle.accountId),
+      gt(cardCyclesTable.cycleStart, cycle.cycleStart),
+    ))
+    .orderBy(asc(cardCyclesTable.cycleStart));
+  if (futureCycles.length === 0) return [];
+
+  const rate = source.weeklyRate != null ? parseFloat(String(source.weeklyRate)) : null;
+  const key = source.name.trim().toLowerCase();
+  const touched: number[] = [];
+  for (const fc of futureCycles) {
+    const rows = await db.select().from(envelopesTable).where(eq(envelopesTable.cardCycleId, fc.id));
+    const target = rows.find((e) => !e.isCarryover && e.name.trim().toLowerCase() === key);
+    if (!target || target.isOverride) continue;
+    const planned = source.envelopeType === "food" && rate != null
+      ? String(foodPlannedAmount(fc, rate))
+      : String(source.plannedAmount ?? "0");
+    if (String(target.plannedAmount) === planned && String(target.weeklyRate) === String(source.weeklyRate)) continue;
+    await db
+      .update(envelopesTable)
+      .set({ plannedAmount: planned, weeklyRate: source.weeklyRate, updatedAt: new Date() })
+      .where(eq(envelopesTable.id, target.id));
+    touched.push(fc.id);
+  }
+  return touched;
 }

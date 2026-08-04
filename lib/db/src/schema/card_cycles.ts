@@ -44,6 +44,10 @@ export const envelopesTable = pgTable("envelopes", {
   recurring: boolean("recurring").default(false), // seeds into future cycles when true
   weeklyRate: numeric("weekly_rate", { precision: 15, scale: 2 }), // food: per-week amount
   isCarryover: boolean("is_carryover").default(false), // carryover child (Stage 3)
+  // Per-cycle override: the user set this cycle's amount deliberately, so
+  // recurring-amount propagation ("this and future cycles") must never
+  // overwrite it, and new-cycle generation must never copy forward from it.
+  isOverride: boolean("is_override").notNull().default(false),
   // Plaid DETAILED category codes this envelope catches (e.g.
   // TRANSPORTATION_GAS). When set, takes precedence over free-text `category`.
   matchCategories: text("match_categories").array(),

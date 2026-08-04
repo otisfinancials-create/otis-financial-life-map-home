@@ -245,6 +245,7 @@ function CycleBreakdownRows({ cycleId, ccAccountId }: { cycleId: number; ccAccou
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [editScope, setEditScope] = useState("all-future");
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState(EMPTY_ENVELOPE_FORM);
   const [chargeOpen, setChargeOpen] = useState(false);
@@ -265,11 +266,13 @@ function CycleBreakdownRows({ cycleId, ccAccountId }: { cycleId: number; ccAccou
   const startEdit = (e: Envelope) => {
     setEditingId(e.id);
     setEditValue(String(e.envelopeType === "food" ? (e.weeklyRate ?? 0) : e.plannedAmount));
+    setEditScope("all-future");
   };
   const saveEdit = (e: Envelope) => {
     const value = parseFloat(editValue);
     if (!Number.isFinite(value) || value < 0) return;
-    const payload = e.envelopeType === "food" ? { weeklyRate: value } : { plannedAmount: value };
+    const payload: Record<string, unknown> = e.envelopeType === "food" ? { weeklyRate: value } : { plannedAmount: value };
+    if (e.recurring && !e.isCarryover) payload.scope = editScope;
     updateEnvelope.mutate({ id: e.id, data: payload }, { onSuccess: () => setEditingId(null) });
   };
   const submitAdd = () => {
@@ -379,6 +382,17 @@ function CycleBreakdownRows({ cycleId, ccAccountId }: { cycleId: number; ccAccou
                     <button type="button" className="text-muted-foreground" aria-label="Cancel" onClick={() => setEditingId(null)}>
                       <X className="h-3.5 w-3.5" />
                     </button>
+                    {e.recurring && !e.isCarryover && (
+                      <button
+                        type="button"
+                        className="ml-1 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                        aria-label="Toggle whether this change applies to future cycles"
+                        data-testid={`toggle-scope-${e.id}`}
+                        onClick={() => setEditScope((s) => (s === "all-future" ? "this-cycle" : "all-future"))}
+                      >
+                        {editScope === "all-future" ? "This & future cycles" : "This cycle only"}
+                      </button>
+                    )}
                   </span>
                 ) : (
                   <button
