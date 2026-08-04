@@ -234,7 +234,7 @@ export default function PaySchedules() {
             <div>
               <p className="font-medium">No income sources yet</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Add your salary, freelance income, or any recurring cash inflow to project your forecast accurately.
+                Add how you get paid — this anchors your whole forecast.
               </p>
             </div>
             <PayScheduleDialog

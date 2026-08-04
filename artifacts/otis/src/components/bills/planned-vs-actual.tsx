@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronRight as ChevronRightSmall } from "lucide-react";
 
 import {
@@ -11,6 +12,7 @@ import { foldCarryover } from "@/components/bills/card-composition";
 import type { Bill } from "@workspace/api-client-react";
 
 import { Card } from "@/components/ui/card";
+import { BillDialog } from "@/components/bills/bill-dialog";
 import { Button } from "@/components/ui/button";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -71,6 +73,7 @@ function SummaryCard({ label, amount, color }: { label: string; amount: number; 
 const moneyCell = "text-right font-mono";
 
 export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
+  const [, navigate] = useLocation();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -230,7 +233,15 @@ export function PlannedVsActualTab({ bills }: { bills: Bill[] }) {
             {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
           </div>
         ) : data.categories.length === 0 && data.goalGroup.rows.length === 0 && data.cardGroups.length === 0 && paySchedules.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-muted-foreground">No active bills or pay schedules yet.</p>
+          <div className="px-5 py-8 text-center space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Add bills and a pay schedule to compare what you planned against what happened.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <BillDialog trigger={<Button size="sm">Add a bill</Button>} />
+              <Button size="sm" variant="outline" onClick={() => navigate("/pay-schedules")}>Add a pay schedule</Button>
+            </div>
+          </div>
         ) : (
           <Table>
             <TableHeader>

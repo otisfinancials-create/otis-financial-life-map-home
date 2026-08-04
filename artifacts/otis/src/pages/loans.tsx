@@ -502,8 +502,8 @@ export default function Loans() {
         <EmptyState
           icon={<CreditCard className="h-8 w-8" />}
           title="No loans tracked yet"
-          description="Add your mortgage, auto loans, and other debts to see payoff schedules and simulate extra payments."
-          action={<LoanDialog trigger={<Button>Add Loan</Button>} />}
+          description="Add a loan to see your amortization schedule and payoff date."
+          action={<LoanDialog trigger={<Button>Add a loan</Button>} />}
         />
       )}
 

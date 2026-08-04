@@ -70,6 +70,8 @@ export interface Account {
   institutionLogo?: string | null;
   /** @nullable */
   lastSyncedAt?: string | null;
+  /** True when the account is no longer linked to Plaid but once was (soft-unlinked by disconnect or item removal). Distinguishes "manual because unlinked" from "manually created". */
+  wasPlaidLinked?: boolean;
   /**
      * Minimum payment from Plaid Liabilities (credit cards)
      * @nullable

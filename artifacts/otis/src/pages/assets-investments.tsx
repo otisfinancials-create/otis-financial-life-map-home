@@ -462,9 +462,9 @@ export default function AssetsInvestments() {
         ) : (
           <EmptyState
             icon={<Scale className="h-8 w-8" />}
-            title="No assets added"
-            description="Add property, vehicles, and other holdings to get a complete view of your net worth."
-            action={<AssetDialog trigger={<Button>Add Asset</Button>} />}
+            title="No assets yet"
+            description="Connect an account or add an asset to see your full net worth."
+            action={<AssetDialog trigger={<Button>Add an asset</Button>} />}
           />
         )}
       </div>

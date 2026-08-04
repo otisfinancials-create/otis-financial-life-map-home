@@ -145,9 +145,12 @@ export default function Upkeep() {
             <Wrench className="h-8 w-8 mx-auto text-muted-foreground" />
             <p className="font-medium">No upkeep items yet</p>
             <p className="text-sm text-muted-foreground">
-              Add things like the annual vet visit, HVAC service, or gutter cleaning so their
-              cost is planned for instead of a surprise.
+              Add recurring upkeep — vet visits, HVAC service, car maintenance — so they stop
+              surprising you.
             </p>
+            <Button className="mt-2" onClick={() => { setBillToEdit(undefined); setDialogOpen(true); }} data-testid="button-empty-add-upkeep">
+              <Plus className="h-4 w-4 mr-1" /> Add upkeep item
+            </Button>
           </CardContent>
         </Card>
       ) : (

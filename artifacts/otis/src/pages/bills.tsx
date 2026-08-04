@@ -492,7 +492,7 @@ export default function Bills() {
             description={
               searchTerm
                 ? `No bills matching "${searchTerm}"`
-                : "Add your first bill to start forecasting your cash flow."
+                : "Add your first bill — it appears in your forecast automatically."
             }
             className="border-0 bg-transparent rounded-none"
             action={

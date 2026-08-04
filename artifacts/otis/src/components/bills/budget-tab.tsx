@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Wallet } from "lucide-react";
+import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -16,6 +17,8 @@ import {
 import type { Bill, PaySchedule } from "@workspace/api-client-react";
 
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { BillDialog } from "@/components/bills/bill-dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FormatCurrency } from "@/components/ui/format-currency";
@@ -123,6 +126,7 @@ function BarRow({ label, amount, max, color }: { label: string; amount: number; 
 }
 
 export function BudgetTab() {
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const {
@@ -228,8 +232,14 @@ export function BudgetTab() {
           <EmptyState
             icon={<Wallet className="h-8 w-8" />}
             title="No budget data yet"
-            description="Add pay schedules and active bills to build your monthly budget."
+            description="Add bills and income to see your monthly budget."
             className="border-0 bg-transparent rounded-none"
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <BillDialog trigger={<Button>Add a bill</Button>} />
+                <Button variant="outline" onClick={() => navigate("/pay-schedules")}>Add income</Button>
+              </div>
+            }
           />
         ) : (
           <Table>

@@ -529,6 +529,11 @@ function serialize(a: typeof accountsTable.$inferSelect) {
     createdAt: a.createdAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
     lastSyncedAt: a.lastSyncedAt ? a.lastSyncedAt.toISOString() : null,
+    // Soft-unlink (disconnect / item removal) nulls plaid_account_id but
+    // leaves plaid_subtype behind; manually created accounts never have a
+    // plaid_subtype. That residue is the only signal that a MANUAL account
+    // used to be bank-linked.
+    wasPlaidLinked: a.plaidAccountId == null && a.plaidSubtype != null,
     availableBalance: a.availableBalance != null ? parseFloat(String(a.availableBalance)) : null,
     minimumPayment: a.minimumPayment != null ? parseFloat(String(a.minimumPayment)) : null,
     lastStatementBalance: a.lastStatementBalance != null ? parseFloat(String(a.lastStatementBalance)) : null,

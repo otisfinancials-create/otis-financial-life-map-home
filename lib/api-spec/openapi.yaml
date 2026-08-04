@@ -2850,6 +2850,12 @@ components:
           description: Base64 institution logo from Plaid, if available
         lastSyncedAt:
           type: ["string", "null"]
+        wasPlaidLinked:
+          type: boolean
+          description: >-
+            True when the account is no longer linked to Plaid but once was
+            (soft-unlinked by disconnect or item removal). Distinguishes
+            "manual because unlinked" from "manually created".
         minimumPayment:
           type: ["number", "null"]
           description: Minimum payment from Plaid Liabilities (credit cards)

@@ -422,7 +422,7 @@ export default function Goals() {
         <EmptyState
           icon={<Target className="h-8 w-8" />}
           title="No goals yet"
-          description="Create a goal to see what saving for it does to the rest of your money."
+          description="Set a savings goal and see exactly what it does to your monthly cash flow."
           action={<Button onClick={openCreate}>Create your first goal</Button>}
         />
       ) : (

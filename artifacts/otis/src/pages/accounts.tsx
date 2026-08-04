@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, MoreHorizontal, Landmark, CreditCard, PiggyBank, Briefcase, TrendingUp, Home, Banknote, Trash2, Pencil, Link2, AlertTriangle } from "lucide-react";
+import { Plus, MoreHorizontal, Landmark, CreditCard, PiggyBank, Briefcase, TrendingUp, Home, Banknote, Trash2, Pencil, Link2, AlertTriangle, ShieldCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useListAccounts, useListAccountBalances, useDeleteAccount, useDisconnectPlaidAccount, useUpdateAccount, useUpdateAccountPaymentMode, useDismissPaymentSuggestion, getListAccountsQueryKey, getGetAccountsSummaryQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
@@ -86,6 +86,25 @@ const getAccountColor = (type: string) => {
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+// "3 hours ago" / "yesterday" / "5 days ago" — a cash-flow app must make
+// balance freshness legible at a glance.
+const relativeTime = (iso: string): string => {
+  const ms = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return mins === 1 ? "1 minute ago" : `${mins} minutes ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "yesterday";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  return months === 1 ? "a month ago" : `${months} months ago`;
+};
+
+const STALE_SYNC_MS = 48 * 60 * 60 * 1000;
+const isStaleSync = (iso: string) => Date.now() - new Date(iso).getTime() > STALE_SYNC_MS;
 
 export default function Accounts() {
   const [accountToEdit, setAccountToEdit] = useState<Account | undefined>(undefined);
@@ -274,12 +293,28 @@ export default function Accounts() {
                 {getTypeLabel(account.accountType)}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {account.accountNumberLast4 ? `····${account.accountNumberLast4} · ` : ""}
-              {account.plaidAccountId && account.lastSyncedAt
-                ? `Last synced ${formatDate(account.lastSyncedAt)}`
-                : `Updated ${formatDate(account.updatedAt)}`}
-            </p>
+            {account.plaidAccountId && account.lastSyncedAt ? (
+              isStaleSync(account.lastSyncedAt) ? (
+                // A stale balance in a cash-flow app is worse than no balance —
+                // past 48h the sync line becomes a warning. amber-800 #92400E
+                // (6.36:1 on white) meets WCAG AA.
+                <p className="text-xs text-amber-800 font-medium mt-0.5 flex items-center gap-1" data-testid={`text-sync-stale-${account.id}`}>
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  {account.accountNumberLast4 ? `····${account.accountNumberLast4} · ` : ""}
+                  Last synced {relativeTime(account.lastSyncedAt)} — balance may be out of date
+                </p>
+              ) : (
+                <p className="text-xs text-slate-600 mt-0.5" data-testid={`text-sync-fresh-${account.id}`}>
+                  {account.accountNumberLast4 ? `····${account.accountNumberLast4} · ` : ""}
+                  Last synced {relativeTime(account.lastSyncedAt)}
+                </p>
+              )
+            ) : (
+              <p className="text-xs text-slate-600 mt-0.5">
+                {account.accountNumberLast4 ? `····${account.accountNumberLast4} · ` : ""}
+                Updated {formatDate(account.updatedAt)}
+              </p>
+            )}
             {account.notes && (
               <p className="text-xs text-muted-foreground/80 mt-1 whitespace-pre-wrap break-words">
                 {account.notes}
@@ -303,11 +338,27 @@ export default function Accounts() {
           <div className={`text-sm font-medium font-mono ${signedBalance(account) >= 0 ? 'text-[#059669]' : 'text-red-600'}`}>
             <FormatCurrency amount={signedBalance(account)} />
           </div>
-          {account.plaidAccountId && (
-            <Badge className="bg-[#56A0D3]/15 text-[#185FA5] hover:bg-[#56A0D3]/15 border-0 text-[10px] px-2 py-0.5 shrink-0">
+          {/* LIVE / MANUAL is more than cosmetics: account removal SOFT-UNLINKS
+              (plaid_account_id set to NULL, row kept), so a card can silently
+              stop receiving new transactions. This badge is that signal. */}
+          {account.plaidAccountId ? (
+            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-0 text-[10px] px-2 py-0.5 shrink-0" data-testid={`badge-live-${account.id}`}>
               <Link2 className="mr-1 h-3 w-3" />
-              Connected via Plaid
+              LIVE
             </Badge>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge className="bg-slate-200 text-slate-700 hover:bg-slate-200 border-0 text-[10px] px-2 py-0.5 shrink-0 cursor-default" data-testid={`badge-manual-${account.id}`}>
+                  MANUAL{account.wasPlaidLinked ? " · UNLINKED" : ""}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[260px]">
+                {account.wasPlaidLinked
+                  ? "This account was disconnected from your bank. Its balance no longer updates automatically — edit it to update the balance, or reconnect your bank."
+                  : "Manually added — its balance only changes when you edit it."}
+              </TooltipContent>
+            </Tooltip>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -383,6 +434,21 @@ export default function Accounts() {
             />
           </div>
         </div>
+
+        {/* Trust banner. ACCURATE TODAY: our Plaid link token requests
+            products=[Transactions] with optional Liabilities/Investments/
+            Identity (see api-server routes/plaid.ts link-token creation).
+            No Auth, no Transfer — we hold no money-movement capability.
+            ⚠️ If Auth or Transfer is EVER added to the link token, this badge
+            copy must change. Text emerald-900 #064E3B on emerald-50 = 12.6:1. */}
+        <Card className="border-emerald-200 bg-emerald-50 rounded-xl" data-testid="banner-read-only">
+          <CardContent className="py-3 flex items-center gap-3">
+            <ShieldCheck className="h-5 w-5 text-emerald-800 shrink-0" />
+            <p className="text-sm text-emerald-900 font-medium">
+              Read-only connection — we can see your balances and transactions, we cannot move your money.
+            </p>
+          </CardContent>
+        </Card>
 
         {/* Cards missing statement/due days generate no forecast rows — nudge setup. */}
         {unconfiguredCards.length > 0 && (
@@ -526,9 +592,14 @@ export default function Accounts() {
         ) : (
           <EmptyState
             icon={<Landmark className="h-8 w-8" />}
-            title="No accounts added"
-            description="Add your checking, savings, and investment accounts to track your net worth."
-            action={<AccountDialog trigger={<Button>Add Account</Button>} />}
+            title="No accounts yet"
+            description="Connect your bank to sync balances and transactions automatically."
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <PlaidConnectButton onLinkedCardsNeedSetup={setPendingCardSetupIds} />
+                <AccountDialog trigger={<Button variant="outline">Add manually</Button>} />
+              </div>
+            }
           />
         )}
 

@@ -1779,11 +1779,24 @@ export default function Forecast() {
               </div>
             )}
             {ledgerGroups.length === 0 ? (
-              <div className="py-20 text-center text-muted-foreground border border-border rounded-lg">
-                <Zap className="h-8 w-8 mx-auto mb-3 opacity-30" />
-                <p className="font-medium">No transactions in this range.</p>
-                <p className="text-sm mt-1">Try a longer time range or regenerate the forecast.</p>
-              </div>
+              allTxs.length === 0 ? (
+                // Truly empty forecast (no rows at all) vs. filtered-out range.
+                <div className="py-20 text-center text-muted-foreground border border-border rounded-lg">
+                  <Zap className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                  <p className="font-medium text-foreground">Nothing to forecast yet</p>
+                  <p className="text-sm mt-1">Add a pay schedule and one bill to see your running balance.</p>
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    <Button size="sm" onClick={() => navigate("/pay-schedules")} data-testid="button-empty-add-pay">Add a pay schedule</Button>
+                    <Button size="sm" variant="outline" onClick={() => navigate("/bills")} data-testid="button-empty-add-bill">Add a bill</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-20 text-center text-muted-foreground border border-border rounded-lg">
+                  <Zap className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                  <p className="font-medium">No transactions in this range.</p>
+                  <p className="text-sm mt-1">Try a longer time range or regenerate the forecast.</p>
+                </div>
+              )
             ) : (
               <div className="bg-white border border-[#E8ECF0] rounded-[14px] overflow-hidden flex-1 min-h-0 flex flex-col">
                 {/* Locked layout: only this rows area scrolls; the column

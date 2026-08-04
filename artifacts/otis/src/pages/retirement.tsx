@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { PiggyBank, TrendingUp, Wallet, Target, Pencil } from "lucide-react";
 import {
   LineChart,
@@ -48,6 +49,7 @@ function compactCurrency(value: number): string {
 }
 
 export default function Retirement() {
+  const [, navigate] = useLocation();
   const { data: settings, isLoading: settingsLoading } = useGetRetirementSettings();
   const { data: summary, isLoading: summaryLoading } = useGetRetirementSummary();
   const { data: projection, isLoading: projectionLoading } = useGetRetirementProjection();
@@ -529,7 +531,10 @@ export default function Retirement() {
               <EmptyState
                 icon={<PiggyBank className="h-8 w-8" />}
                 title="No retirement accounts yet"
-                description="Add your retirement accounts in Accounts to get started."
+                description="Add retirement accounts and your contribution rate to see your projection."
+                action={
+                  <Button onClick={() => navigate("/accounts")}>Add a retirement account</Button>
+                }
               />
             ) : (
               <div className="space-y-3">
