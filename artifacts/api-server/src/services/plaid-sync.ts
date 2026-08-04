@@ -5,6 +5,7 @@ import { plaidClient } from "../lib/plaid";
 import { detectBills } from "./bill-detection";
 import { syncLiabilitiesForItem } from "./plaid-liabilities";
 import { rollActualsForUser } from "./actuals-roll";
+import { invalidateOtisCache } from "../lib/otis-cache";
 import { logger } from "../lib/logger";
 
 export interface SyncCounts {
@@ -114,6 +115,21 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
   // due dates) so cycle days stay current cycle over cycle. Best-effort
   // inside the service — unsupported institutions never fail the sync.
   await syncLiabilitiesForItem(item);
+
+  // Otis cached answers quote balances and cash flow. The HTTP invalidation
+  // middleware only sees authenticated mutations — webhook and cron syncs
+  // bypass it — so invalidation lives HERE, keyed item → user, covering every
+  // sync path (webhook, nightly cron, user-triggered). Placed before the
+  // cursor guard's early return: transactions/balances are already persisted
+  // by this point even when the cursor isn't saved.
+  if (counts.added > 0 || counts.modified > 0 || counts.removed > 0 || counts.balances_captured > 0) {
+    try {
+      await invalidateOtisCache(item.userId, ["net_worth", "cash_flow"]);
+    } catch (err) {
+      // Never fail a sync over cache cleanup; worst case the next answer is regenerated late.
+      logger.warn({ userId: item.userId, err: sanitizeSyncError(err) }, "Failed to invalidate Otis cache after sync");
+    }
+  }
 
   // Hard guard (all syncs, not just initial): never persist a cursor while
   // Plaid reports the historical backfill is still pending. Persisting one
