@@ -119,7 +119,7 @@ export function CardCompositionSection() {
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
             <TableHead>Card / Item</TableHead>
-            <TableHead>Type</TableHead>
+            <TableHead>Due Date</TableHead>
             <TableHead className="text-right">Planned</TableHead>
           </TableRow>
         </TableHeader>
@@ -145,8 +145,8 @@ export function CardCompositionSection() {
                       💳 {c.accountName}
                     </span>
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    cycle due {fmtDate(c.dueDate)}
+                  <TableCell className="text-xs text-muted-foreground" data-testid={`text-card-due-date-${c.accountId}`}>
+                    {fmtDate(c.dueDate)}
                   </TableCell>
                   <TableCell className="text-right font-mono">
                     <FormatCurrency amount={c.plannedTotal} />
@@ -155,19 +155,10 @@ export function CardCompositionSection() {
                 {open && c.bills.map((b) => (
                   <TableRow key={`cb-${b.id}`} className="border-border bg-muted/20 hover:bg-muted/20">
                     <TableCell className="pl-12 text-sm text-muted-foreground">↳ {b.billName}</TableCell>
+                    {/* No status pills here: this section lists what the card
+                        covers; payment status lives in Planned vs Actual. */}
                     <TableCell>
-                      <span className="inline-flex items-center gap-1">
-                        <Badge variant="outline" className="text-[10px]">bill</Badge>
-                        {b.status === "hit" ? (
-                          <Badge className="text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-transparent" data-testid={`badge-cycle-bill-paid-${b.id}`}>
-                            paid
-                          </Badge>
-                        ) : b.status === "missed" ? (
-                          <Badge variant="destructive" className="text-[10px]" data-testid={`badge-cycle-bill-missed-${b.id}`}>missed</Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-[10px] text-muted-foreground" data-testid={`badge-cycle-bill-pending-${b.id}`}>not yet charged</Badge>
-                        )}
-                      </span>
+                      <Badge variant="outline" className="text-[10px]">bill</Badge>
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm text-muted-foreground">
                       {b.status === "hit" && b.actualAmount != null ? (

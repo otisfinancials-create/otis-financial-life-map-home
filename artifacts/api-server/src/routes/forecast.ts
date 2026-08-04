@@ -4,6 +4,7 @@ import { db, forecastedTransactionsTable, billsTable, paySchedulesTable, userSet
 import { generateBillOccurrences, addMonthsIso, addDaysIso, clampDay } from "../services/bill-occurrences";
 export { generateBillOccurrences } from "../services/bill-occurrences";
 import { findReconcileSuggestions } from "../services/bill-reconciliation";
+import { generateCyclesForAccount } from "../services/card-cycles";
 import { rollActualsForUser } from "../services/actuals-roll";
 import { getForecastAccounts } from "../services/forecast-accounts";
 import { deriveActualBucket, projectedAtSpendDate, recomputeGoalActualBuckets } from "../services/goal-buckets";
@@ -555,9 +556,38 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
   // bills and charges are NEVER standalone forecast lines — they live inside
   // the cycle payment. Assumes the statement is paid in full each cycle
   // (partial-payment / revolving balances are out of scope).
-  const allCycles = ccAccounts.length
+  let allCycles = ccAccounts.length
     ? await db.select().from(cardCyclesTable).where(inArray(cardCyclesTable.accountId, ccAccounts.map((a) => a.id)))
     : [];
+
+  // Cycle top-up: the forecast window rolls forward daily, but cycles are only
+  // generated when account config changes or Plaid liabilities sync. Without a
+  // horizon-driven trigger, a user's cycles would silently run out again as the
+  // window advances. Any cycle-backed card whose last generated payment due
+  // date no longer covers the window gets its cycles regenerated here (REPLACE
+  // semantics preserve existing cycles' envelopes/budgets; new cycles inherit
+  // recurring envelope amounts via populateNewCycle). No-op when coverage is
+  // already sufficient, so the common regenerate path stays cheap.
+  const maxDueByAccount = new Map<number, string>();
+  for (const c of allCycles) {
+    const prev = maxDueByAccount.get(c.accountId);
+    if (!prev || c.dueDate > prev) maxDueByAccount.set(c.accountId, c.dueDate);
+  }
+  let toppedUp = false;
+  for (const acct of ccAccounts) {
+    if (acct.statementDay == null || acct.dueDay == null) continue;
+    const maxDue = maxDueByAccount.get(acct.id);
+    // Horizon check mirrors generateCyclesForAccount, which generates every
+    // cycle whose due date is <= the horizon end. Coverage is sufficient when
+    // the NEXT cycle after the last generated one (monthly cadence: +1 month)
+    // would fall beyond the window — then generation would add nothing.
+    if (maxDue != null && addMonthsIso(maxDue, 1) > endStr) continue;
+    await generateCyclesForAccount(acct.id);
+    toppedUp = true;
+  }
+  if (toppedUp) {
+    allCycles = await db.select().from(cardCyclesTable).where(inArray(cardCyclesTable.accountId, ccAccounts.map((a) => a.id)));
+  }
   const cycleBackedAccountIds = new Set(allCycles.map((c) => c.accountId));
 
   // groups: key = `${accountId}|${dueDateStr}` → child rows for that CC payment

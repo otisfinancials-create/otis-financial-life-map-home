@@ -89,9 +89,16 @@ export async function generateCyclesForAccount(accountId: number): Promise<CardC
   let endMonth = now.getMonth();
   if (clampedIso(endYear, endMonth, statementDay) < today) endMonth += 1;
 
+  // Horizon: cycles must cover the FULL forecast window, not a fixed count.
+  // regenerateForecastForUser projects 12 months out (endDate = last day of
+  // today's month + 11), so generate every cycle whose payment due date falls
+  // on/before that horizon. A fixed count (previously 4) made card payments
+  // silently vanish from the forecast past mid-December.
+  const horizonEnd = clampedIso(now.getFullYear(), now.getMonth() + 11, 31);
+
   // Desired cycles, keyed by period (YYYY-MM of cycle_end).
   const desired: Array<{ period: string; cycleStart: string; cycleEnd: string; dueDate: string }> = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 24; i++) {
     const m = endMonth + i;
     const cycleEnd = clampedIso(endYear, m, statementDay);
     // cycle_start = day after the previous month's statement close.
@@ -102,6 +109,9 @@ export async function generateCyclesForAccount(accountId: number): Promise<CardC
     // due_date: the due_day in the month after cycle_end; never before it.
     let dueDate = clampedIso(endYear, m + 1, dueDay);
     if (dueDate <= cycleEnd) dueDate = clampedIso(endYear, m + 2, dueDay);
+    // Always keep the current cycle; past it, stop once payments fall beyond
+    // the forecast horizon (they'd never be emitted anyway).
+    if (i > 0 && dueDate > horizonEnd) break;
     desired.push({ period: cycleEnd.slice(0, 7), cycleStart, cycleEnd, dueDate });
   }
   const firstPeriod = desired[0].period;
