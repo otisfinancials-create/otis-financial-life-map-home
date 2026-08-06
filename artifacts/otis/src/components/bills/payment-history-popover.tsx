@@ -102,6 +102,7 @@ export function PaymentHistoryPopover({
             {stats.firstDate && (
               <span className="block text-xs text-slate-600 mt-1">
                 Paid {formatMonth(stats.firstDate)}
+                {(stats.inferredPayments ?? 0) > 0 ? " · matched from bank history" : ""}
               </span>
             )}
           </p>
@@ -124,6 +125,11 @@ export function PaymentHistoryPopover({
             <p className="text-xs text-slate-600">
               {count} payments since {stats.firstDate ? formatMonth(stats.firstDate) : "—"}
               {stats.lastDate ? `, most recent ${formatMonth(stats.lastDate)}` : ""}.
+              {(stats.inferredPayments ?? 0) > 0 && (
+                <span className="block">
+                  {count - (stats.inferredPayments ?? 0)} confirmed · {stats.inferredPayments} matched from bank history.
+                </span>
+              )}
             </p>
             <p className="text-xs text-slate-500">
               Based on payments recorded here — earlier payments may not be included.

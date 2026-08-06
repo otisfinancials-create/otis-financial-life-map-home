@@ -31,6 +31,8 @@ export interface BillPaymentStats {
   firstDate: string | null;
   /** @nullable */
   lastDate: string | null;
+  /** Payments found by matching the bill's merchant against full Plaid history (not confirmed links) */
+  inferredPayments: number;
   /** How many of the payments came from card cycle actuals */
   cardPayments: number;
   /** How many came from bank-reconciled forecast rows */

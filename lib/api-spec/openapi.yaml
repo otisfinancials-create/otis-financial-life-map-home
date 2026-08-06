@@ -3026,7 +3026,7 @@ components:
 
     BillPaymentStats:
       type: object
-      required: [billId, frequency, isVariable, count, totalPaid, average, minAmount, maxAmount, firstDate, lastDate, cardPayments, bankPayments]
+      required: [billId, frequency, isVariable, count, totalPaid, average, minAmount, maxAmount, firstDate, lastDate, cardPayments, bankPayments, inferredPayments]
       properties:
         billId:
           type: integer
@@ -3055,6 +3055,9 @@ components:
           description: Date of the earliest recorded payment (YYYY-MM-DD)
         lastDate:
           type: ["string", "null"]
+        inferredPayments:
+          type: integer
+          description: Payments found by matching the bill's merchant against full Plaid history (not confirmed links)
         cardPayments:
           type: integer
           description: How many of the payments came from card cycle actuals

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc, isNotNull } from "drizzle-orm";
+import { eq, and, desc, isNotNull, inArray, gte } from "drizzle-orm";
 import {
   db,
   billsTable,
@@ -11,6 +11,7 @@ import {
   plaidTransactionsTable,
 } from "@workspace/db";
 import { syncBillWithCycles, detachBillFromAllCycles, refreshClosedCycles } from "../services/bill-cycle-sync";
+import { merchantMatchStrength } from "../services/cycle-processing";
 import { listBillLinkReview, suggestForBillLike, listAccountMerchants } from "../services/bill-merchant-suggest";
 import {
   GetBillLinkReviewResponse,
@@ -170,7 +171,15 @@ router.post("/bills", async (req, res): Promise<void> => {
 // the /bills/:id param routes.
 router.get("/bills/payment-stats", async (req, res): Promise<void> => {
   const bills = await db
-    .select({ id: billsTable.id, frequency: billsTable.frequency, isVariable: billsTable.isVariable, customIntervalDays: billsTable.customIntervalDays })
+    .select({
+      id: billsTable.id,
+      frequency: billsTable.frequency,
+      isVariable: billsTable.isVariable,
+      customIntervalDays: billsTable.customIntervalDays,
+      amount: billsTable.amount,
+      matchMerchant: billsTable.matchMerchant,
+      paymentAccountId: billsTable.paymentAccountId,
+    })
     .from(billsTable)
     .where(eq(billsTable.userId, req.userId));
 
@@ -181,6 +190,7 @@ router.get("/bills/payment-stats", async (req, res): Promise<void> => {
       billId: forecastedTransactionsTable.sourceBillId,
       amount: forecastedTransactionsTable.amount,
       date: forecastedTransactionsTable.transactionDate,
+      matchedPlaidTransactionId: forecastedTransactionsTable.matchedPlaidTransactionId,
     })
     .from(forecastedTransactionsTable)
     .where(and(
@@ -208,11 +218,11 @@ router.get("/bills/payment-stats", async (req, res): Promise<void> => {
       isNotNull(cardCycleBillsTable.actualAmount),
     ));
 
-  type Acc = { amounts: number[]; dates: string[]; bank: number; card: number };
+  type Acc = { amounts: number[]; dates: string[]; bank: number; card: number; inferred: number };
   const byBill = new Map<number, Acc>();
   const acc = (billId: number): Acc => {
     let a = byBill.get(billId);
-    if (!a) { a = { amounts: [], dates: [], bank: 0, card: 0 }; byBill.set(billId, a); }
+    if (!a) { a = { amounts: [], dates: [], bank: 0, card: 0, inferred: 0 }; byBill.set(billId, a); }
     return a;
   };
   for (const r of bankRows) {
@@ -229,12 +239,99 @@ router.get("/bills/payment-stats", async (req, res): Promise<void> => {
     a.card++;
   }
 
+  // ---- Inferred history from full Plaid transaction data (up to 730 days).
+  // Confirmed links (reconciled forecast rows / card-cycle allocations) take
+  // precedence: any transaction already linked to a bill is excluded here so
+  // nothing is counted twice. Only STRONG merchant matches are used —
+  // accuracy over coverage, since a wrong match silently corrupts the average.
+  const confirmedTxnIds = new Set<string>();
+  // Bank links store the plaid_transactions integer id; map them to the text id.
+  const bankLinkIds = bankRows.map((r) => r.matchedPlaidTransactionId).filter((x): x is number => x != null);
+  if (bankLinkIds.length > 0) {
+    const rows = await db
+      .select({ txnId: plaidTransactionsTable.plaidTransactionId })
+      .from(plaidTransactionsTable)
+      .where(and(eq(plaidTransactionsTable.userId, req.userId), inArray(plaidTransactionsTable.id, bankLinkIds)));
+    for (const r of rows) confirmedTxnIds.add(r.txnId);
+  }
+  // Card links: allocations tied to a card_cycle_bill carry the charge's text id.
+  const cardAllocRows = await db
+    .select({ txnId: envelopeAllocationsTable.plaidTransactionId })
+    .from(envelopeAllocationsTable)
+    .where(and(eq(envelopeAllocationsTable.userId, req.userId), isNotNull(envelopeAllocationsTable.cardCycleBillId)));
+  for (const r of cardAllocRows) if (r.txnId != null) confirmedTxnIds.add(r.txnId);
+
+  // Candidate bills: need a merchant pattern and a Plaid-linked payment
+  // account. Fixed bills with a non-positive amount are excluded — the ±50%
+  // amount gate is meaningless at $0 and would admit any strong match.
+  const inferable = bills.filter((b) =>
+    b.matchMerchant
+    && b.paymentAccountId != null
+    && (b.isVariable || Math.abs(parseFloat(String(b.amount))) > 0),
+  );
+  const accountIds = [...new Set(inferable.map((b) => b.paymentAccountId!))];
+  const accounts = accountIds.length > 0
+    ? await db
+        .select({ id: accountsTable.id, plaidAccountId: accountsTable.plaidAccountId })
+        .from(accountsTable)
+        .where(and(eq(accountsTable.userId, req.userId), inArray(accountsTable.id, accountIds)))
+    : [];
+  const plaidAcctByAccountId = new Map(accounts.filter((a) => a.plaidAccountId != null).map((a) => [a.id, a.plaidAccountId!]));
+  const plaidAcctIds = [...new Set(plaidAcctByAccountId.values())];
+  const txns = plaidAcctIds.length > 0
+    ? await db
+        .select({
+          plaidTransactionId: plaidTransactionsTable.plaidTransactionId,
+          accountId: plaidTransactionsTable.accountId,
+          amount: plaidTransactionsTable.amount,
+          date: plaidTransactionsTable.date,
+          name: plaidTransactionsTable.name,
+          merchantName: plaidTransactionsTable.merchantName,
+        })
+        .from(plaidTransactionsTable)
+        .where(and(
+          eq(plaidTransactionsTable.userId, req.userId),
+          eq(plaidTransactionsTable.pending, false),
+          inArray(plaidTransactionsTable.accountId, plaidAcctIds),
+          // Plaid link tokens request at most 730 days of history; bound the
+          // scan so it never grows past that window.
+          gte(plaidTransactionsTable.date, new Date(Date.now() - 730 * 86_400_000).toISOString().slice(0, 10)),
+        ))
+    : [];
+
+  for (const txn of txns) {
+    if (confirmedTxnIds.has(txn.plaidTransactionId)) continue;
+    const amt = Math.abs(parseFloat(String(txn.amount)));
+    if (parseFloat(String(txn.amount)) <= 0) continue; // Plaid: positive = outflow; skip refunds/credits
+    // A transaction is assigned to at most ONE bill. When several bills on the
+    // same account share a merchant pattern (e.g. two USAA policies), pick the
+    // bill whose amount is closest; a tie means ambiguity — exclude the txn.
+    let best: { bill: (typeof inferable)[number]; dist: number } | null = null;
+    let tied = false;
+    for (const b of inferable) {
+      if (plaidAcctByAccountId.get(b.paymentAccountId!) !== txn.accountId) continue;
+      if (merchantMatchStrength(b.matchMerchant!, txn) !== "strong") continue;
+      const billAmt = Math.abs(parseFloat(String(b.amount)));
+      // Fixed bills: require the charge within ±50% of the bill amount so an
+      // unrelated charge from the same merchant can't skew the average.
+      if (!b.isVariable && billAmt > 0 && (amt < billAmt * 0.5 || amt > billAmt * 1.5)) continue;
+      const dist = billAmt > 0 ? Math.abs(amt - billAmt) : 0;
+      if (best == null || dist < best.dist) { best = { bill: b, dist }; tied = false; }
+      else if (dist === best.dist && best.bill.id !== b.id) tied = true;
+    }
+    if (best == null || tied) continue;
+    const a = acc(best.bill.id);
+    a.amounts.push(amt);
+    a.dates.push(txn.date);
+    a.inferred++;
+  }
+
   const round2 = (n: number) => Math.round(n * 100) / 100;
   res.json(ListBillPaymentStatsResponse.parse({
     stats: bills.map((b) => {
       const a = byBill.get(b.id);
       if (!a || a.amounts.length === 0) {
-        return { billId: b.id, frequency: b.frequency, isVariable: b.isVariable ?? false, customIntervalDays: b.customIntervalDays ?? null, count: 0, totalPaid: 0, average: null, minAmount: null, maxAmount: null, firstDate: null, lastDate: null, cardPayments: 0, bankPayments: 0 };
+        return { billId: b.id, frequency: b.frequency, isVariable: b.isVariable ?? false, customIntervalDays: b.customIntervalDays ?? null, count: 0, totalPaid: 0, average: null, minAmount: null, maxAmount: null, firstDate: null, lastDate: null, cardPayments: 0, bankPayments: 0, inferredPayments: 0 };
       }
       const total = a.amounts.reduce((s, x) => s + x, 0);
       const dates = [...a.dates].sort();
@@ -252,6 +349,7 @@ router.get("/bills/payment-stats", async (req, res): Promise<void> => {
         lastDate: dates[dates.length - 1],
         cardPayments: a.card,
         bankPayments: a.bank,
+        inferredPayments: a.inferred,
       };
     }),
   }));

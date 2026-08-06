@@ -158,6 +158,7 @@ export const ListBillPaymentStatsResponse = zod.object({
   "maxAmount": zod.number().nullable(),
   "firstDate": zod.string().nullable().describe('Date of the earliest recorded payment (YYYY-MM-DD)'),
   "lastDate": zod.string().nullable(),
+  "inferredPayments": zod.number().describe('Payments found by matching the bill\'s merchant against full Plaid history (not confirmed links)'),
   "cardPayments": zod.number().describe('How many of the payments came from card cycle actuals'),
   "bankPayments": zod.number().describe('How many came from bank-reconciled forecast rows')
 }))
