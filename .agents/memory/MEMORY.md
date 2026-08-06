@@ -5,6 +5,7 @@
 - [Clerk dev iframe 401s](clerk-dev-iframe-cookies.md) — preview-pane iframe blocks Clerk session cookie; signed-in app 401s with sessionStatus null. Fix: open app in own tab. Not data loss.
 - [E2E Clerk testing](e2e-clerk-testing.md) — runTest needs explicit programmatic sign-in step or Turnstile blocks it; test user has no data, create fixtures first; don't test mid-edit (HMR false failures).
 - [Upkeep bills](upkeep-bills.md) — upkeep items ARE bills (billKind='upkeep'); life events retired; merchant-link tier-1 detection dedupe; isVariable defaults true.
+- [Envelope recurrence](envelope-recurrence.md) — recurring amount lives on rows; is_override per-cycle; value-based change detection; new cycles inherit newest non-override prior row.
 - [Cycle membership occurrence-based](cycle-membership-occurrence-based.md) — bills join cycles only when a due date falls in the window; monthly special-cased to exactly 1.
 - [Detected bill start_date](detected-bill-start-date.md) — confirm path must stamp first_seen (or NULL), never next_expected_date, or in-flight cycles exclude the bill and its charges hide in Misc.
 - [Bill frequency steppers](bill-frequency-steppers.md) — generateBillOccurrences is the authoritative bill cadence stepper; unknown frequency throws, never silently monthly; keep pricing/preview/validation in lockstep.
@@ -23,13 +24,16 @@
 - [Forecast calendar view](forecast-calendar-view.md) — hybrid month calendar: server `today` is the actuals/plan seam; override days must step with forecast net, not plaid net.
 - [Forecast balance anchoring](forecast-balance-anchoring.md) — sync-adjustment rows must skip the past back-fill and survive regenerate/delete, or rebaselining silently breaks.
 - [pnpm @types/react hoist](pnpm-types-react-hoist.md) — duplicate @types/react (Expo pin vs catalog) breaks web typecheck via pnpm hidden hoist; align all pins to catalog:.
+- [Otis context provenance](otis-context-provenance.md) — figures carry kind/cite/lastSyncedAt; asOf from full source set pre-cap; deterministic sorts keep cite ids stable; model never states timestamps.
 - [Mobile AI tab dead endpoints](mobile-ai-dead-endpoints.md) — mobile ai.tsx targets /api/anthropic/* routes that never existed; typecheck patched with local hooks, real fix must retarget /api/otis SSE with auth plumbing.
 - [Plaid sandbox update-mode testing](plaid-sandbox-update-mode-testing.md) — Link selection pane is locked in sandbox; verify reconciliation server-side; user_custom regenerates all account IDs per login.
 - [Plaid Liabilities auto-config](plaid-liabilities-autoconfig.md) — best-effort card data sync; fills cycle days only when both NULL; statement-seam row has ccBasis set, legacy parents NULL.
 - [Plaid update mode](plaid-update-mode.md) — add accounts to an existing item: never exchange the token; reconcile by plaid_account_id under the (user, plaid_account_id) unique key; new-account history flows through the existing cursor.
+- [Plaid sync health tracking](plaid-sync-health.md) — attempt/failure state on plaid_items; all syncs funnel through one per-item-serialized function; failing ≠ idle; cron 3am America/New_York.
 - [Plaid webhook verification](plaid-webhook-verification.md) — public webhooks must verify the Plaid JWT (raw-body sha256) and per-item debounce sync, or they are a DoS vector.
 - [Plaid initial sync historical wait](plaid-initial-sync-historical.md) — never persist an initial cursor before HISTORICAL_UPDATE_COMPLETE, or the item silently skips all history; fix by nulling the cursor.
 - [Plaid transactionsSync accounts array](plaid-sync-accounts-array.md) — accounts[] is empty on caught-up runs; balance snapshots only accrue when a sync has new transactions.
+- [Card cycle horizon](card-cycle-horizon.md) — cycles cover the full 12-mo forecast window; forecast regen tops up coverage; food envelopes vary by weeklyRate × weeks.
 - [Card cycle period identity](card-cycle-period-identity.md) — cycles are unique per (account, close-month); regeneration replaces by period, never accumulates; account delete must clear cycle FKs first.
 - [Forecast start date + actuals roll](forecast-actuals-roll.md) — anchored past: every posted bank txn steps the balance exactly once; roll order + per-user serialization matter.
 - [Bank-paid bill reconciliation](bill-bank-reconciliation.md) — confirm moves row to posted date; always snapshot pre-confirm amount; regen needs forecastedDate keys + paid-early query or it double-counts.
@@ -41,5 +45,6 @@
 - [New-detection notification](new-detection-notification.md) — seen_at is the "new" marker; upsert never touches it; per-user coalesced post-sync detection; review page snapshots drafts before mark-seen + invalidates caches.
 - [Detection sub-clustering](detection-subclustering.md) — amount splits are only trusted for ≥2 monthly+ sub-clusters, else whole-group fallback; prevents grocery/gas pseudo-bills and utility fragmentation.
 - [Express route ordering](express-route-ordering.md) — literal `/bills/detected*` routes must mount before the `/bills/:id` router or the param route swallows them.
+- [Popover touch dismiss](popover-touch-dismiss.md) — Radix touch outside-dismiss ghost-clicks the row underneath; use the shared touch-only capture hook, not modal/onPointerDownOutside.
 - [Drizzle db.execute result shape](drizzle-execute-rows.md) — raw SQL returns {rows}; destructuring as array throws "not iterable".
 - [Drizzle pg error codes](drizzle-pg-error-codes.md) — pg error code (23505 etc.) is on err.cause.code, not err.code; check the cause chain.

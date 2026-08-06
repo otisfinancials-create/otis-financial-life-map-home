@@ -143,6 +143,28 @@ export const GetUpcomingBillsResponse = zod.array(GetUpcomingBillsResponseItem)
 
 
 /**
+ * @summary Historical payment stats per bill (bank-reconciled rows + card cycle actuals)
+ */
+export const ListBillPaymentStatsResponse = zod.object({
+  "stats": zod.array(zod.object({
+  "billId": zod.number(),
+  "frequency": zod.string(),
+  "isVariable": zod.boolean(),
+  "customIntervalDays": zod.number().nullish().describe('Interval in days when frequency is \'custom\'; null otherwise'),
+  "count": zod.number().describe('Number of recorded payments across both sources'),
+  "totalPaid": zod.number(),
+  "average": zod.number().nullable().describe('Average payment amount; null when fewer than 2 payments'),
+  "minAmount": zod.number().nullable(),
+  "maxAmount": zod.number().nullable(),
+  "firstDate": zod.string().nullable().describe('Date of the earliest recorded payment (YYYY-MM-DD)'),
+  "lastDate": zod.string().nullable(),
+  "cardPayments": zod.number().describe('How many of the payments came from card cycle actuals'),
+  "bankPayments": zod.number().describe('How many came from bank-reconciled forecast rows')
+}))
+})
+
+
+/**
  * @summary Get a bill by ID
  */
 export const GetBillParams = zod.object({
@@ -1479,6 +1501,27 @@ export const GetCycleBreakdownResponse = zod.object({
   "expectedAmount": zod.number(),
   "actualAmount": zod.number().nullish(),
   "status": zod.string()
+}))
+})
+
+
+/**
+ * @summary Transactions making up an envelope's actuals (allocations joined to posted transactions), newest first
+ */
+export const ListEnvelopeAllocationsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListEnvelopeAllocationsResponse = zod.object({
+  "envelopeId": zod.number(),
+  "envelopeName": zod.string(),
+  "spentAmount": zod.number().describe('The envelope\'s stored spent_amount (what the UI displays)'),
+  "allocationsTotal": zod.number().describe('Sum of the listed allocations — should equal spentAmount; a mismatch indicates a bug'),
+  "transactions": zod.array(zod.object({
+  "txnDate": zod.string().nullable(),
+  "name": zod.string(),
+  "amount": zod.number(),
+  "source": zod.string()
 }))
 })
 

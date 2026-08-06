@@ -109,6 +109,25 @@ paths:
                 items:
                   $ref: "#/components/schemas/UpcomingBill"
 
+  /bills/payment-stats:
+    get:
+      operationId: listBillPaymentStats
+      tags: [bills]
+      summary: Historical payment stats per bill (bank-reconciled rows + card cycle actuals)
+      responses:
+        "200":
+          description: Per-bill payment history stats
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [stats]
+                properties:
+                  stats:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BillPaymentStats"
+
   /bills/{id}:
     get:
       operationId: getBill
@@ -874,6 +893,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CycleBreakdown"
+        "404":
+          description: Not found
+
+  /envelopes/{id}/allocations:
+    get:
+      operationId: listEnvelopeAllocations
+      tags: [envelopes]
+      summary: Transactions making up an envelope's actuals (allocations joined to posted transactions), newest first
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Envelope allocation breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAllocationBreakdown"
         "404":
           description: Not found
 
@@ -2983,6 +3023,76 @@ components:
           type: ["integer", "null"]
         foodRemaining:
           type: number
+
+    BillPaymentStats:
+      type: object
+      required: [billId, frequency, isVariable, count, totalPaid, average, minAmount, maxAmount, firstDate, lastDate, cardPayments, bankPayments]
+      properties:
+        billId:
+          type: integer
+        frequency:
+          type: string
+        isVariable:
+          type: boolean
+        customIntervalDays:
+          type: integer
+          nullable: true
+          description: Interval in days when frequency is 'custom'; null otherwise
+        count:
+          type: integer
+          description: Number of recorded payments across both sources
+        totalPaid:
+          type: number
+        average:
+          type: ["number", "null"]
+          description: Average payment amount; null when fewer than 2 payments
+        minAmount:
+          type: ["number", "null"]
+        maxAmount:
+          type: ["number", "null"]
+        firstDate:
+          type: ["string", "null"]
+          description: Date of the earliest recorded payment (YYYY-MM-DD)
+        lastDate:
+          type: ["string", "null"]
+        cardPayments:
+          type: integer
+          description: How many of the payments came from card cycle actuals
+        bankPayments:
+          type: integer
+          description: How many came from bank-reconciled forecast rows
+
+    EnvelopeAllocationTxn:
+      type: object
+      required: [txnDate, name, amount, source]
+      properties:
+        txnDate:
+          type: ["string", "null"]
+        name:
+          type: string
+        amount:
+          type: number
+        source:
+          type: string
+
+    EnvelopeAllocationBreakdown:
+      type: object
+      required: [envelopeId, envelopeName, spentAmount, allocationsTotal, transactions]
+      properties:
+        envelopeId:
+          type: integer
+        envelopeName:
+          type: string
+        spentAmount:
+          type: number
+          description: The envelope's stored spent_amount (what the UI displays)
+        allocationsTotal:
+          type: number
+          description: Sum of the listed allocations — should equal spentAmount; a mismatch indicates a bug
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnvelopeAllocationTxn"
 
     ManualCharge:
       type: object

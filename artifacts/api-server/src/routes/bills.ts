@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNotNull } from "drizzle-orm";
 import {
   db,
   billsTable,
   forecastedTransactionsTable,
   accountsTable,
   cardCycleBillsTable,
+  cardCyclesTable,
   envelopeAllocationsTable,
   plaidTransactionsTable,
 } from "@workspace/db";
@@ -32,6 +33,7 @@ import {
   GetBillResponse,
   UpdateBillResponse,
   GetUpcomingBillsResponse,
+  ListBillPaymentStatsResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -158,6 +160,101 @@ router.post("/bills", async (req, res): Promise<void> => {
     }
   }
   res.status(201).json(CreateBillResponse.parse(serializeBill(bill)));
+});
+
+// Historical payment stats per bill. Two disjoint sources by construction:
+// bank-paid bills reconcile onto forecast rows (matched_plaid_transaction_id
+// set), while card-paid bills accrue actuals on card_cycle_bills (status
+// 'hit') — bank reconciliation explicitly excludes credit-card payment
+// accounts, so no payment can appear in both. Literal path: MUST stay above
+// the /bills/:id param routes.
+router.get("/bills/payment-stats", async (req, res): Promise<void> => {
+  const bills = await db
+    .select({ id: billsTable.id, frequency: billsTable.frequency, isVariable: billsTable.isVariable, customIntervalDays: billsTable.customIntervalDays })
+    .from(billsTable)
+    .where(eq(billsTable.userId, req.userId));
+
+  // Bank-paid: reconciled forecast rows for a bill (actual + linked to a
+  // posted transaction). Amounts here are the settled posted amounts.
+  const bankRows = await db
+    .select({
+      billId: forecastedTransactionsTable.sourceBillId,
+      amount: forecastedTransactionsTable.amount,
+      date: forecastedTransactionsTable.transactionDate,
+    })
+    .from(forecastedTransactionsTable)
+    .where(and(
+      eq(forecastedTransactionsTable.userId, req.userId),
+      eq(forecastedTransactionsTable.isActual, true),
+      isNotNull(forecastedTransactionsTable.sourceBillId),
+      isNotNull(forecastedTransactionsTable.matchedPlaidTransactionId),
+    ));
+
+  // Card-paid: each 'hit' cycle-bill row is one payment occurrence; its
+  // actual_amount already sums that cycle's matched charges. Dated by the
+  // cycle close (the statement the charge belongs to).
+  const cardRows = await db
+    .select({
+      billId: cardCycleBillsTable.billId,
+      amount: cardCycleBillsTable.actualAmount,
+      date: cardCyclesTable.cycleEnd,
+    })
+    .from(cardCycleBillsTable)
+    .innerJoin(cardCyclesTable, eq(cardCycleBillsTable.cardCycleId, cardCyclesTable.id))
+    .innerJoin(billsTable, eq(cardCycleBillsTable.billId, billsTable.id))
+    .where(and(
+      eq(billsTable.userId, req.userId),
+      eq(cardCycleBillsTable.status, "hit"),
+      isNotNull(cardCycleBillsTable.actualAmount),
+    ));
+
+  type Acc = { amounts: number[]; dates: string[]; bank: number; card: number };
+  const byBill = new Map<number, Acc>();
+  const acc = (billId: number): Acc => {
+    let a = byBill.get(billId);
+    if (!a) { a = { amounts: [], dates: [], bank: 0, card: 0 }; byBill.set(billId, a); }
+    return a;
+  };
+  for (const r of bankRows) {
+    if (r.billId == null) continue;
+    const a = acc(r.billId);
+    a.amounts.push(Math.abs(parseFloat(String(r.amount))));
+    a.dates.push(r.date);
+    a.bank++;
+  }
+  for (const r of cardRows) {
+    const a = acc(r.billId);
+    a.amounts.push(Math.abs(parseFloat(String(r.amount))));
+    a.dates.push(r.date);
+    a.card++;
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  res.json(ListBillPaymentStatsResponse.parse({
+    stats: bills.map((b) => {
+      const a = byBill.get(b.id);
+      if (!a || a.amounts.length === 0) {
+        return { billId: b.id, frequency: b.frequency, isVariable: b.isVariable ?? false, customIntervalDays: b.customIntervalDays ?? null, count: 0, totalPaid: 0, average: null, minAmount: null, maxAmount: null, firstDate: null, lastDate: null, cardPayments: 0, bankPayments: 0 };
+      }
+      const total = a.amounts.reduce((s, x) => s + x, 0);
+      const dates = [...a.dates].sort();
+      return {
+        billId: b.id,
+        frequency: b.frequency,
+        isVariable: b.isVariable ?? false,
+        customIntervalDays: b.customIntervalDays ?? null,
+        count: a.amounts.length,
+        totalPaid: round2(total),
+        average: a.amounts.length >= 2 ? round2(total / a.amounts.length) : null,
+        minAmount: round2(Math.min(...a.amounts)),
+        maxAmount: round2(Math.max(...a.amounts)),
+        firstDate: dates[0],
+        lastDate: dates[dates.length - 1],
+        cardPayments: a.card,
+        bankPayments: a.bank,
+      };
+    }),
+  }));
 });
 
 router.get("/bills/upcoming", async (req, res): Promise<void> => {

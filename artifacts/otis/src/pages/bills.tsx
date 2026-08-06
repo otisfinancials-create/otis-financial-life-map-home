@@ -7,13 +7,14 @@ import {
   useListBills,
   useGetBillLinkReview,
   useListDetectedBillDrafts,
+  useListBillPaymentStats,
   useDeleteBill,
   useUpdateBill,
   getListBillsQueryKey,
   getGetUpcomingBillsQueryKey,
   getGetDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
-import type { Bill } from "@workspace/api-client-react";
+import type { Bill, BillPaymentStats } from "@workspace/api-client-react";
 import { useSyncForecast } from "@/hooks/use-sync-forecast";
 
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BillDialog, BillForm } from "@/components/bills/bill-dialog";
+import { PaymentHistoryPopover } from "@/components/bills/payment-history-popover";
 import { BillsAnalytics } from "@/components/bills/bills-analytics";
 import { categoryMeta, getCategoryEmoji } from "@/utils/categoryIcons";
 import { isGoalContribution, GOAL_SAVINGS_LABEL } from "@/lib/bill-groups";
@@ -98,6 +100,12 @@ export default function Bills() {
   const { data: bills, isLoading } = useListBills();
   const { data: linkReview } = useGetBillLinkReview();
   const { data: detectedDrafts } = useListDetectedBillDrafts();
+  const { data: paymentStats } = useListBillPaymentStats();
+  const statsByBillId = useMemo(() => {
+    const map = new Map<number, BillPaymentStats>();
+    for (const s of paymentStats?.stats ?? []) map.set(s.billId, s);
+    return map;
+  }, [paymentStats]);
   const deleteBill = useDeleteBill();
   const updateBill = useUpdateBill();
   const { sync: syncForecast } = useSyncForecast();
@@ -428,13 +436,16 @@ export default function Bills() {
                       )}
                     </TableCell>
                     <TableCell className="font-mono">
-                      {bill.amountType === "positive" ? (
-                        <span className="text-[#059669]">
-                          +<FormatCurrency amount={bill.amount} />
-                        </span>
-                      ) : (
-                        <FormatCurrency amount={bill.amount} />
-                      )}
+                      <span className="inline-flex items-center gap-1">
+                        {bill.amountType === "positive" ? (
+                          <span className="text-[#059669]">
+                            +<FormatCurrency amount={bill.amount} />
+                          </span>
+                        ) : (
+                          <FormatCurrency amount={bill.amount} />
+                        )}
+                        <PaymentHistoryPopover billName={bill.billName} stats={statsByBillId.get(bill.id)} />
+                      </span>
                     </TableCell>
                     <TableCell className="capitalize text-muted-foreground text-sm">
                       {bill.frequency}

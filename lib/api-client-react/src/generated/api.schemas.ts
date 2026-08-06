@@ -736,6 +736,55 @@ export interface CloseCycleResult {
   foodRemaining: number;
 }
 
+export interface BillPaymentStats {
+  billId: number;
+  frequency: string;
+  isVariable: boolean;
+  /** Interval in days when frequency is 'custom'; null otherwise */
+  customIntervalDays?: number | null;
+  /** Number of recorded payments across both sources */
+  count: number;
+  totalPaid: number;
+  /**
+     * Average payment amount; null when fewer than 2 payments
+     * @nullable
+     */
+  average: number | null;
+  /** @nullable */
+  minAmount: number | null;
+  /** @nullable */
+  maxAmount: number | null;
+  /**
+     * Date of the earliest recorded payment (YYYY-MM-DD)
+     * @nullable
+     */
+  firstDate: string | null;
+  /** @nullable */
+  lastDate: string | null;
+  /** How many of the payments came from card cycle actuals */
+  cardPayments: number;
+  /** How many came from bank-reconciled forecast rows */
+  bankPayments: number;
+}
+
+export interface EnvelopeAllocationTxn {
+  /** @nullable */
+  txnDate: string | null;
+  name: string;
+  amount: number;
+  source: string;
+}
+
+export interface EnvelopeAllocationBreakdown {
+  envelopeId: number;
+  envelopeName: string;
+  /** The envelope's stored spent_amount (what the UI displays) */
+  spentAmount: number;
+  /** Sum of the listed allocations — should equal spentAmount; a mismatch indicates a bug */
+  allocationsTotal: number;
+  transactions: EnvelopeAllocationTxn[];
+}
+
 export interface ManualCharge {
   id: number;
   amount: number;
@@ -1958,6 +2007,10 @@ export interface PlaidTransaction {
   accountName?: string | null;
   accountType?: string | null;
 }
+
+export type ListBillPaymentStats200 = {
+  stats: BillPaymentStats[];
+};
 
 export type ListCardCompositionsParams = {
 /**

@@ -88,6 +88,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import CalendarView from "@/components/forecast/calendar-view";
+import { EnvelopeActualsPopover } from "@/components/forecast/envelope-actuals-popover";
 import {
   BarChart,
   Bar,
@@ -363,7 +364,16 @@ function CycleBreakdownRows({ cycleId, ccAccountId }: { cycleId: number; ccAccou
                 )}
               </span>
               <span className={`font-mono tabular-nums whitespace-nowrap ${e.spentAmount != null && e.spentAmount > e.plannedAmount ? "text-[var(--color-negative)] font-medium" : "text-muted-foreground"}`}>
-                {e.spentAmount != null ? <FormatCurrency amount={e.spentAmount} /> : "—"}
+                {e.spentAmount != null ? (
+                  <EnvelopeActualsPopover
+                    envelopeId={e.id}
+                    envelopeName={e.name}
+                    spentAmount={e.spentAmount}
+                    overspent={e.spentAmount > e.plannedAmount}
+                  />
+                ) : (
+                  "—"
+                )}
                 <span className="text-[10px]"> / planned </span>
                 {editing ? (
                   <span className="inline-flex items-center gap-1">

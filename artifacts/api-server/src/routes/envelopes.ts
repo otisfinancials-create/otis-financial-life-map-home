@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, eq, gt, gte, lte, asc, inArray, sql } from "drizzle-orm";
-import { db, cardCyclesTable, envelopesTable, cardCycleBillsTable, billsTable, envelopeAllocationsTable, accountsTable, type Envelope, type CardCycle, type EnvelopeAllocation } from "@workspace/db";
+import { db, cardCyclesTable, envelopesTable, cardCycleBillsTable, billsTable, envelopeAllocationsTable, accountsTable, plaidTransactionsTable, type Envelope, type CardCycle, type EnvelopeAllocation } from "@workspace/db";
 import {
   ListCycleEnvelopesParams,
   ListCycleEnvelopesResponse,
@@ -23,6 +23,7 @@ import {
   CreateCycleChargeParams, CreateCycleChargeBody, CreateCycleChargeResponse,
   UpdateCycleChargeParams, UpdateCycleChargeBody, UpdateCycleChargeResponse,
   DeleteCycleChargeParams,
+  ListEnvelopeAllocationsParams, ListEnvelopeAllocationsResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -286,6 +287,51 @@ async function cycleTargets(cycleId: number) {
     billById: new Map(cycleBills.map(({ cb, billName }) => [cb.id, { cb, billName }])),
   };
 }
+
+// Read-only breakdown of an envelope's actuals: every allocation pointing at
+// the envelope, joined to its posted transaction when one exists (manual
+// charges have no plaid transaction — their own txn_date/description apply).
+// allocationsTotal is reported alongside the stored spent_amount so a
+// mismatch is SURFACED to the client, never hidden.
+router.get("/envelopes/:id/allocations", async (req, res): Promise<void> => {
+  const params = ListEnvelopeAllocationsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [env] = await db
+    .select()
+    .from(envelopesTable)
+    .where(and(eq(envelopesTable.id, params.data.id), eq(envelopesTable.userId, req.userId)));
+  if (!env) {
+    res.status(404).json({ error: "Envelope not found" });
+    return;
+  }
+  const rows = await db
+    .select({ alloc: envelopeAllocationsTable, txn: plaidTransactionsTable })
+    .from(envelopeAllocationsTable)
+    .leftJoin(
+      plaidTransactionsTable,
+      eq(envelopeAllocationsTable.plaidTransactionId, plaidTransactionsTable.plaidTransactionId),
+    )
+    .where(eq(envelopeAllocationsTable.envelopeId, env.id));
+  const transactions = rows
+    .map(({ alloc, txn }) => ({
+      txnDate: txn?.date ?? alloc.txnDate ?? null,
+      name: txn ? (txn.merchantName ?? txn.name ?? "Posted transaction") : (alloc.description ?? "Manual charge"),
+      amount: parseFloat(String(alloc.amount)),
+      source: alloc.source,
+    }))
+    .sort((a, b) => (b.txnDate ?? "").localeCompare(a.txnDate ?? ""));
+  const allocationsTotal = Math.round(transactions.reduce((s, t) => s + t.amount, 0) * 100) / 100;
+  res.json(ListEnvelopeAllocationsResponse.parse({
+    envelopeId: env.id,
+    envelopeName: env.name,
+    spentAmount: env.spentAmount != null ? parseFloat(String(env.spentAmount)) : 0,
+    allocationsTotal,
+    transactions,
+  }));
+});
 
 router.get("/cycles/:cycleId/charges", async (req, res): Promise<void> => {
   const params = ListCycleChargesParams.safeParse(req.params);

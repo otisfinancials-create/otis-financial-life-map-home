@@ -54,6 +54,7 @@ import type {
   DetectedBill,
   DetectedBillDraft,
   Envelope,
+  EnvelopeAllocationBreakdown,
   EnvelopeInput,
   EnvelopeUpdate,
   ForecastCalendarResponse,
@@ -69,6 +70,7 @@ import type {
   GoalUpdate,
   HealthStatus,
   ListAccountMerchantsParams,
+  ListBillPaymentStats200,
   ListCardCompositionsParams,
   ListForecastParams,
   ListPlaidTransactionsParams,
@@ -518,6 +520,83 @@ export function useGetUpcomingBills<TData = Awaited<ReturnType<typeof getUpcomin
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetUpcomingBillsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListBillPaymentStatsUrl = () => {
+
+
+
+
+  return `/api/bills/payment-stats`
+}
+
+/**
+ * @summary Historical payment stats per bill (bank-reconciled rows + card cycle actuals)
+ */
+export const listBillPaymentStats = async ( options?: RequestInit): Promise<ListBillPaymentStats200> => {
+
+  return customFetch<ListBillPaymentStats200>(getListBillPaymentStatsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBillPaymentStatsQueryKey = () => {
+    return [
+    `/api/bills/payment-stats`
+    ] as const;
+    }
+
+
+export const getListBillPaymentStatsQueryOptions = <TData = Awaited<ReturnType<typeof listBillPaymentStats>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBillPaymentStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBillPaymentStatsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBillPaymentStats>>> = ({ signal }) => listBillPaymentStats({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBillPaymentStats>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBillPaymentStatsQueryResult = NonNullable<Awaited<ReturnType<typeof listBillPaymentStats>>>
+export type ListBillPaymentStatsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Historical payment stats per bill (bank-reconciled rows + card cycle actuals)
+ */
+
+export function useListBillPaymentStats<TData = Awaited<ReturnType<typeof listBillPaymentStats>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBillPaymentStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBillPaymentStatsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -3298,6 +3377,83 @@ export function useGetCycleBreakdown<TData = Awaited<ReturnType<typeof getCycleB
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetCycleBreakdownQueryOptions(cycleId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListEnvelopeAllocationsUrl = (id: number,) => {
+
+
+
+
+  return `/api/envelopes/${id}/allocations`
+}
+
+/**
+ * @summary Transactions making up an envelope's actuals (allocations joined to posted transactions), newest first
+ */
+export const listEnvelopeAllocations = async (id: number, options?: RequestInit): Promise<EnvelopeAllocationBreakdown> => {
+
+  return customFetch<EnvelopeAllocationBreakdown>(getListEnvelopeAllocationsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEnvelopeAllocationsQueryKey = (id: number,) => {
+    return [
+    `/api/envelopes/${id}/allocations`
+    ] as const;
+    }
+
+
+export const getListEnvelopeAllocationsQueryOptions = <TData = Awaited<ReturnType<typeof listEnvelopeAllocations>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEnvelopeAllocations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEnvelopeAllocationsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEnvelopeAllocations>>> = ({ signal }) => listEnvelopeAllocations(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEnvelopeAllocations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEnvelopeAllocationsQueryResult = NonNullable<Awaited<ReturnType<typeof listEnvelopeAllocations>>>
+export type ListEnvelopeAllocationsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Transactions making up an envelope's actuals (allocations joined to posted transactions), newest first
+ */
+
+export function useListEnvelopeAllocations<TData = Awaited<ReturnType<typeof listEnvelopeAllocations>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEnvelopeAllocations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEnvelopeAllocationsQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
