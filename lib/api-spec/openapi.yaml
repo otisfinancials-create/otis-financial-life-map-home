@@ -2850,6 +2850,21 @@ components:
           description: Base64 institution logo from Plaid, if available
         lastSyncedAt:
           type: ["string", "null"]
+        lastSyncAttemptedAt:
+          type: ["string", "null"]
+          description: When the connection's last sync ATTEMPT started (success or failure); null for manual accounts
+        lastSyncError:
+          type: ["string", "null"]
+          description: Sanitized message from the most recent failed sync attempt; null when the last attempt succeeded
+        lastSyncErrorCode:
+          type: ["string", "null"]
+          description: Plaid error code from the most recent failed sync attempt (e.g. ITEM_LOGIN_REQUIRED)
+        consecutiveFailures:
+          type: integer
+          description: Number of sync attempts that have failed in a row for this connection (0 = healthy)
+        needsReauth:
+          type: boolean
+          description: The bank requires the user to re-authenticate this connection (Link update mode)
         wasPlaidLinked:
           type: boolean
           description: >-

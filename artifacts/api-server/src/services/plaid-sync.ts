@@ -15,8 +15,91 @@ export interface SyncCounts {
   balances_captured: number;
 }
 
-/** Sync transactions for a single plaid_items row using /transactions/sync with cursor pagination. */
+/**
+ * Sync transactions for a single plaid_items row, recording attempt/outcome
+ * state so a failing connection is distinguishable from an idle one:
+ * - last_sync_attempted_at is stamped at the START of every attempt
+ * - success clears last_sync_error/last_sync_error_code and resets
+ *   consecutive_failures (last_synced_at is set by the cursor-persist step)
+ * - failure stores the sanitized error + Plaid code, increments
+ *   consecutive_failures, never touches last_synced_at, and rethrows
+ * Covers every sync path (nightly cron, webhook, user-triggered) because they
+ * all funnel through this function.
+ */
 export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCounts> {
+  // Serialize per item across EVERY entry point (cron, webhook, manual,
+  // post-reauth). Without this, an older failed run finishing after a newer
+  // successful one could overwrite healthy state (or vice versa), and
+  // concurrent runs would reuse the same stale cursor.
+  const prev = itemSyncChains.get(item.id) ?? Promise.resolve();
+  const run = prev.then(() => runTrackedSync(item));
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  itemSyncChains.set(item.id, tail);
+  void tail.then(() => {
+    if (itemSyncChains.get(item.id) === tail) itemSyncChains.delete(item.id);
+  });
+  return run;
+}
+
+const itemSyncChains = new Map<number, Promise<void>>();
+
+async function runTrackedSync(item: PlaidItem): Promise<SyncCounts> {
+  // Re-read the cursor now that we hold the per-item slot: a queued run must
+  // continue from wherever the previous run left off, not from the cursor its
+  // caller loaded before waiting. (The caller's item is otherwise kept as-is.)
+  const [fresh] = await db
+    .select({ transactionsCursor: plaidItemsTable.transactionsCursor })
+    .from(plaidItemsTable)
+    .where(eq(plaidItemsTable.id, item.id));
+  const current: PlaidItem = fresh ? { ...item, transactionsCursor: fresh.transactionsCursor } : item;
+
+  await db
+    .update(plaidItemsTable)
+    .set({ lastSyncAttemptedAt: new Date(), updatedAt: new Date() })
+    .where(eq(plaidItemsTable.id, item.id));
+  try {
+    const counts = await performSyncForItem(current);
+    await recordSyncSuccess(item.id);
+    return counts;
+  } catch (err) {
+    await recordSyncFailure(item.id, err);
+    throw err;
+  }
+}
+
+/** Clear failure state after a successful sync attempt. */
+export async function recordSyncSuccess(plaidItemId: number): Promise<void> {
+  await db
+    .update(plaidItemsTable)
+    .set({ lastSyncError: null, lastSyncErrorCode: null, consecutiveFailures: 0, updatedAt: new Date() })
+    .where(eq(plaidItemsTable.id, plaidItemId));
+}
+
+/** Persist sanitized failure state; flags re-auth when Plaid says login is required. */
+export async function recordSyncFailure(plaidItemId: number, err: unknown): Promise<void> {
+  const sanitized = sanitizeSyncError(err);
+  try {
+    await db
+      .update(plaidItemsTable)
+      .set({
+        lastSyncError: sanitized.message,
+        lastSyncErrorCode: sanitized.plaidCode ?? null,
+        consecutiveFailures: sql`${plaidItemsTable.consecutiveFailures} + 1`,
+        ...(sanitized.plaidCode === "ITEM_LOGIN_REQUIRED" && { needsReauth: true }),
+        updatedAt: new Date(),
+      })
+      .where(eq(plaidItemsTable.id, plaidItemId));
+  } catch (writeErr) {
+    // Never mask the original sync error with a bookkeeping failure.
+    logger.error({ plaidItemId, err: sanitizeSyncError(writeErr) }, "Failed to persist sync failure state");
+  }
+}
+
+/** Core /transactions/sync pagination loop (no attempt bookkeeping — see wrapper). */
+async function performSyncForItem(item: PlaidItem): Promise<SyncCounts> {
   let cursor = item.transactionsCursor ?? undefined;
   const isInitialSync = cursor === undefined;
   let hasMore = true;
@@ -135,10 +218,17 @@ export async function syncTransactionsForItem(item: PlaidItem): Promise<SyncCoun
   // Plaid reports the historical backfill is still pending. Persisting one
   // would permanently skip the item's history.
   if (lastUpdateStatus !== "HISTORICAL_UPDATE_COMPLETE") {
+    // The attempt itself SUCCEEDED (transactions/balances persisted), so
+    // last_synced_at must advance — only the cursor is withheld, forcing the
+    // next sync to retry from the previous cursor once history is ready.
     logger.warn(
       { plaidItemId: item.id, status: lastUpdateStatus, isInitialSync },
       "Plaid sync: historical update not complete; cursor not saved (will retry next sync)",
     );
+    await db
+      .update(plaidItemsTable)
+      .set({ lastSyncedAt: new Date(), updatedAt: new Date() })
+      .where(eq(plaidItemsTable.id, item.id));
     return counts;
   }
 

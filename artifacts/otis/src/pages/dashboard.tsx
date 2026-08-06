@@ -30,6 +30,7 @@ import {
   ArrowDownRight,
   Minus,
   ExternalLink,
+  AlertTriangle,
 } from "lucide-react";
 import {
   AreaChart,
@@ -380,6 +381,25 @@ export default function Dashboard() {
   const liabilities = summary?.totalLiabilities ?? 0;
   const prevNetWorth = netWorth - avgMonthlyCashFlow;
 
+  // Bank-connection health: the forecast is only as good as its inputs, so a
+  // failing or reauth-required connection is surfaced HERE, not just on
+  // Accounts. One banner per affected institution. "Failing" requires an
+  // actual failed attempt (lastSyncError) — idle-but-healthy items never show.
+  const brokenConnections = (() => {
+    const seen = new Map<number, { institutionName: string; needsReauth: boolean }>();
+    for (const a of accounts ?? []) {
+      if (a.plaidItemId == null) continue;
+      if (!a.needsReauth && !a.lastSyncError) continue;
+      const existing = seen.get(a.plaidItemId);
+      if (!existing) {
+        seen.set(a.plaidItemId, { institutionName: a.institutionName, needsReauth: a.needsReauth ?? false });
+      } else if (a.needsReauth) {
+        existing.needsReauth = true;
+      }
+    }
+    return [...seen.values()];
+  })();
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
@@ -388,6 +408,29 @@ export default function Dashboard() {
           <p className="mt-1" style={{ fontSize: 12, color: "#64748b" }}>Your financial life at a glance.</p>
         </div>
       </div>
+
+      {brokenConnections.length > 0 && (
+        <div
+          className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 flex items-start gap-3"
+          data-testid="banner-sync-failing"
+        >
+          <AlertTriangle className="h-4 w-4 text-red-700 shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-red-800">
+              {brokenConnections.map((c) => c.institutionName).join(", ")}{" "}
+              {brokenConnections.length === 1 ? "isn't" : "aren't"} updating — your forecast may be using stale balances.
+            </p>
+            <p className="text-xs text-red-700 mt-0.5">
+              {brokenConnections.some((c) => c.needsReauth)
+                ? "Your bank needs you to sign in again. "
+                : "We couldn't reach your bank on the last try. "}
+              <Link href="/accounts" className="underline font-medium" data-testid="link-fix-connection">
+                Fix it on the Accounts page
+              </Link>
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Primary Metrics */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">

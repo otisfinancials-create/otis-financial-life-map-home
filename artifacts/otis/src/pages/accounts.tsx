@@ -106,6 +106,35 @@ const relativeTime = (iso: string): string => {
 const STALE_SYNC_MS = 48 * 60 * 60 * 1000;
 const isStaleSync = (iso: string) => Date.now() - new Date(iso).getTime() > STALE_SYNC_MS;
 
+// Plain-language reasons for Plaid sync failures — users should never see a
+// raw error code. Anything unmapped falls back to a generic explanation.
+const SYNC_ERROR_REASONS: Record<string, string> = {
+  ITEM_LOGIN_REQUIRED: "Your bank needs you to sign in again.",
+  PENDING_EXPIRATION: "Your bank's connection is about to expire — reconnect to keep it active.",
+  PENDING_DISCONNECT: "Your bank is ending this connection — reconnect to keep it active.",
+  INSTITUTION_DOWN: "Your bank's systems are temporarily unavailable. We'll keep retrying.",
+  INSTITUTION_NOT_RESPONDING: "Your bank isn't responding right now. We'll keep retrying.",
+  INTERNAL_SERVER_ERROR: "Our data provider hit a temporary problem. We'll keep retrying.",
+  RATE_LIMIT: "Too many requests to your bank — we'll retry shortly.",
+  PRODUCT_NOT_READY: "Your bank data is still being prepared. We'll retry shortly.",
+};
+
+const syncFailureReason = (code: string | null | undefined): string =>
+  (code && SYNC_ERROR_REASONS[code]) ??
+  "We couldn't reach your bank on the last try. We'll keep retrying automatically.";
+
+/**
+ * Connection health for a bank-linked account. "Failing" requires an actual
+ * failed ATTEMPT (lastSyncError set) — an item whose last_synced_at is old but
+ * whose attempts all succeeded (or that simply hasn't run) is idle, not broken.
+ */
+type SyncHealth = "healthy" | "failing" | "reauth";
+const syncHealth = (a: Account): SyncHealth => {
+  if (a.needsReauth) return "reauth";
+  if (a.lastSyncError) return "failing";
+  return "healthy";
+};
+
 export default function Accounts() {
   const [accountToEdit, setAccountToEdit] = useState<Account | undefined>(undefined);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -293,7 +322,54 @@ export default function Accounts() {
                 {getTypeLabel(account.accountType)}
               </Badge>
             </div>
-            {account.plaidAccountId && account.lastSyncedAt ? (
+            {account.plaidAccountId && syncHealth(account) === "reauth" ? (
+              // Needs re-auth: the bank requires the user to sign in again.
+              // red-700 #B91C1C (5.94:1 on white) meets WCAG AA.
+              <div className="mt-0.5" data-testid={`text-sync-reauth-${account.id}`}>
+                <p className="text-xs text-red-700 font-medium flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  {account.accountNumberLast4 ? `····${account.accountNumberLast4} · ` : ""}
+                  Your bank needs you to sign in again
+                </p>
+                {account.plaidItemId != null && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-1.5 h-7 text-xs border-red-700 text-red-700 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => setUpdateItem({ itemId: account.plaidItemId!, institutionName: account.institutionName })}
+                    data-testid={`button-reconnect-${account.id}`}
+                  >
+                    <Link2 className="mr-1.5 h-3 w-3" />
+                    Reconnect
+                  </Button>
+                )}
+              </div>
+            ) : account.plaidAccountId && syncHealth(account) === "failing" ? (
+              // Failing: an actual sync ATTEMPT failed. Distinct from merely
+              // stale — say when it last worked, when it last failed, and why.
+              <div className="mt-0.5" data-testid={`text-sync-failing-${account.id}`}>
+                <p className="text-xs text-red-700 font-medium flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  {account.accountNumberLast4 ? `····${account.accountNumberLast4} · ` : ""}
+                  Not updating.
+                  {account.lastSyncedAt ? ` Last successful sync ${relativeTime(account.lastSyncedAt)}` : " Never synced successfully"}
+                  {account.lastSyncAttemptedAt ? `; last attempt failed ${relativeTime(account.lastSyncAttemptedAt)}.` : "."}
+                </p>
+                <p className="text-xs text-red-700 mt-0.5">{syncFailureReason(account.lastSyncErrorCode)}</p>
+                {account.plaidItemId != null && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-1.5 h-7 text-xs border-red-700 text-red-700 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => setUpdateItem({ itemId: account.plaidItemId!, institutionName: account.institutionName })}
+                    data-testid={`button-reconnect-${account.id}`}
+                  >
+                    <Link2 className="mr-1.5 h-3 w-3" />
+                    Reconnect
+                  </Button>
+                )}
+              </div>
+            ) : account.plaidAccountId && account.lastSyncedAt ? (
               isStaleSync(account.lastSyncedAt) ? (
                 // A stale balance in a cash-flow app is worse than no balance —
                 // past 48h the sync line becomes a warning. amber-800 #92400E

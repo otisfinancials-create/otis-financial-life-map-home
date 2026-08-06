@@ -19,7 +19,7 @@ import {
   SetPlaidForecastAccountsResponse,
 } from "@workspace/api-zod";
 import { plaidClient, mapPlaidAccountType, cleanPlaidName } from "../lib/plaid";
-import { syncAllItemsForUser } from "../services/plaid-sync";
+import { syncAllItemsForUser, syncTransactionsForItem } from "../services/plaid-sync";
 import { removePlaidItem, PlaidRemovalError } from "../services/plaid-item-removal";
 import { syncLiabilitiesForItem } from "../services/plaid-liabilities";
 
@@ -425,6 +425,18 @@ router.post("/plaid/items/:id/refresh-accounts", async (req, res): Promise<void>
     // Liabilities enrichment for any newly added cards (best-effort inside
     // the service; never fails the reconciliation).
     await syncLiabilitiesForItem(item);
+
+    // A successful accounts/get proves the connection is healthy again, so a
+    // completed update-mode session (reauth or add-account) clears the
+    // re-auth flag and failure state, then pulls fresh transactions in the
+    // background — if that sync fails, it re-records the failure state.
+    await db
+      .update(plaidItemsTable)
+      .set({ needsReauth: false, lastSyncError: null, lastSyncErrorCode: null, consecutiveFailures: 0, updatedAt: now })
+      .where(eq(plaidItemsTable.id, item.id));
+    void syncTransactionsForItem(item).catch((err) => {
+      req.log.error({ plaidItemRow: item.id, err: sanitizePlaidError(err) }, "Post-reauth Plaid sync failed");
+    });
 
     req.log.info(
       { plaidItemRow: item.id, accountsAdded: newAccountIds.length, accountsUnlinked },

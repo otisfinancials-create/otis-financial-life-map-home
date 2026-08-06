@@ -561,6 +561,25 @@ export interface Account {
   institutionLogo?: string | null;
   /** @nullable */
   lastSyncedAt?: string | null;
+  /**
+     * When the connection's last sync ATTEMPT started (success or failure); null for manual accounts
+     * @nullable
+     */
+  lastSyncAttemptedAt?: string | null;
+  /**
+     * Sanitized message from the most recent failed sync attempt; null when the last attempt succeeded
+     * @nullable
+     */
+  lastSyncError?: string | null;
+  /**
+     * Plaid error code from the most recent failed sync attempt (e.g. ITEM_LOGIN_REQUIRED)
+     * @nullable
+     */
+  lastSyncErrorCode?: string | null;
+  /** Number of sync attempts that have failed in a row for this connection (0 = healthy) */
+  consecutiveFailures?: number;
+  /** The bank requires the user to re-authenticate this connection (Link update mode) */
+  needsReauth?: boolean;
   /** True when the account is no longer linked to Plaid but once was (soft-unlinked by disconnect or item removal). Distinguishes "manual because unlinked" from "manually created". */
   wasPlaidLinked?: boolean;
   /**

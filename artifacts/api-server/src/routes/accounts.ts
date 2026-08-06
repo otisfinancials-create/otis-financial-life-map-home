@@ -47,7 +47,16 @@ router.get("/accounts", async (req, res): Promise<void> => {
     .where(eq(accountsTable.userId, req.userId))
     .orderBy(accountsTable.accountType, accountsTable.accountName);
   const items = await db
-    .select({ id: plaidItemsTable.id, institutionLogo: plaidItemsTable.institutionLogo, lastSyncedAt: plaidItemsTable.lastSyncedAt })
+    .select({
+      id: plaidItemsTable.id,
+      institutionLogo: plaidItemsTable.institutionLogo,
+      lastSyncedAt: plaidItemsTable.lastSyncedAt,
+      lastSyncAttemptedAt: plaidItemsTable.lastSyncAttemptedAt,
+      lastSyncError: plaidItemsTable.lastSyncError,
+      lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+      consecutiveFailures: plaidItemsTable.consecutiveFailures,
+      needsReauth: plaidItemsTable.needsReauth,
+    })
     .from(plaidItemsTable)
     .where(eq(plaidItemsTable.userId, req.userId));
   const itemById = new Map(items.map((i) => [i.id, i]));
@@ -65,6 +74,14 @@ router.get("/accounts", async (req, res): Promise<void> => {
             : a.lastSyncedAt
               ? a.lastSyncedAt.toISOString()
               : null,
+          // Connection health: an item is FAILING only when an actual attempt
+          // failed (lastSyncError set). An old lastSyncedAt with no failed
+          // attempt is idle-but-healthy, never a failure state.
+          lastSyncAttemptedAt: item?.lastSyncAttemptedAt ? item.lastSyncAttemptedAt.toISOString() : null,
+          lastSyncError: item?.lastSyncError ?? null,
+          lastSyncErrorCode: item?.lastSyncErrorCode ?? null,
+          consecutiveFailures: item?.consecutiveFailures ?? 0,
+          needsReauth: item?.needsReauth ?? false,
         };
       }),
     ),

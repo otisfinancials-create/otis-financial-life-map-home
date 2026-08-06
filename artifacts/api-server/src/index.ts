@@ -26,10 +26,13 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
 });
 
-// Nightly Plaid transaction sync at 2:00 AM.
-cron.schedule("0 2 * * *", () => {
+// Nightly Plaid transaction sync at 3:00 AM Eastern, pinned to
+// America/New_York so it does not drift with daylight saving. (The previous
+// "0 2 * * *" ran in server-local UTC = 10pm EDT, before most banks post the
+// day's transactions.) Fires at 3:00 AM EDT (07:00 UTC) / 3:00 AM EST (08:00 UTC).
+cron.schedule("0 3 * * *", () => {
   logger.info("Starting nightly Plaid transaction sync");
   void syncAllUsers()
     .then(() => logger.info("Nightly Plaid sync complete"))
     .catch((err) => logger.error({ err }, "Nightly Plaid sync error"));
-});
+}, { timezone: "America/New_York" });
