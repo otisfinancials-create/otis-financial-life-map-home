@@ -48,11 +48,13 @@ import type {
   CardCycle,
   CloseCycleResult,
   ConfirmDetectedBillInput,
+  ConfirmDetectedPayScheduleInput,
   CycleBreakdown,
   CycleConfigInput,
   DashboardSummary,
   DetectedBill,
   DetectedBillDraft,
+  DetectedPaySchedule,
   Envelope,
   EnvelopeAllocationBreakdown,
   EnvelopeInput,
@@ -88,6 +90,7 @@ import type {
   MonthlyForecast,
   OtisChatRequest,
   OtisHistoryMessage,
+  PayDetectionSummary,
   PaySchedule,
   PayScheduleInput,
   PayScheduleUpdate,
@@ -8076,6 +8079,294 @@ export const useDismissDetectedBill = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getDismissDetectedBillMutationOptions(options));
+    }
+
+export const getDetectPaySchedulesUrl = () => {
+
+
+
+
+  return `/api/pay-schedules/detect`
+}
+
+/**
+ * @summary Run recurring-income detection over synced Plaid transactions
+ */
+export const detectPaySchedules = async ( options?: RequestInit): Promise<PayDetectionSummary> => {
+
+  return customFetch<PayDetectionSummary>(getDetectPaySchedulesUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getDetectPaySchedulesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof detectPaySchedules>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof detectPaySchedules>>, TError,void, TContext> => {
+
+const mutationKey = ['detectPaySchedules'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof detectPaySchedules>>, void> = () => {
+
+
+          return  detectPaySchedules(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DetectPaySchedulesMutationResult = NonNullable<Awaited<ReturnType<typeof detectPaySchedules>>>
+
+    export type DetectPaySchedulesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Run recurring-income detection over synced Plaid transactions
+ */
+export const useDetectPaySchedules = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof detectPaySchedules>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof detectPaySchedules>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDetectPaySchedulesMutationOptions(options));
+    }
+
+export const getListDetectedPaySchedulesUrl = () => {
+
+
+
+
+  return `/api/pay-schedules/detected`
+}
+
+/**
+ * @summary List pending detected pay schedules, highest confidence first
+ */
+export const listDetectedPaySchedules = async ( options?: RequestInit): Promise<DetectedPaySchedule[]> => {
+
+  return customFetch<DetectedPaySchedule[]>(getListDetectedPaySchedulesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDetectedPaySchedulesQueryKey = () => {
+    return [
+    `/api/pay-schedules/detected`
+    ] as const;
+    }
+
+
+export const getListDetectedPaySchedulesQueryOptions = <TData = Awaited<ReturnType<typeof listDetectedPaySchedules>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDetectedPaySchedules>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDetectedPaySchedulesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDetectedPaySchedules>>> = ({ signal }) => listDetectedPaySchedules({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDetectedPaySchedules>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDetectedPaySchedulesQueryResult = NonNullable<Awaited<ReturnType<typeof listDetectedPaySchedules>>>
+export type ListDetectedPaySchedulesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List pending detected pay schedules, highest confidence first
+ */
+
+export function useListDetectedPaySchedules<TData = Awaited<ReturnType<typeof listDetectedPaySchedules>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDetectedPaySchedules>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDetectedPaySchedulesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getConfirmDetectedPayScheduleUrl = (id: number,) => {
+
+
+
+
+  return `/api/pay-schedules/detected/${id}/confirm`
+}
+
+/**
+ * @summary Confirm a detected pay schedule and create a real pay schedule from it
+ */
+export const confirmDetectedPaySchedule = async (id: number,
+    confirmDetectedPayScheduleInput?: ConfirmDetectedPayScheduleInput, options?: RequestInit): Promise<PaySchedule> => {
+
+  return customFetch<PaySchedule>(getConfirmDetectedPayScheduleUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(confirmDetectedPayScheduleInput)
+  }
+);}
+
+
+
+
+export const getConfirmDetectedPayScheduleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedPaySchedule>>, TError,{id: number;data?: BodyType<ConfirmDetectedPayScheduleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedPaySchedule>>, TError,{id: number;data?: BodyType<ConfirmDetectedPayScheduleInput>}, TContext> => {
+
+const mutationKey = ['confirmDetectedPaySchedule'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmDetectedPaySchedule>>, {id: number;data?: BodyType<ConfirmDetectedPayScheduleInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  confirmDetectedPaySchedule(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmDetectedPayScheduleMutationResult = NonNullable<Awaited<ReturnType<typeof confirmDetectedPaySchedule>>>
+    export type ConfirmDetectedPayScheduleMutationBody = BodyType<ConfirmDetectedPayScheduleInput> | undefined
+    export type ConfirmDetectedPayScheduleMutationError = ErrorType<void>
+
+    /**
+ * @summary Confirm a detected pay schedule and create a real pay schedule from it
+ */
+export const useConfirmDetectedPaySchedule = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmDetectedPaySchedule>>, TError,{id: number;data?: BodyType<ConfirmDetectedPayScheduleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmDetectedPaySchedule>>,
+        TError,
+        {id: number;data?: BodyType<ConfirmDetectedPayScheduleInput>},
+        TContext
+      > => {
+      return useMutation(getConfirmDetectedPayScheduleMutationOptions(options));
+    }
+
+export const getDismissDetectedPayScheduleUrl = (id: number,) => {
+
+
+
+
+  return `/api/pay-schedules/detected/${id}/dismiss`
+}
+
+/**
+ * @summary Dismiss a detected pay schedule (persists — never re-proposed)
+ */
+export const dismissDetectedPaySchedule = async (id: number, options?: RequestInit): Promise<DetectedPaySchedule> => {
+
+  return customFetch<DetectedPaySchedule>(getDismissDetectedPayScheduleUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getDismissDetectedPayScheduleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissDetectedPaySchedule>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof dismissDetectedPaySchedule>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['dismissDetectedPaySchedule'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dismissDetectedPaySchedule>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  dismissDetectedPaySchedule(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DismissDetectedPayScheduleMutationResult = NonNullable<Awaited<ReturnType<typeof dismissDetectedPaySchedule>>>
+
+    export type DismissDetectedPayScheduleMutationError = ErrorType<void>
+
+    /**
+ * @summary Dismiss a detected pay schedule (persists — never re-proposed)
+ */
+export const useDismissDetectedPaySchedule = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissDetectedPaySchedule>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof dismissDetectedPaySchedule>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDismissDetectedPayScheduleMutationOptions(options));
     }
 
 export const getGetForecastCalendarUrl = (params: GetForecastCalendarParams,) => {

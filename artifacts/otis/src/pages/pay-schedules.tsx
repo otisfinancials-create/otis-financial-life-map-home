@@ -43,6 +43,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { PayScheduleDialog } from "@/components/pay-schedules/pay-schedule-dialog";
+import { DetectedPayProposals } from "@/components/pay-schedules/detected-pay-proposals";
 
 const FREQUENCY_LABELS: Record<string, string> = {
   weekly: "Weekly",
@@ -115,6 +116,9 @@ export default function PaySchedules() {
           }
         />
       </div>
+
+      {/* Detected recurring income (first-run experience) */}
+      <DetectedPayProposals hasSchedules={(schedules?.length ?? 0) > 0} />
 
       {/* Summary strip */}
       {!isLoading && schedules && schedules.length > 0 && (

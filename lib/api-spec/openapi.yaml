@@ -2133,6 +2133,86 @@ paths:
         "404":
           description: Not found
 
+  /pay-schedules/detect:
+    post:
+      operationId: detectPaySchedules
+      tags: [pay-schedules]
+      summary: Run recurring-income detection over synced Plaid transactions
+      responses:
+        "200":
+          description: Detection run summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayDetectionSummary"
+
+  /pay-schedules/detected:
+    get:
+      operationId: listDetectedPaySchedules
+      tags: [pay-schedules]
+      summary: List pending detected pay schedules, highest confidence first
+      responses:
+        "200":
+          description: Detected pay schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DetectedPaySchedule"
+
+  /pay-schedules/detected/{id}/confirm:
+    post:
+      operationId: confirmDetectedPaySchedule
+      tags: [pay-schedules]
+      summary: Confirm a detected pay schedule and create a real pay schedule from it
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmDetectedPayScheduleInput"
+      responses:
+        "200":
+          description: Pay schedule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaySchedule"
+        "400":
+          description: Cadence is ambiguous and no frequency was chosen
+        "404":
+          description: Not found
+        "409":
+          description: Already confirmed or dismissed
+
+  /pay-schedules/detected/{id}/dismiss:
+    post:
+      operationId: dismissDetectedPaySchedule
+      tags: [pay-schedules]
+      summary: Dismiss a detected pay schedule (persists — never re-proposed)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Dismissed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetectedPaySchedule"
+        "404":
+          description: Not found
+
   /forecast/calendar:
     get:
       operationId: getForecastCalendar
@@ -2826,6 +2906,70 @@ components:
         nextPayDate:
           type: string
         notes:
+          type: string
+
+    PayDetectionSummary:
+      type: object
+      required: [detected, pending, duplicates, excluded]
+      properties:
+        detected:
+          type: integer
+        pending:
+          type: integer
+        duplicates:
+          type: integer
+        excluded:
+          type: integer
+
+    DetectedPaySchedule:
+      type: object
+      required: [id, employerKey, displayName, amount, amountMin, amountMax, frequency, cadenceAmbiguous, frequencyOptions, occurrenceCount, firstSeen, lastSeen, nextExpectedDate, confidence, status]
+      properties:
+        id:
+          type: integer
+        employerKey:
+          type: string
+        displayName:
+          type: string
+        amount:
+          type: number
+          description: Proposed amount — the most recent deposit
+        amountMin:
+          type: ["number", "null"]
+        amountMax:
+          type: ["number", "null"]
+        frequency:
+          type: string
+        cadenceAmbiguous:
+          type: boolean
+          description: When true, present frequencyOptions to the user instead of trusting frequency
+        frequencyOptions:
+          type: array
+          items:
+            type: string
+        occurrenceCount:
+          type: integer
+        firstSeen:
+          type: ["string", "null"]
+        lastSeen:
+          type: ["string", "null"]
+        nextExpectedDate:
+          type: ["string", "null"]
+        confidence:
+          type: number
+        status:
+          type: string
+
+    ConfirmDetectedPayScheduleInput:
+      type: object
+      properties:
+        employerName:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+        nextPayDate:
           type: string
 
     # ── Accounts ─────────────────────────────────────────────────────────────

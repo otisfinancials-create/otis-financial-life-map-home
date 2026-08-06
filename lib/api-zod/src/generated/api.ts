@@ -2954,6 +2954,92 @@ export const DismissDetectedBillResponse = zod.object({
 
 
 /**
+ * @summary Run recurring-income detection over synced Plaid transactions
+ */
+export const DetectPaySchedulesResponse = zod.object({
+  "detected": zod.number(),
+  "pending": zod.number(),
+  "duplicates": zod.number(),
+  "excluded": zod.number()
+})
+
+
+/**
+ * @summary List pending detected pay schedules, highest confidence first
+ */
+export const ListDetectedPaySchedulesResponseItem = zod.object({
+  "id": zod.number(),
+  "employerKey": zod.string(),
+  "displayName": zod.string(),
+  "amount": zod.number().describe('Proposed amount — the most recent deposit'),
+  "amountMin": zod.number().nullable(),
+  "amountMax": zod.number().nullable(),
+  "frequency": zod.string(),
+  "cadenceAmbiguous": zod.boolean().describe('When true, present frequencyOptions to the user instead of trusting frequency'),
+  "frequencyOptions": zod.array(zod.string()),
+  "occurrenceCount": zod.number(),
+  "firstSeen": zod.string().nullable(),
+  "lastSeen": zod.string().nullable(),
+  "nextExpectedDate": zod.string().nullable(),
+  "confidence": zod.number(),
+  "status": zod.string()
+})
+export const ListDetectedPaySchedulesResponse = zod.array(ListDetectedPaySchedulesResponseItem)
+
+
+/**
+ * @summary Confirm a detected pay schedule and create a real pay schedule from it
+ */
+export const ConfirmDetectedPayScheduleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ConfirmDetectedPayScheduleBody = zod.object({
+  "employerName": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "frequency": zod.string().optional(),
+  "nextPayDate": zod.string().optional()
+})
+
+export const ConfirmDetectedPayScheduleResponse = zod.object({
+  "id": zod.number(),
+  "employerName": zod.string(),
+  "amount": zod.number(),
+  "frequency": zod.string(),
+  "nextPayDate": zod.string(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Dismiss a detected pay schedule (persists — never re-proposed)
+ */
+export const DismissDetectedPayScheduleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DismissDetectedPayScheduleResponse = zod.object({
+  "id": zod.number(),
+  "employerKey": zod.string(),
+  "displayName": zod.string(),
+  "amount": zod.number().describe('Proposed amount — the most recent deposit'),
+  "amountMin": zod.number().nullable(),
+  "amountMax": zod.number().nullable(),
+  "frequency": zod.string(),
+  "cadenceAmbiguous": zod.boolean().describe('When true, present frequencyOptions to the user instead of trusting frequency'),
+  "frequencyOptions": zod.array(zod.string()),
+  "occurrenceCount": zod.number(),
+  "firstSeen": zod.string().nullable(),
+  "lastSeen": zod.string().nullable(),
+  "nextExpectedDate": zod.string().nullable(),
+  "confidence": zod.number(),
+  "status": zod.string()
+})
+
+
+/**
  * @summary Hybrid month calendar — per-day events, net cash change, and rolled end-of-day balance
  */
 export const getForecastCalendarQueryMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');

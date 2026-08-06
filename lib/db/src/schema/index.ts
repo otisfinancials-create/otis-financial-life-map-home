@@ -16,5 +16,6 @@ export * from "./otis_conversations";
 export * from "./plaid_items";
 export * from "./plaid_transactions";
 export * from "./detected_bills";
+export * from "./detected_pay_schedules";
 export * from "./card_cycles";
 export * from "./bill_match_dismissals";

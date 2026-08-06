@@ -227,7 +227,7 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-interface MerchantGroup {
+export interface MerchantGroup {
   key: string;
   txns: Txn[];
   /** True if the key was derived from a Plaid merchant_name (cleaner source). */
@@ -250,7 +250,7 @@ function pickCanonical(a: MerchantGroup, b: MerchantGroup): MerchantGroup {
 }
 
 /** Fuzzy merge pass (Change 1): merges split merchant keys before cadence analysis. */
-function mergeSimilarGroups(groups: MerchantGroup[]): { merged: MerchantGroup[]; merges: number } {
+export function mergeSimilarGroups(groups: MerchantGroup[]): { merged: MerchantGroup[]; merges: number } {
   const clusters: MerchantGroup[] = [];
   let merges = 0;
   for (const group of [...groups].sort((a, b) => a.key.length - b.key.length)) {

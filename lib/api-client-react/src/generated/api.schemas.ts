@@ -465,6 +465,45 @@ export interface PayScheduleUpdate {
   notes?: string;
 }
 
+export interface PayDetectionSummary {
+  detected: number;
+  pending: number;
+  duplicates: number;
+  excluded: number;
+}
+
+export interface DetectedPaySchedule {
+  id: number;
+  employerKey: string;
+  displayName: string;
+  /** Proposed amount — the most recent deposit */
+  amount: number;
+  /** @nullable */
+  amountMin: number | null;
+  /** @nullable */
+  amountMax: number | null;
+  frequency: string;
+  /** When true, present frequencyOptions to the user instead of trusting frequency */
+  cadenceAmbiguous: boolean;
+  frequencyOptions: string[];
+  occurrenceCount: number;
+  /** @nullable */
+  firstSeen: string | null;
+  /** @nullable */
+  lastSeen: string | null;
+  /** @nullable */
+  nextExpectedDate: string | null;
+  confidence: number;
+  status: string;
+}
+
+export interface ConfirmDetectedPayScheduleInput {
+  employerName?: string;
+  amount?: number;
+  frequency?: string;
+  nextPayDate?: string;
+}
+
 /**
  * @nullable
  */
