@@ -3999,7 +3999,7 @@ components:
 
     ReconcileCandidateTxn:
       type: object
-      required: [plaidTransactionId, actualDate, actualAmount, postedName, pending]
+      required: [plaidTransactionId, actualDate, actualAmount, postedName, pending, strong]
       properties:
         plaidTransactionId:
           type: integer
@@ -4012,6 +4012,9 @@ components:
         pending:
           type: boolean
           description: Still pending at the bank; amount/date may settle differently
+        strong:
+          type: boolean
+          description: Strong match (strong merchant hit / corroborated transfer / employer hit / exact manual amount); weak matches wait out the grace period before auto-confirming
 
     ReconcileSuggestion:
       type: object

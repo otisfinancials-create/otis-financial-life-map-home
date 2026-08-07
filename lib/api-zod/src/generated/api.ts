@@ -2212,7 +2212,8 @@ export const ListReconcileCandidatesResponseItem = zod.object({
   "actualDate": zod.string(),
   "actualAmount": zod.number(),
   "postedName": zod.string(),
-  "pending": zod.boolean().describe('Still pending at the bank; amount\/date may settle differently')
+  "pending": zod.boolean().describe('Still pending at the bank; amount\/date may settle differently'),
+  "strong": zod.boolean().describe('Strong match (strong merchant hit \/ corroborated transfer \/ employer hit \/ exact manual amount); weak matches wait out the grace period before auto-confirming')
 })).describe('Ranked best-first; more than one means ambiguous — the user chooses')
 })
 export const ListReconcileCandidatesResponse = zod.array(ListReconcileCandidatesResponseItem)

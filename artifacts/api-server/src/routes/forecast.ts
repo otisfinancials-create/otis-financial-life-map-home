@@ -1423,8 +1423,11 @@ router.post("/forecast/:id/reconcile", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Forecasted transaction not found" });
     return;
   }
-  if ((row.sourceBillId == null && row.sourcePayId == null) || row.sourceCardCycleId != null || row.ccAccountId != null) {
-    res.status(400).json({ error: "Only standalone bank-paid bill or paycheck rows can be reconciled" });
+  // Bill, paycheck, and MANUAL (hand-entered) rows can all reconcile; card
+  // rows never do (they reconcile through card_cycle_bills). Manual rows are
+  // validated the same way — the pair must appear in the live suggestions.
+  if (row.sourceCardCycleId != null || row.ccAccountId != null || row.isCcParent || row.isUnplanned) {
+    res.status(400).json({ error: "Only standalone bank-paid bill, paycheck, or manual rows can be reconciled" });
     return;
   }
   if (row.isActual || row.matchedPlaidTransactionId != null) {
@@ -1503,7 +1506,7 @@ router.post("/forecast/:id/dismiss-match", async (req, res): Promise<void> => {
     return;
   }
   const row = await ownedRow(params.data.id, req.userId);
-  if (!row || (row.sourceBillId == null && row.sourcePayId == null)) {
+  if (!row) {
     res.status(404).json({ error: "Forecasted transaction not found" });
     return;
   }
@@ -1526,6 +1529,8 @@ router.post("/forecast/:id/dismiss-match", async (req, res): Promise<void> => {
       userId: req.userId,
       billId: row.sourceBillId,
       payScheduleId: row.sourceBillId == null ? row.sourcePayId : null,
+      // MANUAL rows (no bill/pay source) dismiss by the forecast row itself.
+      forecastTransactionId: row.sourceBillId == null && row.sourcePayId == null ? row.id : null,
       plaidTransactionId: body.data.plaidTransactionId,
     })
     .onConflictDoNothing();

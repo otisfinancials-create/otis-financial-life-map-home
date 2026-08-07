@@ -140,7 +140,17 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
         eq(forecastedTransactionsTable.id, sug.forecastTransactionId),
         eq(forecastedTransactionsTable.userId, userId),
       ));
-    if (!row || row.isActual || row.transactionDate >= graceCutoff) continue; // only stale rows auto-confirm
+    // AUTO-CONFIRM CONDITIONS (exhaustive):
+    //   • exactly ONE candidate (checked above) — ambiguous always suggests
+    //   • candidate is non-pending (checked above)
+    //   • the row is due today or earlier — future rows keep their suggestion
+    //     so an early posted deposit can't consume a paycheck weeks away
+    //   • the match is STRONG (strong merchant hit / corroborated transfer /
+    //     employer hit / exact manual amount) → confirms the day it posts;
+    //     a WEAK single match still waits out the grace period (GRACE_DAYS)
+    //     as a suggestion before auto-applying.
+    if (!row || row.isActual || row.transactionDate > todayStr) continue;
+    if (!cand.strong && row.transactionDate >= graceCutoff) continue;
     await db
       .update(forecastedTransactionsTable)
       .set({
@@ -208,7 +218,48 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
   // the card's cycles were configured, have no parent at all).
   const CARD_PAY_WINDOW = 7; // days between posted date and planned due date
   const CARD_PAY_TOLERANCE = 0.3; // projected statement totals are estimates
-  const cardPayTxns = txns.filter((t) => isCardPaymentTxn(t) && !claimedTxnIds.has(t.id));
+  // Card names/institutions disambiguate when several parents are close in
+  // date+amount (e.g. two cards paid the same day): a parent whose card
+  // name appears in the transaction label wins over one that doesn't.
+  const ccAccountRows = await db
+    .select({ id: accountsTable.id, accountName: accountsTable.accountName, institutionName: accountsTable.institutionName, plaidAccountId: accountsTable.plaidAccountId })
+    .from(accountsTable)
+    .where(and(eq(accountsTable.userId, userId), eq(accountsTable.accountType, "credit_card")));
+  const cardTokens = new Map<number, string[]>(ccAccountRows.map((a) => [
+    a.id,
+    `${a.accountName} ${a.institutionName ?? ""}`.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4),
+  ]));
+  const labelMatches = (accountId: number | null, label: string): boolean =>
+    accountId != null && (cardTokens.get(accountId) ?? []).some((tok) => label.includes(tok));
+  // Plaid sometimes mislabels a card payment (e.g. LOAN_PAYMENTS_CAR_PAYMENT
+  // on a store-card payment). Fallback is ACCOUNT-BASED, not name-based:
+  // a LOAN_PAYMENTS outflow only qualifies when a corroborating inflow leg
+  // of the SAME amount posts on one of the user's linked credit-card
+  // accounts within ±3 days — a real car-loan payment from checking has no
+  // such card-side leg, so it can never be misread as a card payment.
+  const CARD_LEG_DAYS = 3;
+  const ccPlaidIds = ccAccountRows.map((a) => a.plaidAccountId).filter((x): x is string => x != null);
+  const cardSideLegs = ccPlaidIds.length
+    ? await db
+        .select({ date: plaidTransactionsTable.date, amount: plaidTransactionsTable.amount })
+        .from(plaidTransactionsTable)
+        .where(and(
+          eq(plaidTransactionsTable.userId, userId),
+          inArray(plaidTransactionsTable.accountId, ccPlaidIds),
+          eq(plaidTransactionsTable.pending, false),
+        ))
+    : [];
+  const cardLegInflows = cardSideLegs
+    .map((l) => ({ date: l.date, inflow: -parseFloat(String(l.amount)) })) // Plaid: negative = inflow (payment received)
+    .filter((l) => l.inflow > 0);
+  const looksLikeCardPayment = (t: typeof txns[number]): boolean => {
+    if (isCardPaymentTxn(t)) return true;
+    if (t.personalFinanceCategory !== "LOAN_PAYMENTS") return false;
+    const paid = parseFloat(String(t.amount)); // positive = bank outflow
+    if (!(paid > 0)) return false;
+    return cardLegInflows.some((l) => Math.abs(l.inflow - paid) < 0.005 && dayDiff(l.date, t.date) <= CARD_LEG_DAYS);
+  };
+  const cardPayTxns = txns.filter((t) => looksLikeCardPayment(t) && !claimedTxnIds.has(t.id));
   if (cardPayTxns.length) {
     const plannedParents = await db
       .select()
@@ -219,19 +270,6 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
         eq(forecastedTransactionsTable.isActual, false),
         isNull(forecastedTransactionsTable.status),
       ));
-    // Card names/institutions disambiguate when several parents are close in
-    // date+amount (e.g. two cards paid the same day): a parent whose card
-    // name appears in the transaction label wins over one that doesn't.
-    const ccAccountRows = await db
-      .select({ id: accountsTable.id, accountName: accountsTable.accountName, institutionName: accountsTable.institutionName })
-      .from(accountsTable)
-      .where(and(eq(accountsTable.userId, userId), eq(accountsTable.accountType, "credit_card")));
-    const cardTokens = new Map<number, string[]>(ccAccountRows.map((a) => [
-      a.id,
-      `${a.accountName} ${a.institutionName ?? ""}`.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4),
-    ]));
-    const labelMatches = (accountId: number | null, label: string): boolean =>
-      accountId != null && (cardTokens.get(accountId) ?? []).some((tok) => label.includes(tok));
 
     const usedParents = new Set<number>();
     for (const t of cardPayTxns) {
@@ -344,11 +382,19 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
     }
   }
 
-  type Bucket = { date: string; label: string; type: "expense" | "income"; total: number; assetMovement?: boolean };
-  const buckets = new Map<string, Bucket>();
   type UnplannedInsert = typeof forecastedTransactionsTable.$inferInsert;
+  const unplannedRows: UnplannedInsert[] = [];
   const cardPayRows: UnplannedInsert[] = [];
+  const txnLabel = (t: typeof txns[number], fallback: string): string => {
+    const label = (t.merchantName ?? t.name ?? fallback).trim() || fallback;
+    return label.length > 60 ? label.slice(0, 57) + "…" : label;
+  };
   for (const t of txns) {
+    // TRANSACTION-CLAIM GUARD: a plaid transaction already claimed by any
+    // forecast row (auto-reconcile, card-parent match, manual confirm, or a
+    // live suggestion candidate) must NEVER also produce an unplanned row —
+    // that would count the same money twice. `excluded` = all claimed ids +
+    // all live-candidate ids, refreshed after phase 1 resolutions.
     if (excluded.has(t.id)) continue;
     if (internalPairIds.has(t.id)) continue; // both legs inside the pool — not a cash event
     // Bank-side card payments not reconciled to a planned parent above are
@@ -375,32 +421,42 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
       continue;
     }
     const amt = parseFloat(String(t.amount)); // positive = outflow
+    if (amt === 0) continue;
+    // ONE ROW PER TRANSACTION (never aggregated): each posted transaction is
+    // individually traceable via matchedPlaidTransactionId, and confirming a
+    // manual/planned row against one txn removes exactly that row.
     if (isAssetMovementTxn(t)) {
       // 4b: crosses the pool boundary — steps the balance exactly as today,
       // same amount and sign, but classified as asset movement (not spend).
-      // Bucketed per day + detailed category so the ledger reads as "money
-      // moved" ("Transfer to savings"), never as generic unplanned spending.
-      if (amt === 0) continue;
-      const type = amt > 0 ? ("expense" as const) : ("income" as const);
-      const label = assetMovementLabel(t.personalFinanceCategoryDetailed);
-      const key = `${t.date}|asset-movement|${label}|${type}`;
-      const b = buckets.get(key) ?? { date: t.date, label, type, total: 0, assetMovement: true };
-      b.total += Math.abs(amt);
-      buckets.set(key, b);
+      unplannedRows.push({
+        userId,
+        transactionDate: t.date,
+        description: assetMovementLabel(t.personalFinanceCategoryDetailed),
+        amount: String(Math.round(Math.abs(amt) * 100) / 100),
+        transactionType: amt > 0 ? "expense" : "income",
+        category: "Asset Movement",
+        isActual: true,
+        isCommitted: false,
+        isUnplanned: true,
+        isAssetMovement: true,
+        matchedPlaidTransactionId: t.id,
+        sortOrder: 0,
+      });
       continue;
     }
-    if (amt > 0) {
-      const label = titleCase(t.personalFinanceCategory ?? "OTHER");
-      const key = `${t.date}|expense|${label}`;
-      const b = buckets.get(key) ?? { date: t.date, label, type: "expense" as const, total: 0 };
-      b.total += amt;
-      buckets.set(key, b);
-    } else if (amt < 0) {
-      const key = `${t.date}|income`;
-      const b = buckets.get(key) ?? { date: t.date, label: "Unplanned income", type: "income" as const, total: 0 };
-      b.total += -amt;
-      buckets.set(key, b);
-    }
+    unplannedRows.push({
+      userId,
+      transactionDate: t.date,
+      description: txnLabel(t, amt > 0 ? titleCase(t.personalFinanceCategory ?? "OTHER") : "Unplanned income"),
+      amount: String(Math.round(Math.abs(amt) * 100) / 100),
+      transactionType: amt > 0 ? "expense" : "income",
+      category: amt > 0 ? "Other" : "Income",
+      isActual: true,
+      isCommitted: false,
+      isUnplanned: true,
+      matchedPlaidTransactionId: t.id,
+      sortOrder: 0,
+    });
   }
 
   await db.transaction(async (tx) => {
@@ -408,22 +464,9 @@ async function rollActualsForUserInner(userId: string): Promise<RollResult> {
       eq(forecastedTransactionsTable.userId, userId),
       eq(forecastedTransactionsTable.isUnplanned, true),
     ));
-    const rows = [...buckets.values()].map((b) => ({
-      userId,
-      transactionDate: b.date,
-      description: b.label,
-      amount: String(Math.round(b.total * 100) / 100),
-      transactionType: b.type,
-      category: b.assetMovement ? "Asset Movement" : b.type === "income" ? "Income" : "Other",
-      isActual: true,
-      isCommitted: false,
-      isUnplanned: true,
-      isAssetMovement: b.assetMovement === true,
-      sortOrder: 0,
-    }));
-    const allRows = [...rows, ...cardPayRows];
+    const allRows = [...unplannedRows, ...cardPayRows];
     if (allRows.length > 0) await tx.insert(forecastedTransactionsTable).values(allRows);
-    result.unplannedRows = rows.length;
+    result.unplannedRows = unplannedRows.length;
     result.cardPaymentsMaterialized = cardPayRows.length;
   });
 

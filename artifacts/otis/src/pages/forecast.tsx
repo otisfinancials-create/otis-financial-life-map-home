@@ -1871,7 +1871,14 @@ export default function Forecast() {
                           const isNeg     = tx.runningBalance < 0;
                           const isAdjustment = tx.sourceBalanceSyncId != null;
                           const isMissed  = tx.status === "missed";
-                          const isManual  = !tx.sourceBillId && !tx.sourcePayId && !isAdjustment;
+                          // MANUAL = truly hand-entered: no bill/pay/goal/life-event
+                          // source, not a card row, not system-generated unplanned or
+                          // asset-movement, not reconciled to a bank transaction.
+                          const isManual  = !tx.sourceBillId && !tx.sourcePayId && !isAdjustment &&
+                            !tx.isCcParent && tx.sourceCardCycleId == null && tx.ccAccountId == null &&
+                            !tx.isUnplanned && !tx.isAssetMovement &&
+                            tx.matchedPlaidTransactionId == null &&
+                            tx.sourceLifeEventId == null && tx.sourceGoalId == null;
                           const isEditing = editingId === tx.id;
                           const isPast    = tx.transactionDate < todayStr;
                           const isOverdue = isPast && !tx.isActual && !isMissed && !isAdjustment;
@@ -2044,7 +2051,7 @@ export default function Forecast() {
                                 {tx.isActual && (
                                   <StatusPill bg="var(--color-carolina-muted)" text="var(--color-primary)">
                                     <Check className="h-2.5 w-2.5" />
-                                    {tx.transactionType === "income" ? "Confirmed" : "Paid"}
+                                    Confirmed
                                   </StatusPill>
                                 )}
                                 {savedFlashId === tx.id && (
@@ -2184,44 +2191,6 @@ export default function Forecast() {
                                 className="px-3 py-[11px] flex items-center justify-end gap-1"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {/* Reconcile suggestion — a REAL posted actual exists. The user
-                                    sees the posted amount + date before committing. Multiple
-                                    candidates = ambiguous: the user picks one. */}
-                                {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && candidateByRowId.has(tx.id) && (
-                                  <span
-                                    data-testid={`reconcile-suggestion-${tx.id}`}
-                                    className="inline-flex flex-col items-end gap-1"
-                                  >
-                                    {candidateByRowId.get(tx.id)!.candidates.map((cand) => (
-                                      <span
-                                        key={cand.plaidTransactionId}
-                                        className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 pl-2 pr-1 py-[3px] text-[11px] whitespace-nowrap"
-                                      >
-                                        <span className="text-gray-600">
-                                          Planned <span className="font-medium">${Math.abs(tx.amount).toFixed(2)}</span> · {cand.pending ? "Pending" : "Posted"} <span className="font-semibold text-foreground">${cand.actualAmount.toFixed(2)}</span> on {fmtShortDate(cand.actualDate)}
-                                        </span>
-                                        <button
-                                          title={`Reconcile: confirm "${cand.postedName}" as this ${tx.transactionType === "income" ? "deposit" : "payment"}`}
-                                          data-testid={`button-reconcile-confirm-${tx.id}-${cand.plaidTransactionId}`}
-                                          onClick={() => handleReconcile(tx, cand)}
-                                          disabled={reconcileTx.isPending}
-                                          className="inline-flex items-center gap-1 rounded border border-primary bg-white px-1.5 py-[1px] font-medium text-primary hover:bg-primary/10 transition-colors"
-                                        >
-                                          Reconcile <Check className="h-3 w-3" />
-                                        </button>
-                                        <button
-                                          title="Not a match — don't suggest this transaction again"
-                                          data-testid={`button-reconcile-dismiss-${tx.id}-${cand.plaidTransactionId}`}
-                                          onClick={() => handleDismissMatch(tx, cand)}
-                                          disabled={dismissMatch.isPending}
-                                          className="text-muted-foreground/60 hover:text-destructive transition-colors px-0.5"
-                                        >
-                                          <X className="h-3 w-3" />
-                                        </button>
-                                      </span>
-                                    ))}
-                                  </span>
-                                )}
                                 {/* PAST planned row, no posted actual → resolve: mark paid
                                     (user asserts it happened) or didn't happen (remove).
                                     FUTURE rows are projections — no confirm/paid buttons. */}
@@ -2266,6 +2235,45 @@ export default function Forecast() {
                                 )}
                               </div>
                             </div>
+                            {/* Reconcile suggestion — its OWN full-width line under the row
+                                (never inside the grid cells, so it can't overlap the amount/
+                                balance columns). Multiple candidates = ambiguous: user picks. */}
+                            {!tx.isActual && !isMissed && !isAdjustment && tx.sourceCardCycleId == null && candidateByRowId.has(tx.id) && (
+                              <div
+                                data-testid={`reconcile-suggestion-${tx.id}`}
+                                className="flex flex-col items-end gap-1 px-4 pb-2 -mt-1"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {candidateByRowId.get(tx.id)!.candidates.map((cand) => (
+                                  <span
+                                    key={cand.plaidTransactionId}
+                                    className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 pl-2 pr-1 py-[3px] text-[11px] whitespace-nowrap"
+                                  >
+                                    <span className="text-gray-600">
+                                      Planned <span className="font-medium">${Math.abs(tx.amount).toFixed(2)}</span> · {cand.pending ? "Pending" : "Posted"} <span className="font-semibold text-foreground">${cand.actualAmount.toFixed(2)}</span> on {fmtShortDate(cand.actualDate)}
+                                    </span>
+                                    <button
+                                      title={`Reconcile: confirm "${cand.postedName}" as this ${tx.transactionType === "income" ? "deposit" : "payment"}`}
+                                      data-testid={`button-reconcile-confirm-${tx.id}-${cand.plaidTransactionId}`}
+                                      onClick={() => handleReconcile(tx, cand)}
+                                      disabled={reconcileTx.isPending}
+                                      className="inline-flex items-center gap-1 rounded border border-primary bg-white px-1.5 py-[1px] font-medium text-primary hover:bg-primary/10 transition-colors"
+                                    >
+                                      Reconcile <Check className="h-3 w-3" />
+                                    </button>
+                                    <button
+                                      title="Not a match — don't suggest this transaction again"
+                                      data-testid={`button-reconcile-dismiss-${tx.id}-${cand.plaidTransactionId}`}
+                                      onClick={() => handleDismissMatch(tx, cand)}
+                                      disabled={dismissMatch.isPending}
+                                      className="text-muted-foreground/60 hover:text-destructive transition-colors px-0.5"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             {cycleExpanded && (
                               <CycleBreakdownRows cycleId={tx.sourceCardCycleId!} ccAccountId={tx.ccAccountId ?? null} />
                             )}

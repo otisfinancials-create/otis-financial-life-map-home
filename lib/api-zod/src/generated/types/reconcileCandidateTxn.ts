@@ -13,4 +13,6 @@ export interface ReconcileCandidateTxn {
   postedName: string;
   /** Still pending at the bank; amount/date may settle differently */
   pending: boolean;
+  /** Strong match (strong merchant hit / corroborated transfer / employer hit / exact manual amount); weak matches wait out the grace period before auto-confirming */
+  strong: boolean;
 }

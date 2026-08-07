@@ -36,6 +36,10 @@ export interface ReconcileCandidateTxn {
   actualAmount: number; // absolute amount
   postedName: string; // merchant/name of the posted transaction
   pending: boolean; // still pending at the bank; amount/date may settle differently
+  /** Strong match (strong merchant hit / corroborated transfer / employer hit /
+   * exact manual amount). Auto-confirm requires strong; weak waits out the
+   * grace period as a suggestion. */
+  strong: boolean;
 }
 
 export interface ReconcileSuggestion {
@@ -50,6 +54,20 @@ export interface ReconcileSuggestion {
 
 const AMOUNT_TOLERANCE = 0.15;
 const DATE_WINDOW_DAYS = 7;
+
+// MANUAL match class: hand-entered rows (no bill/pay source). No merchant to
+// match against, so the amount must be tight — manual entries state a known
+// figure ("reimbursement $168"), unlike variable bills.
+const MANUAL_AMOUNT_TOLERANCE = 0.05;
+
+// Internal asset movements never match manual rows (they are pool-internal
+// legs, not the user's planned cash event). Mirrors actuals-roll's set.
+const MANUAL_EXCLUDED_DETAILED = new Set([
+  "TRANSFER_OUT_ACCOUNT_TRANSFER",
+  "TRANSFER_IN_ACCOUNT_TRANSFER",
+  "TRANSFER_OUT_SAVINGS",
+  "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS",
+]);
 
 // TRANSFER match class (goal contributions — Addendum §7). Transfers are
 // usually exact and land on schedule, so both windows are tighter than bills.
@@ -139,8 +157,6 @@ export async function findReconcileSuggestions(userId: string): Promise<Reconcil
     .where(eq(paySchedulesTable.userId, userId));
   const payById = new Map(paySchedules.map((p) => [p.id, p]));
 
-  if (billIds.length === 0 && goalEligible.length === 0 && paySchedules.length === 0) return [];
-
   // Planned rows: not yet actual/confirmed, not missed/removed, and not part
   // of any card path (standalone bank-paid rows only).
   const plannedRows = await db
@@ -153,9 +169,20 @@ export async function findReconcileSuggestions(userId: string): Promise<Reconcil
       isNull(forecastedTransactionsTable.ccAccountId),
       isNull(forecastedTransactionsTable.status),
     ));
+  // MANUAL rows: hand-entered — no bill/pay/goal/balance-sync source, not a
+  // CC parent, not system-generated unplanned/asset-movement rows.
+  const isManualRow = (r: typeof plannedRows[number]): boolean =>
+    r.sourceBillId == null &&
+    r.sourcePayId == null &&
+    r.sourceBalanceSyncId == null &&
+    r.sourceLifeEventId == null &&
+    !r.isCcParent &&
+    !r.isUnplanned &&
+    !r.isAssetMovement;
   const relevantRows = plannedRows.filter((r) =>
     (r.sourceBillId != null && (byBillId.has(r.sourceBillId) || goalByBillId.has(r.sourceBillId))) ||
-    (r.sourcePayId != null && payById.has(r.sourcePayId)),
+    (r.sourcePayId != null && payById.has(r.sourcePayId)) ||
+    isManualRow(r),
   );
   if (relevantRows.length === 0) return [];
 
@@ -197,7 +224,9 @@ export async function findReconcileSuggestions(userId: string): Promise<Reconcil
     .from(billMatchDismissalsTable)
     .where(eq(billMatchDismissalsTable.userId, userId));
   const dismissedPairs = new Set(dismissals.map((d) =>
-    d.billId != null ? `b${d.billId}|${d.plaidTransactionId}` : `p${d.payScheduleId}|${d.plaidTransactionId}`,
+    d.billId != null ? `b${d.billId}|${d.plaidTransactionId}`
+    : d.payScheduleId != null ? `p${d.payScheduleId}|${d.plaidTransactionId}`
+    : `f${d.forecastTransactionId}|${d.plaidTransactionId}`,
   ));
 
   type Ranked = { txn: PlaidTransaction; strong: boolean; amountDelta: number; dateDelta: number };
@@ -289,6 +318,29 @@ export async function findReconcileSuggestions(userId: string): Promise<Reconcil
           dateDelta: dayDiff(txn.date, row.transactionDate),
         });
       }
+    } else if (isManualRow(row)) {
+      // ── MANUAL match class ── hand-entered rows carry no merchant or
+      // account binding: match any bank transaction in the same DIRECTION
+      // with a tight amount (±5%) inside the ±7d window. Internal asset
+      // movements are excluded — they are pool-internal legs, not the
+      // planned cash event. Exact-amount matches rank strong.
+      if (!(planned > 0)) continue;
+      for (const txn of txns) {
+        if (claimed.has(txn.id)) continue;
+        if (dismissedPairs.has(`f${row.id}|${txn.id}`)) continue;
+        if (MANUAL_EXCLUDED_DETAILED.has(txn.personalFinanceCategoryDetailed ?? "")) continue;
+        const signed = parseFloat(String(txn.amount)); // Plaid: positive = outflow
+        const actual = row.transactionType === "income" ? -signed : signed;
+        if (!(actual > 0)) continue; // direction must match
+        if (Math.abs(actual - planned) > planned * MANUAL_AMOUNT_TOLERANCE) continue;
+        if (dayDiff(txn.date, row.transactionDate) > DATE_WINDOW_DAYS) continue;
+        ranked.push({
+          txn,
+          strong: Math.abs(actual - planned) < 0.005,
+          amountDelta: Math.abs(actual - planned),
+          dateDelta: dayDiff(txn.date, row.transactionDate),
+        });
+      }
     } else {
       continue;
     }
@@ -308,6 +360,7 @@ export async function findReconcileSuggestions(userId: string): Promise<Reconcil
         actualAmount: Math.abs(parseFloat(String(c.txn.amount))),
         postedName: c.txn.merchantName ?? c.txn.name ?? "Posted transaction",
         pending: c.txn.pending,
+        strong: c.strong,
       })),
     });
   }
