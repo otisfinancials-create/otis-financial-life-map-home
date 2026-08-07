@@ -8,6 +8,8 @@ import {
   useListAssets,
   useListPaySchedules,
   useGetRetirementSummary,
+  useListCardCompositions,
+  getListForecastQueryKey,
 } from "@workspace/api-client-react";
 import {
   NetWorthModal,
@@ -15,7 +17,8 @@ import {
   SavingsInvestmentsModal,
   BillsSnapshotModal,
 } from "@/components/dashboard/breakdown-modals";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { foldCarryover } from "@/components/bills/card-composition";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,8 +46,8 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { categoryMeta, accountTypeMeta } from "@/utils/categoryIcons";
-import { format, startOfMonth, addMonths, addDays, differenceInCalendarDays } from "date-fns";
+import { categoryMeta, categoryDisplayLabel, accountTypeMeta } from "@/utils/categoryIcons";
+import { format, startOfMonth, endOfMonth, addMonths, addDays, differenceInCalendarDays } from "date-fns";
 import { Link, useLocation } from "wouter";
 import type { ReactNode } from "react";
 
@@ -203,6 +206,23 @@ function softenColor(color: string): string {
 
 /* ── 6 Month View tooltip ─────────────────────────────────────────────── */
 
+// Card envelopes are a first-class stacked series, not a bill category.
+const SIX_MONTH_ENVELOPES_KEY = "cardEnvelopes";
+const ENVELOPES_COLOR = "#534AB7";
+
+function sixMonthSeriesLabel(key: string): string {
+  if (key === SIX_MONTH_ENVELOPES_KEY) return "Card Envelopes";
+  // Display label, not canonical bucket: custom categories ("Home
+  // Maintenance") keep their own name instead of collapsing into "Other",
+  // which previously produced two identical "Other" legend entries.
+  return categoryDisplayLabel(key);
+}
+
+function sixMonthSeriesColor(key: string): string {
+  if (key === SIX_MONTH_ENVELOPES_KEY) return ENVELOPES_COLOR;
+  return categoryMeta(key).color;
+}
+
 function SixMonthTooltip({
   active,
   payload,
@@ -219,8 +239,10 @@ function SixMonthTooltip({
   payload.forEach((p) => {
     if (p.dataKey != null) byKey.set(String(p.dataKey), Number(p.value ?? 0));
   });
-  const income = categories.reduce((s, c) => s + (byKey.get(c) ?? 0), 0) + (byKey.get("remaining") ?? 0);
-  const net = byKey.get("remaining") ?? 0;
+  const row = (payload[0] as { payload?: Record<string, number> } | undefined)?.payload;
+  const income = Number(row?.income ?? 0);
+  const expenses = categories.reduce((s, c) => s + (byKey.get(c) ?? 0), 0);
+  const net = income - expenses;
   return (
     <div className="rounded-lg border border-border bg-card p-3 shadow-md text-xs space-y-1 min-w-[180px]">
       <p className="font-semibold text-sm mb-1">{label}</p>
@@ -233,9 +255,9 @@ function SixMonthTooltip({
           <span className="flex items-center gap-1.5">
             <span
               className="h-2 w-2 rounded-full shrink-0"
-              style={{ backgroundColor: categoryMeta(c).color }}
+              style={{ backgroundColor: sixMonthSeriesColor(c) }}
             />
-            <span className="text-muted-foreground">{categoryMeta(c).label}</span>
+            <span className="text-muted-foreground">{sixMonthSeriesLabel(c)}</span>
           </span>
           <span className="font-mono tabular-nums">{fmt(byKey.get(c) ?? 0)}</span>
         </div>
@@ -296,19 +318,93 @@ export default function Dashboard() {
   const avgMonthlyCashFlow = payMonthly - billsMonthlyTotal;
 
   /* ── 6 Month View chart data ────────────────────────────────────────── */
-  // Categories largest-first so the biggest band renders at the bottom.
-  const categoryEntries = Object.entries(billsByCategory).sort((a, b) => b[1] - a[1]);
-  const chartCategories = categoryEntries.map(([cat]) => cat);
-  const remainingCashFlow = Math.max(0, payMonthly - billsMonthlyTotal);
-  const sixMonthData = Array.from({ length: 6 }, (_, i) => {
-    const label = format(addMonths(startOfMonth(today), i), "MMM");
-    const row: Record<string, number | string> = { month: label };
-    categoryEntries.forEach(([cat, amt]) => {
-      row[cat] = amt;
+  // Real per-month amounts from forecast occurrences — NO cadence
+  // normalization. A quarterly bill appears at full amount only in its
+  // occurrence months; biweekly pay shows three-paycheck months. Card
+  // envelopes and card-paid bills come from cycle compositions (attributed to
+  // the month the CYCLE CLOSES, same as Planned vs Actual), with the same
+  // precedence rule: forecast rows win, cycle rows only for bills with no
+  // forecast occurrence that month — the is_cc_parent aggregate is skipped so
+  // each dollar is counted exactly once.
+  const sixMonthStart = format(startOfMonth(today), "yyyy-MM-dd");
+  const sixMonthEnd = format(endOfMonth(addMonths(today, 5)), "yyyy-MM-dd");
+  const { data: sixMonthTxs } = useListForecast(
+    { startDate: sixMonthStart, endDate: sixMonthEnd },
+    { query: { queryKey: getListForecastQueryKey({ startDate: sixMonthStart, endDate: sixMonthEnd }) } },
+  );
+  // Cycle due dates trail cycle close by up to ~2 months; fetch a wider due
+  // window and re-filter by cycle end below (same as Planned vs Actual).
+  const sixMonthDueEnd = format(addDays(endOfMonth(addMonths(today, 5)), 70), "yyyy-MM-dd");
+  const { data: sixMonthComps } = useListCardCompositions({ dueStart: sixMonthStart, dueEnd: sixMonthDueEnd });
+
+  const ENVELOPES_KEY = SIX_MONTH_ENVELOPES_KEY;
+  const { sixMonthData, chartCategories } = useMemo(() => {
+    const monthKeys = Array.from({ length: 6 }, (_, i) => format(addMonths(startOfMonth(today), i), "yyyy-MM"));
+    const monthIndex = new Map(monthKeys.map((k, i) => [k, i]));
+    const billById = new Map((bills ?? []).map((b) => [b.id, b]));
+
+    interface MonthAgg {
+      income: number;
+      byCategory: Map<string, number>;
+      envelopes: number;
+      forecastBillIds: Set<number>;
+    }
+    const months: MonthAgg[] = monthKeys.map(() => ({ income: 0, byCategory: new Map(), envelopes: 0, forecastBillIds: new Set() }));
+
+    for (const tx of sixMonthTxs ?? []) {
+      if (tx.status === "missed" || tx.isCcParent || tx.sourceBalanceSyncId) continue;
+      const idx = monthIndex.get(tx.transactionDate.slice(0, 7));
+      if (idx == null) continue;
+      const m = months[idx]!;
+      // Same sources as Planned vs Actual: pay rows for income, bill
+      // occurrences for expenses. Anything else (asset-movement transfers,
+      // posted card-payment actuals, one-off manual rows) is either not
+      // spending or already represented by the cycle decomposition — counting
+      // it here would double-count or inflate the month.
+      if (tx.sourcePayId != null && tx.transactionType === "income") {
+        m.income += Math.abs(tx.amount);
+      } else if (tx.sourceBillId != null && tx.transactionType !== "income") {
+        const cat = billById.get(tx.sourceBillId)?.category ?? "Other";
+        m.byCategory.set(cat, (m.byCategory.get(cat) ?? 0) + Math.abs(tx.amount));
+        m.forecastBillIds.add(tx.sourceBillId);
+      }
+    }
+
+    for (const c of sixMonthComps ?? []) {
+      const idx = monthIndex.get(c.cycleEnd.slice(0, 7));
+      if (idx == null) continue;
+      const m = months[idx]!;
+      m.envelopes += foldCarryover(c.envelopes).reduce((s, e) => s + e.plannedAmount, 0);
+      for (const cb of c.bills) {
+        if (cb.billId == null) continue;
+        // Precedence: a bill with a forecast occurrence this month is already
+        // counted above — cycle rows fill in card-paid bills only.
+        if (m.forecastBillIds.has(cb.billId)) continue;
+        const cat = billById.get(cb.billId)?.category ?? "Other";
+        m.byCategory.set(cat, (m.byCategory.get(cat) ?? 0) + cb.expectedAmount);
+      }
+    }
+
+    // Categories largest-first (by 6-month total) so the biggest band renders
+    // at the bottom of the stack.
+    const catTotals = new Map<string, number>();
+    for (const m of months) for (const [cat, amt] of m.byCategory) catTotals.set(cat, (catTotals.get(cat) ?? 0) + amt);
+    const cats = [...catTotals.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+    const anyEnvelopes = months.some((m) => m.envelopes > 0.005);
+    const chartCategories = anyEnvelopes ? [...cats, ENVELOPES_KEY] : cats;
+
+    const sixMonthData = months.map((m, i) => {
+      const row: Record<string, number | string> = { month: format(addMonths(startOfMonth(today), i), "MMM") };
+      for (const cat of cats) row[cat] = m.byCategory.get(cat) ?? 0;
+      if (anyEnvelopes) row[ENVELOPES_KEY] = m.envelopes;
+      const expenses = [...m.byCategory.values()].reduce((s, v) => s + v, 0) + m.envelopes;
+      row.income = m.income;
+      row.remaining = Math.max(0, m.income - expenses);
+      return row;
     });
-    row.remaining = remainingCashFlow;
-    return row;
-  });
+    return { sixMonthData, chartCategories };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sixMonthTxs, sixMonthComps, bills]);
 
   /* ── Savings & investments ──────────────────────────────────────────── */
   // Retirement is intentionally excluded — it's shown in its own section (#R3-6).
@@ -585,8 +681,8 @@ export default function Dashboard() {
                           type="monotone"
                           dataKey={cat}
                           stackId="1"
-                          stroke={softenColor(categoryMeta(cat).color)}
-                          fill={softenColor(categoryMeta(cat).color)}
+                          stroke={softenColor(sixMonthSeriesColor(cat))}
+                          fill={softenColor(sixMonthSeriesColor(cat))}
                           fillOpacity={0.65}
                         />
                       ))}
@@ -607,9 +703,9 @@ export default function Dashboard() {
                     <span key={cat} className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <span
                         className="h-2.5 w-2.5 rounded-sm shrink-0"
-                        style={{ backgroundColor: softenColor(categoryMeta(cat).color) }}
+                        style={{ backgroundColor: softenColor(sixMonthSeriesColor(cat)) }}
                       />
-                      {categoryMeta(cat).label}
+                      {sixMonthSeriesLabel(cat)}
                     </span>
                   ))}
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
