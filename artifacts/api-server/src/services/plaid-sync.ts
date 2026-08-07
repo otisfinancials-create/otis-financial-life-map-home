@@ -1,5 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db, plaidItemsTable, plaidTransactionsTable, balanceSnapshotsTable, forecastedTransactionsTable, type PlaidItem } from "@workspace/db";
+import { db, plaidItemsTable, plaidTransactionsTable, balanceSnapshotsTable, forecastedTransactionsTable, accountsTable, type PlaidItem } from "@workspace/db";
 import type { Transaction, AccountBase } from "plaid";
 import { plaidClient } from "../lib/plaid";
 import { detectBills } from "./bill-detection";
@@ -197,7 +197,24 @@ async function performSyncForItem(item: PlaidItem): Promise<SyncCounts> {
   // Refresh Plaid Liabilities data (card minimums, statement balances, next
   // due dates) so cycle days stay current cycle over cycle. Best-effort
   // inside the service — unsupported institutions never fail the sync.
-  await syncLiabilitiesForItem(item);
+  const liabilities = await syncLiabilitiesForItem(item);
+
+  // A fixed-payment-mode card's spread is anchored to last_statement_balance
+  // at the time the forecast was last regenerated. When that balance changes
+  // (extra payment, new statement), regenerate so the payoff schedule
+  // re-anchors — otherwise it keeps amortizing the stale balance until the
+  // user happens to regenerate manually. Dynamic import avoids a module
+  // cycle (routes/forecast imports from this service chain). Best-effort:
+  // never fail the sync over a regeneration problem.
+  if (liabilities.fixedModeStatementChanged) {
+    try {
+      const { regenerateForecastForUser } = await import("../routes/forecast");
+      await regenerateForecastForUser(item.userId);
+      logger.info({ plaidItemId: item.id, userId: item.userId }, "Regenerated forecast after fixed-mode statement balance change");
+    } catch (err) {
+      logger.warn({ plaidItemId: item.id, err: sanitizeSyncError(err) }, "Forecast regeneration after liabilities refresh failed (non-fatal)");
+    }
+  }
 
   // Otis cached answers quote balances and cash flow. The HTTP invalidation
   // middleware only sees authenticated mutations — webhook and cron syncs
@@ -312,6 +329,24 @@ async function captureBalanceSnapshots(item: PlaidItem, accounts: AccountBase[] 
           capturedAt: sql`now()`,
         },
       });
+    // Keep the user's accounts row in step with the freshest cached balance.
+    // Snapshots alone left accounts.current_balance frozen at link time for
+    // items with no new transactions — net worth and payment plans read the
+    // accounts row, not the snapshot history.
+    if (values.current != null) {
+      await db
+        .update(accountsTable)
+        .set({
+          currentBalance: values.current,
+          availableBalance: values.available,
+          lastSyncedAt: now,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(accountsTable.userId, item.userId),
+          eq(accountsTable.plaidAccountId, acct.account_id),
+        ));
+    }
     captured++;
   }
   return captured;

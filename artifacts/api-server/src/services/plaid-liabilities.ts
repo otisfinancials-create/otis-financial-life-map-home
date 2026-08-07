@@ -17,6 +17,10 @@ export interface LiabilitiesSyncResult {
   updated: number;
   autoConfigured: number[]; // account ids whose statement/due days were filled
   supported: boolean;
+  /** Fixed-payment-mode card whose last_statement_balance changed this sync —
+   * the fixed spread in the forecast is anchored to that balance, so the
+   * caller should regenerate the user's forecast to re-anchor the schedule. */
+  fixedModeStatementChanged: boolean;
 }
 
 /** Day-of-month from a YYYY-MM-DD string, clamped to 1-31. */
@@ -44,7 +48,7 @@ function dayOf(iso: string): number {
 export async function syncLiabilitiesForItem(
   item: Pick<PlaidItem, "id" | "userId" | "accessToken">,
 ): Promise<LiabilitiesSyncResult> {
-  const result: LiabilitiesSyncResult = { updated: 0, autoConfigured: [], supported: true };
+  const result: LiabilitiesSyncResult = { updated: 0, autoConfigured: [], supported: true, fixedModeStatementChanged: false };
   let credits;
   try {
     const response = await plaidClient.liabilitiesGet({ access_token: item.accessToken });
@@ -87,6 +91,14 @@ export async function syncLiabilitiesForItem(
       interestChargeAmount: a.interest_charge_amount ?? null,
     }));
 
+    // Statement-balance change detection (compare as numbers — the column is
+    // numeric text). A changed balance on a fixed-payment-mode card means the
+    // amortization anchor moved (user paid extra, or a new statement closed).
+    const prevStmt = account.lastStatementBalance != null ? parseFloat(String(account.lastStatementBalance)) : null;
+    const nextStmt = credit.last_statement_balance ?? null;
+    const stmtChanged = (prevStmt ?? null) !== (nextStmt ?? null) &&
+      !(prevStmt != null && nextStmt != null && Math.abs(prevStmt - nextStmt) < 0.005);
+
     try {
       await db
         .update(accountsTable)
@@ -102,6 +114,9 @@ export async function syncLiabilitiesForItem(
         })
         .where(eq(accountsTable.id, account.id));
       result.updated++;
+      if (stmtChanged && account.paymentMode === "fixed") {
+        result.fixedModeStatementChanged = true;
+      }
 
       // Auto-configure cycle days ONLY when the user never set either day.
       // The isNull guards in the WHERE make this race-safe against a
