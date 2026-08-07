@@ -847,8 +847,11 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     // A legacy grouped parent staged in THIS pass for the same card+date
     // would collide with the seam row — the grouped payment wins.
     if (ccGroups.has(`${card.id}|${stmtDue}`)) continue;
-    // A surviving row (user marked it paid / edited it) already covers this
-    // statement — don't insert a duplicate.
+    // A surviving row (user marked it paid / edited it / reconciled to a
+    // posted bank txn) already covers this statement — don't insert a
+    // duplicate. Match on forecastedDate too: reconciliation moves a paid
+    // row to its posted date, but forecastedDate keeps the original due
+    // date, and Plaid liability data can lag behind the posted payment.
     const [survivor] = await db
       .select({ id: forecastedTransactionsTable.id })
       .from(forecastedTransactionsTable)
@@ -857,7 +860,10 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
         eq(forecastedTransactionsTable.ccAccountId, card.id),
         eq(forecastedTransactionsTable.isCcParent, true),
         isNull(forecastedTransactionsTable.sourceCardCycleId),
-        eq(forecastedTransactionsTable.transactionDate, stmtDue),
+        or(
+          eq(forecastedTransactionsTable.transactionDate, stmtDue),
+          eq(forecastedTransactionsTable.forecastedDate, stmtDue),
+        ),
       ));
     if (survivor) continue;
     toInsert.push({
@@ -889,7 +895,11 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
         eq(forecastedTransactionsTable.ccAccountId, extra.card.id),
         eq(forecastedTransactionsTable.isCcParent, true),
         isNull(forecastedTransactionsTable.sourceCardCycleId),
-        eq(forecastedTransactionsTable.transactionDate, extra.date),
+        // forecastedDate too — reconciled rows move to their posted date.
+        or(
+          eq(forecastedTransactionsTable.transactionDate, extra.date),
+          eq(forecastedTransactionsTable.forecastedDate, extra.date),
+        ),
       ));
     if (survivor) continue;
     toInsert.push({

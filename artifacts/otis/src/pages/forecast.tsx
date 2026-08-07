@@ -1918,27 +1918,37 @@ export default function Forecast() {
                           const showDayHeader =
                             idx === 0 || group.rows[idx - 1].transactionDate !== tx.transactionDate;
 
+                          // TODAY divider placement: when the first future row
+                          // is dated AFTER today (no row lands on today itself),
+                          // the divider must render BEFORE that row's day header
+                          // — otherwise "Aug 8" appears above "Today — Aug 7".
+                          const showTodayDivider = hasPastRows && tx.id === firstFutureTxId;
+                          const dividerBeforeHeader = showTodayDivider && tx.transactionDate > todayStr;
+
+                          const todayDivider = showTodayDivider && (
+                            <div
+                              className="flex items-center justify-between gap-3 px-4 py-1.5 select-none"
+                              style={{ backgroundColor: "var(--color-carolina-muted)", borderTop: "2px solid var(--color-carolina)", borderBottom: "2px solid var(--color-carolina)" }}
+                            >
+                              <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: "var(--color-carolina)" }}>
+                                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "var(--color-carolina)" }} />
+                                Today — {format(today, "MMMM d, yyyy")}
+                              </span>
+                              <span className="text-xs font-semibold font-mono tabular-nums whitespace-nowrap" style={{ color: "var(--color-navy)" }}>
+                                Current balance {currentBalanceValue < 0 && "−"}<FormatCurrency amount={Math.abs(currentBalanceValue)} />
+                              </span>
+                            </div>
+                          );
+
                           return (
                             <Fragment key={tx.id}>
+                            {dividerBeforeHeader && todayDivider}
                             {showDayHeader && (
                               <div className="px-4 py-1.5 bg-[#F5F7FA] border-b border-[#EEF1F5] text-[11px] font-semibold tracking-[0.03em]" style={{ color: "#6B7280" }}>
                                 {format(new Date(tx.transactionDate + "T00:00:00"), "MMM d, yyyy")}
                               </div>
                             )}
-                            {hasPastRows && tx.id === firstFutureTxId && (
-                              <div
-                                className="flex items-center justify-between gap-3 px-4 py-1.5 select-none"
-                                style={{ backgroundColor: "var(--color-carolina-muted)", borderTop: "2px solid var(--color-carolina)", borderBottom: "2px solid var(--color-carolina)" }}
-                              >
-                                <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: "var(--color-carolina)" }}>
-                                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "var(--color-carolina)" }} />
-                                  Today — {format(today, "MMMM d, yyyy")}
-                                </span>
-                                <span className="text-xs font-semibold font-mono tabular-nums whitespace-nowrap" style={{ color: "var(--color-navy)" }}>
-                                  Current balance {currentBalanceValue < 0 && "−"}<FormatCurrency amount={Math.abs(currentBalanceValue)} />
-                                </span>
-                              </div>
-                            )}
+                            {!dividerBeforeHeader && todayDivider}
                             <div
                               ref={(el) => { rowRefs.current[tx.id] = el; }}
                               draggable={!isEditing && !isAdjustment && !isCc}
