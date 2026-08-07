@@ -811,7 +811,10 @@ export async function regenerateForecastForUser(userId: string): Promise<number>
     // Fixed-mode cards pay their fixed portion of the carried balance PLUS
     // any new charges in the cycle (a user paying down a promo balance still
     // pays for what they buy).
-    const newCharges = closed ? accumulated : Math.max(accumulated, planned);
+    // Refunds/credits net into accumulated_total, so a credit-heavy cycle can
+    // go negative — a card never pays a negative statement, so floor at $0
+    // (the issuer carries the credit balance forward instead).
+    const newCharges = Math.max(0, closed ? accumulated : Math.max(accumulated, planned));
     const amount = newCharges + (fixedPortionByCycleId.get(cyc.id) ?? 0);
     toInsert.push({
       userId,

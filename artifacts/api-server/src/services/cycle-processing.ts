@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, lte, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, gte, lt, lte, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import {
   db,
   cardCyclesTable,
@@ -254,6 +254,40 @@ export interface AllocationSummary {
 }
 
 /**
+ * Card payments arrive as NEGATIVE amounts too, but they settle the PREVIOUS
+ * statement — they must never net against the current cycle's spend. Refunds
+ * and merchant credits (also negative) DO reduce what the statement will
+ * close at, so they qualify. Plaid marks payments LOAN_PAYMENTS (and inbound
+ * transfers TRANSFER_IN); everything else negative is a refund/credit.
+ */
+const CARD_PAYMENT_CATEGORIES = ["LOAN_PAYMENTS", "TRANSFER_IN"];
+
+/**
+ * Shared predicate for "transactions that count toward a cycle's spend":
+ * posted, in-window, and either a charge (amount > 0) or a refund/credit
+ * (amount < 0 that is not a card payment). Used by BOTH the allocation
+ * query and the rollup invariant — keep them in lockstep.
+ */
+function cycleSpendTxnWhere(plaidAccountId: string, cycleStart: string, cycleEnd: string) {
+  return and(
+    eq(plaidTransactionsTable.accountId, plaidAccountId),
+    eq(plaidTransactionsTable.pending, false),
+    gte(plaidTransactionsTable.date, cycleStart),
+    lte(plaidTransactionsTable.date, cycleEnd),
+    or(
+      gt(plaidTransactionsTable.amount, "0"),
+      and(
+        lt(plaidTransactionsTable.amount, "0"),
+        or(
+          isNull(plaidTransactionsTable.personalFinanceCategory),
+          notInArray(plaidTransactionsTable.personalFinanceCategory, CARD_PAYMENT_CATEGORIES),
+        ),
+      ),
+    ),
+  );
+}
+
+/**
  * Allocate every posted charge in the cycle window to exactly one target:
  * matching cycle bill (name similarity + amount within ±15%), else a named
  * envelope by category, else the catch-all. Idempotent per transaction;
@@ -269,13 +303,7 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
   const txns = await db
     .select()
     .from(plaidTransactionsTable)
-    .where(and(
-      eq(plaidTransactionsTable.accountId, account.plaidAccountId),
-      gt(plaidTransactionsTable.amount, "0"),
-      eq(plaidTransactionsTable.pending, false),
-      gte(plaidTransactionsTable.date, cycle.cycleStart),
-      lte(plaidTransactionsTable.date, cycle.cycleEnd),
-    ));
+    .where(cycleSpendTxnWhere(account.plaidAccountId, cycle.cycleStart, cycle.cycleEnd));
 
   const cycleBills = await db
     .select({
@@ -425,7 +453,13 @@ export async function allocateTransactionsForCycle(cardCycleId: number): Promise
     // 3. named envelope by category; 4. catch-all.
     let envelopeId: number | null = null;
     let cardCycleBillId: number | null = null;
-    if (bestBill) {
+    if (amount < 0) {
+      // Refund/credit: never a bill hit and never carryover budget — net it
+      // against the envelope its category belongs to (where the original
+      // charge most likely lives), else the catch-all.
+      const env = named.find((e) => envelopeMatches(e, txn));
+      envelopeId = env ? env.id : catchall.id;
+    } else if (bestBill) {
       cardCycleBillId = bestBill.id;
     } else {
       const carryover = carryovers.find(
@@ -566,13 +600,7 @@ export async function rollupCycle(cardCycleId: number): Promise<RollupResult> {
     const txns = await db
       .select()
       .from(plaidTransactionsTable)
-      .where(and(
-        eq(plaidTransactionsTable.accountId, account.plaidAccountId),
-        gt(plaidTransactionsTable.amount, "0"),
-        eq(plaidTransactionsTable.pending, false),
-        gte(plaidTransactionsTable.date, cycle.cycleStart),
-        lte(plaidTransactionsTable.date, cycle.cycleEnd),
-      ));
+      .where(cycleSpendTxnWhere(account.plaidAccountId, cycle.cycleStart, cycle.cycleEnd));
     postedChargesTotal = round2(txns.reduce((s, t) => s + num(t.amount), 0));
   }
   const invariantOk = Math.abs(accumulatedTotal - postedChargesTotal) < 0.005;
