@@ -7,13 +7,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { monthlyFactor } from "@/lib/bill-math";
+import { useBudgetMath } from "@/hooks/use-budget-math";
 import { accountTypeMeta } from "@/utils/categoryIcons";
 import type {
   Account,
   Asset,
   Loan,
-  PaySchedule,
-  Bill,
   LiabilitiesBreakdown,
 } from "@workspace/api-client-react";
 
@@ -199,30 +198,33 @@ export function NetWorthModal({
 export function CashFlowModal({
   open,
   onOpenChange,
-  paySchedules,
-  bills,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  paySchedules: PaySchedule[];
-  bills: Bill[];
 }) {
-  const incomeRows = paySchedules.map((p) => ({
+  // Shared budget computation (same as the Budget tab, dashboard cards, and
+  // Bills Snapshot): cadence-normalized bills by category, card envelopes as
+  // their own visible lines, and committed goal contributions.
+  const budget = useBudgetMath();
+  const incomeRows = (budget.paySchedules ?? []).map((p) => ({
     name: p.employerName,
     amount: p.amount * monthlyFactor(p.frequency),
   }));
-  const moneyIn = incomeRows.reduce((s, r) => s + r.amount, 0);
+  const moneyIn = budget.monthlyIncome;
 
-  const byCategory = bills
-    .filter((b) => b.isActive)
-    .reduce<Record<string, number>>((acc, b) => {
-      acc[b.category] = (acc[b.category] ?? 0) + b.amount * monthlyFactor(b.frequency, b.customIntervalDays);
-      return acc;
-    }, {});
-  const outRows = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
-  const moneyOut = outRows.reduce((s, [, v]) => s + v, 0);
+  const outRows: [string, number][] = [
+    ...budget.groups.map((g): [string, number] => [g.category, g.monthlyTotal]),
+    ...budget.envelopeGroups.map((g): [string, number] => [
+      `Card envelopes — ${g.cardName}`,
+      g.monthlyTotal,
+    ]),
+    ...(budget.totalGoalSavings > 0.005
+      ? [["Goal contributions", budget.totalGoalSavings] as [string, number]]
+      : []),
+  ].sort((a, b) => b[1] - a[1]);
+  const moneyOut = budget.totalBills;
 
-  const net = moneyIn - moneyOut;
+  const net = budget.netCashFlow;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -231,6 +233,13 @@ export function CashFlowModal({
           <DialogTitle>Your monthly cash flow</DialogTitle>
         </DialogHeader>
 
+        {budget.isLoading ? (
+          <div className="space-y-3 py-4" aria-busy="true">
+            <div className="h-24 rounded-lg bg-muted animate-pulse" />
+            <div className="h-24 rounded-lg bg-muted animate-pulse" />
+          </div>
+        ) : (
+        <>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="rounded-lg border border-border p-4">
             <h3 className="text-sm font-semibold text-emerald-600 mb-2">Money In</h3>
@@ -281,6 +290,8 @@ export function CashFlowModal({
             <FormatCurrency amount={net} showSign />
           </span>
         </div>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

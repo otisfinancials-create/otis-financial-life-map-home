@@ -6,7 +6,7 @@ import {
   useListForecast,
   useListLoans,
   useListAssets,
-  useListPaySchedules,
+
   useGetRetirementSummary,
   useListCardCompositions,
   getListForecastQueryKey,
@@ -19,10 +19,10 @@ import {
 } from "@/components/dashboard/breakdown-modals";
 import { useState, useMemo } from "react";
 import { foldCarryover } from "@/components/bills/card-composition";
+import { useBudgetMath } from "@/hooks/use-budget-math";
 import { FormatCurrency } from "@/components/ui/format-currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { monthlyFactor } from "@/lib/bill-math";
 import {
   Wallet,
   TrendingUp,
@@ -286,7 +286,6 @@ export default function Dashboard() {
   const { data: bills, isLoading: isLoadingBills } = useListBills();
   const { data: loans } = useListLoans();
   const { data: assets } = useListAssets();
-  const { data: paySchedules } = useListPaySchedules();
   const { data: retirementSummary, isLoading: isLoadingRetirement } = useGetRetirementSummary();
 
   const [netWorthOpen, setNetWorthOpen] = useState(false);
@@ -303,19 +302,15 @@ export default function Dashboard() {
   });
 
   /* ── Monthly-equivalent income & bills ──────────────────────────────── */
-  const payMonthly = (paySchedules ?? []).reduce(
-    (s, p) => s + p.amount * monthlyFactor(p.frequency),
-    0,
-  );
-  const activeBills = (bills ?? []).filter((b) => b.isActive);
-  const billsByCategory = activeBills.reduce<Record<string, number>>((acc, b) => {
-    acc[b.category] = (acc[b.category] ?? 0) + b.amount * monthlyFactor(b.frequency, b.customIntervalDays);
-    return acc;
-  }, {});
-  const billsMonthlyTotal = Object.values(billsByCategory).reduce((s, v) => s + v, 0);
-  // No historical variance exists, so the 3-month average equals the current
-  // monthly income − bills (identical for all 3 months). Acceptable per spec.
-  const avgMonthlyCashFlow = payMonthly - billsMonthlyTotal;
+  // Single source of truth shared with the Budget tab, the cash-flow modal,
+  // Bills Snapshot, and the goals surplus readouts. Monthly-average surfaces
+  // normalize cadence (a quarterly bill contributes 1/3 per month) and include
+  // card envelopes + card-paid bills — the opposite of the 6 Month View /
+  // Planned vs Actual, which show actual occurrences without normalization.
+  const budget = useBudgetMath();
+  const payMonthly = budget.monthlyIncome;
+  const billsMonthlyTotal = budget.totalBills;
+  const avgMonthlyCashFlow = budget.netCashFlow;
 
   /* ── 6 Month View chart data ────────────────────────────────────────── */
   // Real per-month amounts from forecast occurrences — NO cadence
@@ -556,7 +551,7 @@ export default function Dashboard() {
           title="Average Monthly Cash Flow"
           icon={<Wallet className="h-4 w-4" />}
           accent="#059669"
-          loading={isLoadingSummary || isLoadingBills}
+          loading={isLoadingSummary || budget.isLoading}
           value={<FormatCurrency amount={avgMonthlyCashFlow} compact showSign />}
           
           trend={<SteadyBadge />}
@@ -594,7 +589,7 @@ export default function Dashboard() {
           title="Bills Snapshot"
           icon={<CalendarHeart className="h-4 w-4" />}
           accent="var(--color-navy)"
-          loading={isLoadingBills}
+          loading={budget.isLoading}
           value={<FormatCurrency amount={avgMonthlyCashFlow} compact showSign />}
           
           trend={
@@ -927,12 +922,7 @@ export default function Dashboard() {
         assets={assets ?? []}
         loans={loans ?? []}
       />
-      <CashFlowModal
-        open={cashFlowOpen}
-        onOpenChange={setCashFlowOpen}
-        paySchedules={paySchedules ?? []}
-        bills={bills ?? []}
-      />
+      <CashFlowModal open={cashFlowOpen} onOpenChange={setCashFlowOpen} />
       <SavingsInvestmentsModal
         open={savingsOpen}
         onOpenChange={setSavingsOpen}
@@ -941,9 +931,9 @@ export default function Dashboard() {
       <BillsSnapshotModal
         open={billsSnapshotOpen}
         onOpenChange={setBillsSnapshotOpen}
-        takeHomePay={payMonthly}
-        totalBills={billsMonthlyTotal}
-        netCashFlow={avgMonthlyCashFlow}
+        takeHomePay={budget.monthlyIncome}
+        totalBills={budget.totalBills}
+        netCashFlow={budget.netCashFlow}
         daysUntilPaycheck={daysUntilPaycheck}
       />
     </div>
