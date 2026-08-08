@@ -15,7 +15,13 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    entryPoints: [
+      path.resolve(artifactDir, "src/index.ts"),
+      // Run-to-completion job entries (Scheduled Deployments / maintenance):
+      // emitted as dist/jobs/<name>.mjs alongside the server bundle.
+      path.resolve(artifactDir, "src/jobs/nightly-sync.ts"),
+      path.resolve(artifactDir, "src/jobs/update-webhooks.ts"),
+    ],
     platform: "node",
     bundle: true,
     format: "esm",
